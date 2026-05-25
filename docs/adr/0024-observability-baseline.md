@@ -28,7 +28,7 @@ We do not run X-Ray, OpenTelemetry, or any tracing backend. Instead, `correlatio
 Operators diagnose multi-service flows with `filter correlation_id = "..."` in CloudWatch Logs Insights.
 
 ### 4. Alarms route to SNS, not human channels directly
-A single SNS topic (`pyme-erp-alerts`) is the integration point. The MVP subscribes email; later subscribers (PagerDuty, Slack) attach without touching the alarm definitions. The SLOs and thresholds themselves live in [`../12-observability.md`](../12-observability.md).
+A single SNS topic (`nica-erp-alerts`) is the integration point. The MVP subscribes email; later subscribers (PagerDuty, Slack) attach without touching the alarm definitions. The SLOs and thresholds themselves live in [`../12-observability.md`](../12-observability.md).
 
 ## Consequences
 - (+) Marginal cost ≈ $0 — metrics piggyback on logs already paid for.

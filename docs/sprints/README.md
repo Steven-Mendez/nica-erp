@@ -88,7 +88,7 @@ Every port has a local adapter + an AWS production adapter. The AWS adapter is w
 |---|---|---|---|---|
 | `IdentityProvider` | 02 | `IdentityProviderLocal` (own JWT, bcrypt, codes in DB) | `IdentityProviderCognito` (User Pool Lite, JWKS cache) | `test_identity_provider_contract.py` |
 | `EmailSender` | 02 | `EmailSenderSmtp` (Mailpit) | `EmailSenderSes` (sandbox permanent, [ADR-0020](../adr/0020-no-custom-domain-mvp.md)) | `test_email_sender_contract.py` |
-| `FileStorage` | 05 | `FileStorageLocal` (`apps/api/.local-files/`) | `FileStorageS3` (`pyme-erp-files`, SSE-S3 AES256) | `test_file_storage_contract.py` |
+| `FileStorage` | 05 | `FileStorageLocal` (`apps/api/.local-files/`) | `FileStorageS3` (`nica-erp-files`, SSE-S3 AES256) | `test_file_storage_contract.py` |
 | `EventPublisher` | 07 | `EventPublisherInProcess` | `EventPublisherEventBridge` (Lambda outbox → bus) | `test_event_publisher_contract.py` |
 | `SecretsProvider` | 01 | `SecretsProviderLocal` (`.env.local`) | `SecretsProviderAwsSsm` (SSM SecureString, cache 5 min, [ADR-0021](../adr/0021-ssm-parameter-store.md)) | `test_secrets_provider_contract.py` |
 | `Clock` | 00 | `ClockReal`; `ClockMock` in tests | `ClockReal` identical | n/a |

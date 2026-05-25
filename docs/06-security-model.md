@@ -22,7 +22,7 @@ The `identity` context defines the `IdentityProvider` port with two interchangea
   - Custom attribute `custom:active_tenant` (mutable string, empty until first tenant).
   - Email = username; verification required; password 12+ chars with mixed case, digit, symbol.
   - Optional per-user MFA.
-  - No Hosted UI; uses the default domain prefix `pyme-erp.auth.us-east-1.amazoncognito.com` ([ADR-0020](adr/0020-no-custom-domain-mvp.md)).
+  - No Hosted UI; uses the default domain prefix `nica-erp.auth.us-east-1.amazoncognito.com` ([ADR-0020](adr/0020-no-custom-domain-mvp.md)).
 - **IAM (Fargate task role)**: `SignUp`, `ConfirmSignUp`, `ResendConfirmationCode`, `InitiateAuth`, `GlobalSignOut`, `ForgotPassword`, `ConfirmForgotPassword`, `ChangePassword`, `AdminUpdateUserAttributes`, `AdminGetUser`. No destructive permissions.
 
 ### Local adapter (`IdentityProviderLocal`)
@@ -208,10 +208,10 @@ Sprint 03's test enumerates this matrix and fails if a cell diverges from the se
 
 | Secret | Location |
 |---|---|
-| RDS master credentials | `/pyme-erp/db/master` (SecureString) |
-| JWT signing key (local IdP only) | `/pyme-erp/jwt/signing-key` (SecureString) |
-| Integration credentials (BCN, gateways) | `/pyme-erp/integrations/*` (SecureString) |
-| Non-sensitive config (URLs, flags) | `/pyme-erp/config/*` (String) |
+| RDS master credentials | `/nica-erp/db/master` (SecureString) |
+| JWT signing key (local IdP only) | `/nica-erp/jwt/signing-key` (SecureString) |
+| Integration credentials (BCN, gateways) | `/nica-erp/integrations/*` (SecureString) |
+| Non-sensitive config (URLs, flags) | `/nica-erp/config/*` (String) |
 
 ECS task definition references SSM ARNs in `secrets[]`. Lambdas read via `boto3.client("ssm").get_parameter(WithDecryption=True)` at cold start and cache. The `SecretsProvider` port isolates dev (`.env.local`) ↔ prod (SSM).
 

@@ -167,9 +167,9 @@ BCN scraper as Lambda with daily scheduled rule + downloadable VAT book.
 
 ### Terraform additions
 
-- **Lambda `fx_scraper`** (first worker Lambda): container image from the same ECR, `entrypoint = ["python","-m","pyme_erp.bootstrap.entrypoints.fx_scraper"]`. Runs in VPC `private-app-a` with SG `lambda-sg` (egress 443 via NAT to BCN; access to RDS via private network).
-- **EventBridge scheduled rule `fx_scraper_daily`**: `cron(0 12 * * ? *)` (06:00 Managua = 12:00 UTC). Exponential retry inside the run with `tenacity` (3 attempts, base 2 s, max 16 s, jitter 0–1 s) before returning an error to the Lambda. AWS does not retry the scheduled invocation (`MaximumRetryAttempts=0`); SNS alert `pyme-erp-alerts` after 3 consecutive daily runs without writing a row to `fx_rates`.
-- **IAM**: role `pyme-erp-lambda-fx-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt` (alias `aws/ssm`) over `/pyme-erp/db/master` ([ADR-0021](../adr/0021-ssm-parameter-store.md)) and `events:PutEvents` (future).
+- **Lambda `fx_scraper`** (first worker Lambda): container image from the same ECR, `entrypoint = ["python","-m","bootstrap.entrypoints.fx_scraper"]`. Runs in VPC `private-app-a` with SG `lambda-sg` (egress 443 via NAT to BCN; access to RDS via private network).
+- **EventBridge scheduled rule `fx_scraper_daily`**: `cron(0 12 * * ? *)` (06:00 Managua = 12:00 UTC). Exponential retry inside the run with `tenacity` (3 attempts, base 2 s, max 16 s, jitter 0–1 s) before returning an error to the Lambda. AWS does not retry the scheduled invocation (`MaximumRetryAttempts=0`); SNS alert `nica-erp-alerts` after 3 consecutive daily runs without writing a row to `fx_rates`.
+- **IAM**: role `nica-erp-lambda-fx-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt` (alias `aws/ssm`) over `/nica-erp/db/master` ([ADR-0021](../adr/0021-ssm-parameter-store.md)) and `events:PutEvents` (future).
 
 ### Wiring
 
@@ -186,5 +186,5 @@ In AWS the provider reads the latest `fx_rates` row populated by the Lambda; scr
 
 See README §Post-deploy verification, plus:
 - Config `tax_config` (iva 0.15, imi 0.01), mark customer `is_retainer=true`, accumulate sales > C$1,000, issue invoice with 2% IR, partial payment → `partially_paid`, download VAT book XLSX.
-- `aws logs filter-log-events --log-group-name /aws/lambda/pyme-erp-fx ...` shows at least one `fx_rate_updated: 36.X`.
-- `aws lambda invoke --function-name pyme-erp-fx ... /tmp/out.json` → `{"statusCode":200,"rate":"36.XX"}`.
+- `aws logs filter-log-events --log-group-name /aws/lambda/nica-erp-fx ...` shows at least one `fx_rate_updated: 36.X`.
+- `aws lambda invoke --function-name nica-erp-fx ... /tmp/out.json` → `{"statusCode":200,"rate":"36.XX"}`.

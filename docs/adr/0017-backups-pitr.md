@@ -23,7 +23,7 @@ Variable changes in `.tfvars`; no module refactor. Documented in [../11-deployme
 Pre-launch: `skip_final_snapshot=true`, no snapshot or protection — each `make destroy` drops the DB and recreates it with Alembic + seed (~30 s extra). Aligned with idle $0 ([ADR-0020](0020-no-custom-domain-mvp.md)). First production tenant: `skip_final_snapshot=false`, `final_snapshot_identifier="${prefix}-final-${suffix}"` with a timestamp suffix injected from the Makefile to avoid perpetual drift ([../11-deployment.md §RDS backups](../11-deployment.md#rds-backups)); survives `terraform destroy` and is restorable via `snapshot_identifier`.
 
 ### Monthly export to S3 + Glacier Deep Archive
-Enabled at first production tenant: a monthly EventBridge Scheduled Rule invokes a Lambda `rds_export_worker` that fires `aws rds start-export-task` against the latest snapshot into `pyme-erp-rds-exports`; lifecycle to `DEEP_ARCHIVE` after 30 days (~$0.00099/GB/month), expiration > 60 months. Parquet output queryable from Athena for DGI requests without restoring the database.
+Enabled at first production tenant: a monthly EventBridge Scheduled Rule invokes a Lambda `rds_export_worker` that fires `aws rds start-export-task` against the latest snapshot into `nica-erp-rds-exports`; lifecycle to `DEEP_ARCHIVE` after 30 days (~$0.00099/GB/month), expiration > 60 months. Parquet output queryable from Athena for DGI requests without restoring the database.
 
 ### RPO/RTO
 
@@ -36,7 +36,7 @@ Manual DNS cutover: the RDS URL in SSM ([ADR-0021](0021-ssm-parameter-store.md))
 
 ### Manual restore (runbook in [13 — Operations](../13-operations.md#restore-from-backup))
 
-1. **From automated snapshot**: `terraform apply` with `snapshot_identifier="rds:pyme-erp-..."`.
+1. **From automated snapshot**: `terraform apply` with `snapshot_identifier="rds:nica-erp-..."`.
 2. **PITR**: `aws rds restore-db-instance-to-point-in-time` + cutover.
 3. **From S3 export**: Athena for DGI requests; not for operational recovery.
 

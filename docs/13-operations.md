@@ -11,7 +11,7 @@ This is a living document — when a scenario plays out, the operator updates th
 - [Debug runbook](#debug-runbook) — generic "something looks wrong" flow
 - [Incident response](#incident-response) — P1/P2 severity playbook
 - [Restore from backup](#restore-from-backup) — RDS PITR + snapshot restore
-- [JWT key rotation](#jwt-key-rotation) — suspected leak of `/pyme-erp/jwt/signing-key`
+- [JWT key rotation](#jwt-key-rotation) — suspected leak of `/nica-erp/jwt/signing-key`
 - [Tenant operations](#tenant-operations) — suspend, reactivate, purge
 - [Outbox poison message](#outbox-poison-message) — DLQ depth > 0
 - [Data migration runbook](#data-migration-runbook) — multi-phase migrations
@@ -25,7 +25,7 @@ This is a living document — when a scenario plays out, the operator updates th
 When an alarm fires or a user reports an issue, work through this in order. Stop at the first step that explains the symptom.
 
 1. **Open the SNS-linked alarm**. Note the metric, threshold, and time window.
-2. **CloudWatch Dashboard `pyme-erp-overview`** — eyeball the same time window for adjacent anomalies (CPU spike, latency rise, DLQ depth).
+2. **CloudWatch Dashboard `nica-erp-overview`** — eyeball the same time window for adjacent anomalies (CPU spike, latency rise, DLQ depth).
 3. **Logs Insights** — start with the all-errors query in [12 — Observability §Querying](12-observability.md#querying), narrow by `tenant_id` or `correlation_id`.
 4. **If you have a `correlation_id`** (from a user-reported error containing `trace_id`):
    ```
@@ -72,10 +72,10 @@ Per [ADR-0017](adr/0017-backups-pitr.md).
 1. Pick the target time (just before the incident).
 2. ```bash
    aws rds restore-db-instance-to-point-in-time \
-     --source-db-instance-identifier pyme-erp \
-     --target-db-instance-identifier pyme-erp-restore-$(date +%Y%m%d) \
+     --source-db-instance-identifier nica-erp \
+     --target-db-instance-identifier nica-erp-restore-$(date +%Y%m%d) \
      --restore-time <ISO8601> \
-     --db-subnet-group-name pyme-erp-private
+     --db-subnet-group-name nica-erp-private
    ```
 3. Verify on the restored instance: row counts on key tables, last fiscal number, RLS works (`SET app.tenant_id = '...'` then a SELECT).
 4. **Cutover**: point the API task definition at the new endpoint via SSM, redeploy ECS service.
@@ -84,7 +84,7 @@ Per [ADR-0017](adr/0017-backups-pitr.md).
 ### From snapshot
 1. ```bash
    aws rds restore-db-instance-from-db-snapshot \
-     --db-instance-identifier pyme-erp-restore-$(date +%Y%m%d) \
+     --db-instance-identifier nica-erp-restore-$(date +%Y%m%d) \
      --db-snapshot-identifier <snapshot-id>
    ```
 2. Continue from step 3 above.
@@ -98,7 +98,7 @@ Per [ADR-0017](adr/0017-backups-pitr.md).
 
 ## JWT key rotation
 
-Per [06 — Security model §Rotation](06-security-model.md#rotation). Trigger: suspected leak of `/pyme-erp/jwt/signing-key`.
+Per [06 — Security model §Rotation](06-security-model.md#rotation). Trigger: suspected leak of `/nica-erp/jwt/signing-key`.
 
 1. **Generate** a new key:
    ```bash
@@ -107,7 +107,7 @@ Per [06 — Security model §Rotation](06-security-model.md#rotation). Trigger: 
 2. **Update SSM**:
    ```bash
    aws ssm put-parameter \
-     --name /pyme-erp/jwt/signing-key \
+     --name /nica-erp/jwt/signing-key \
      --value "$NEW_KEY" \
      --overwrite \
      --type SecureString
@@ -115,7 +115,7 @@ Per [06 — Security model §Rotation](06-security-model.md#rotation). Trigger: 
 3. **Force ECS redeploy** to pick up the new key:
    ```bash
    aws ecs update-service \
-     --cluster pyme-erp \
+     --cluster nica-erp \
      --service api \
      --force-new-deployment
    ```
@@ -218,7 +218,7 @@ If anything goes wrong between phases, roll forward — never roll back a partia
 
 Trigger: `billing-monthly` alarm.
 
-1. **Cost Explorer** — filter by `Project=pyme-erp`, group by **Service**, daily granularity, last 14 days.
+1. **Cost Explorer** — filter by `Project=nica-erp`, group by **Service**, daily granularity, last 14 days.
 2. Identify the service driving the spike.
 3. Common causes:
    - **NAT data transfer** — unexpected outbound traffic from Lambda or ECS. Inspect VPC flow logs.

@@ -167,7 +167,7 @@ Frontend detail in [09](09-frontend.md).
 
 ## Local AWS CLI
 
-`aws` v2 with profile `pyme-erp`. `Makefile` assumes that profile (`AWS_PROFILE=pyme-erp make deploy`). No SSO or assume-role: IAM user with rotatable credentials and minimum policy (Terraform, ECR push, `ecs run-task`, `s3 sync`).
+`aws` v2 with profile `nica-erp`. `Makefile` assumes that profile (`AWS_PROFILE=nica-erp make deploy`). No SSO or assume-role: IAM user with rotatable credentials and minimum policy (Terraform, ECR push, `ecs run-task`, `s3 sync`).
 
 ---
 
@@ -190,7 +190,7 @@ Style rules that apply across the codebase. Architectural rules (layering, ports
 Every source file (Python, TS/TSX) starts with a one-line comment showing its path from the repo root, **before** the docstring.
 
 ```python
-# apps/api/nica_erp/contexts/sales/application/issue_invoice.py
+# apps/api/src/contexts/sales/application/issue_invoice.py
 """
 Use case: issue a draft invoice.
 Allocates DGI number, decrements stock via inventory port, emits InvoiceIssued.
@@ -203,7 +203,7 @@ Allocates DGI number, decrements stock via inventory port, emits InvoiceIssued.
 
 **Why:** large multi-module repos accumulate `utils.py`, `types.ts`, `index.ts`. A path comment disambiguates which one a reader (or AI agent) is looking at, especially when snippets are pasted into Slack, GitHub comments, or an LLM context.
 
-Tests follow the same rule: `# apps/api/nica_erp/contexts/sales/application/issue_invoice_test.py` sits next to `issue_invoice.py`.
+Tests follow the same rule with their own path: `# apps/api/tests/unit/contexts/sales/application/test_issue_invoice.py`. Tests live under `apps/<api|web>/tests/{unit,integration,e2e}/` mirroring the layout of `src/`, **not** co-located with source modules ([14 — Testing](14-testing.md)).
 
 ### Comments
 
@@ -295,7 +295,7 @@ def issue_invoice(draft_id: InvoiceId, idempotency_key: Optional[str] = None) ->
 | Type           | Convention           | Example                            |
 | -------------- | -------------------- | ---------------------------------- |
 | Files          | `snake_case`         | `issue_invoice.py`                 |
-| Test files     | `<thing>_test.py`    | `issue_invoice_test.py`            |
+| Test files     | `test_<thing>.py`    | `test_issue_invoice.py`            |
 | Classes        | `PascalCase`         | `IssueInvoice`, `Invoice`          |
 | Functions      | `snake_case`         | `issue_invoice()`, `apply_payment()` |
 | Constants      | `UPPER_SNAKE_CASE`   | `DGI_DOCUMENT_TYPES`               |
@@ -314,7 +314,7 @@ def issue_invoice(draft_id: InvoiceId, idempotency_key: Optional[str] = None) ->
 | Constants      | `UPPER_SNAKE_CASE`   | `DEFAULT_PAGE_SIZE`                |
 | Types / interfaces | `PascalCase`     | `Invoice`, `IssueInvoiceInput`     |
 
-**Project name.** Distribution package `nica-erp` (Python) / `@nica-erp/web` (npm) / `nica-erp` (folders). Python source lives under `apps/api/src/` with top-level packages `bootstrap`, `shared_kernel`, `contexts` — no wrapping namespace. Do **not** use `pyme_erp` / `pyme-erp` — those appear in some baseline docs and predate the rename.
+**Project name.** Distribution package `nica-erp` (Python) / `@nica-erp/web` (npm) / `nica-erp` (folders). Python source lives under `apps/api/src/` with top-level packages `bootstrap`, `shared_kernel`, `contexts` — no wrapping namespace. Imports use the package names directly (`from bootstrap.X`, `from shared_kernel.X`, `from contexts.X`); do **not** prefix with `nica_erp.`.
 
 **Bounded contexts.** `sales`, `inventory`, `iam`, `tenants`, `notifications`, `outbox`, … — see [03 — Bounded Contexts](03-bounded-contexts.md). Singular, lowercase, one word when possible.
 

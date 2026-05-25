@@ -202,7 +202,7 @@ Per-endpoint permission requirements are documented in the OpenAPI operation's `
 
 ## Adding or changing an endpoint (contributor workflow)
 
-1. Add the route + Pydantic schemas in the adapter (`apps/api/nica_erp/contexts/<context>/adapters/http/`).
+1. Add the route + Pydantic schemas in the adapter (`apps/api/src/contexts/<context>/adapters/http/`).
 2. Implement the use case in `application/`, orchestrating domain logic.
 3. Write tests at the appropriate level — integration test for the router, unit test for the use case ([14 — Testing](14-testing.md)).
 4. Run the API locally (`make api`) and regenerate the frontend client:

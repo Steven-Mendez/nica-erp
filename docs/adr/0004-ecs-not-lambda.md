@@ -14,7 +14,7 @@ ECS Fargate + uvicorn behind an ALB. 1 task `0.25 vCPU / 0.5 GB`, health check `
 - (+) Persistent SQLAlchemy pool without RDS Proxy.
 - (−) No scale-to-zero. Compensated by `make destroy` ([ADR-0003](0003-deploy-destroy-per-env.md)).
 - (−) ALB costs ~$0.55/day while on.
-- (−) Multiple entrypoints in the same image: each workload declares an explicit `command = ["python", "-m", "pyme_erp.bootstrap.entrypoints.<name>"]` in its task/lambda definition to avoid silently booting the wrong handler.
+- (−) Multiple entrypoints in the same image: each workload declares an explicit `command = ["python", "-m", "bootstrap.entrypoints.<name>"]` in its task/lambda definition to avoid silently booting the wrong handler.
 - (−) Cold starts ~100–300 ms on the worker Lambdas; tolerable for the publisher (scheduler 60 s, [ADR-0007](0007-outbox-dispatch-polling.md)) and the daily scraper.
 
 ## Alternatives

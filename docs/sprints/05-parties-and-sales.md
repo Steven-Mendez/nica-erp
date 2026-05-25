@@ -1,6 +1,6 @@
 # Sprint 05 — `parties` + `sales` MVP + S3 adapter + deploy
 
-**Goal.** Complete issuance flow: customer → draft → issuance with 15% VAT → `FOR UPDATE`-locked sequence → stock deduction → downloadable PDF. `FileStorage` port swap: local filesystem ↔ `pyme-erp-files` S3 bucket with presigned URL. Closes with an invoice issued at the CloudFront URL and PDF downloaded from S3.
+**Goal.** Complete issuance flow: customer → draft → issuance with 15% VAT → `FOR UPDATE`-locked sequence → stock deduction → downloadable PDF. `FileStorage` port swap: local filesystem ↔ `nica-erp-files` S3 bucket with presigned URL. Closes with an invoice issued at the CloudFront URL and PDF downloaded from S3.
 
 ---
 
@@ -114,9 +114,9 @@ Endpoints: [`../08-api-conventions.md` #sales](../08-api-conventions.md#sales), 
 - Jinja2 template: SMB header (RUC, address, DGI authorization), customer data, lines, VAT breakdown, **DGI authorization number in the bottom-right corner** (legal requirement).
 - `FileStorage` port (`put`, `get`, `presigned_url`):
   - Local: `FileStorageLocal` → `./tmp/files/invoices/<tenant_id>/<invoice_id>.pdf` (no LocalStack).
-  - AWS: `FileStorageS3` → `s3://pyme-erp-files/invoices/<tenant_id>/<invoice_id>.pdf`.
+  - AWS: `FileStorageS3` → `s3://nica-erp-files/invoices/<tenant_id>/<invoice_id>.pdf`.
 
-  To exercise S3 locally: `awslocal s3 mb s3://pyme-erp-files` from `docker/localstack-init.sh`.
+  To exercise S3 locally: `awslocal s3 mb s3://nica-erp-files` from `docker/localstack-init.sh`.
 
 ## Migration 0005
 
@@ -188,9 +188,9 @@ Swap `FileStorage` Local→AWS against real S3.
 
 ### Terraform additions
 
-- **New `storage/` module**: versioned `pyme-erp-files` bucket + SSE-S3, policy allowing the API task `s3:{PutObject,GetObject,DeleteObject}` only on `invoices/<tenant_id>/`. Lifecycle: abort multipart > 7 days.
-- **IAM**: role `pyme-erp-api-task-role` with S3 over `pyme-erp-files`. Presigned URLs TTL 5 min using role credentials.
-- **SSM**: `/pyme-erp/demo/s3/files_bucket`.
+- **New `storage/` module**: versioned `nica-erp-files` bucket + SSE-S3, policy allowing the API task `s3:{PutObject,GetObject,DeleteObject}` only on `invoices/<tenant_id>/`. Lifecycle: abort multipart > 7 days.
+- **IAM**: role `nica-erp-api-task-role` with S3 over `nica-erp-files`. Presigned URLs TTL 5 min using role credentials.
+- **SSM**: `/nica-erp/demo/s3/files_bucket`.
 - **Migration 0005**: RLS applied.
 
 ### Wiring
@@ -206,6 +206,6 @@ def build_file_storage() -> FileStorage:
 
 ### Verifiable outcome post-deploy
 
-See README §Post-deploy verification, plus: issue invoice with 2 items, "Download PDF" → presigned `s3.amazonaws.com` URL, `aws s3 ls s3://pyme-erp-files/invoices/<tenant_id>/` lists the object, `stock_levels` reflect the deduction.
+See README §Post-deploy verification, plus: issue invoice with 2 items, "Download PDF" → presigned `s3.amazonaws.com` URL, `aws s3 ls s3://nica-erp-files/invoices/<tenant_id>/` lists the object, `stock_levels` reflect the deduction.
 
-**Operational note**: the bucket does not destroy with objects; pre-destroy `aws s3 rm s3://pyme-erp-files/ --recursive` (demo PDFs are not real fiscal documents).
+**Operational note**: the bucket does not destroy with objects; pre-destroy `aws s3 rm s3://nica-erp-files/ --recursive` (demo PDFs are not real fiscal documents).

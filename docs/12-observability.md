@@ -8,8 +8,8 @@ Operational visibility: structured logs, metrics, alarms, dashboards, and the qu
 
 - **Logs**: CloudWatch Logs (one log group per service); JSON via `structlog`.
 - **Metrics**: CloudWatch Metrics via CloudWatch [Embedded Metric Format (EMF)](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Embedded_Metric_Format.html). Metrics ride in the same JSON log line — no second sink.
-- **Dashboards**: CloudWatch Dashboards (`pyme-erp-overview`, sprint-specific dashboards).
-- **Alarms**: CloudWatch Alarms → SNS topic `pyme-erp-alerts` → email (MVP). PagerDuty/Slack subscriptions are post-MVP.
+- **Dashboards**: CloudWatch Dashboards (`nica-erp-overview`, sprint-specific dashboards).
+- **Alarms**: CloudWatch Alarms → SNS topic `nica-erp-alerts` → email (MVP). PagerDuty/Slack subscriptions are post-MVP.
 - **Tracing**: none in MVP. `correlation_id` propagation replaces it ([ADR-0024](adr/0024-observability-baseline.md)).
 
 ---
@@ -77,7 +77,7 @@ Dimensions are bounded by design: `tenant_id`, `event_type`, `route`, `queue`, `
 
 ## Alarms
 
-Defined in the Terraform `observability/` module. All notify `pyme-erp-alerts` SNS topic.
+Defined in the Terraform `observability/` module. All notify `nica-erp-alerts` SNS topic.
 
 | Alarm | Condition | Action |
 |---|---|---|
@@ -97,7 +97,7 @@ Each alarm doc-comment in Terraform names the runbook section in [13 — Operati
 
 ## Dashboards
 
-### `pyme-erp-overview`
+### `nica-erp-overview`
 - ALB requests/s (last 1h)
 - API p50, p95, p99 latency (last 1h)
 - RDS CPU, memory, free storage (last 6h)

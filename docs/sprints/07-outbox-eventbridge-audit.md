@@ -20,9 +20,9 @@
 
 ## `outbox_publisher` Lambda
 
-`bootstrap/entrypoints/outbox_publisher.py`. Same Docker image as the API; `entrypoint = ["python","-m","pyme_erp.bootstrap.entrypoints.outbox_publisher"]`.
+`bootstrap/entrypoints/outbox_publisher.py`. Same Docker image as the API; `entrypoint = ["python","-m","bootstrap.entrypoints.outbox_publisher"]`.
 
-1. Connects to DB (creds SSM SecureString `/pyme-erp/db/master` via `ssm:GetParameter` + `kms:Decrypt`; [ADR-0021](../adr/0021-ssm-parameter-store.md)).
+1. Connects to DB (creds SSM SecureString `/nica-erp/db/master` via `ssm:GetParameter` + `kms:Decrypt`; [ADR-0021](../adr/0021-ssm-parameter-store.md)).
 2. `SELECT event_id, event_type, event_version, aggregate_type, aggregate_id, tenant_id, payload, occurred_at, published_at, publish_attempts FROM outbox WHERE published_at IS NULL ORDER BY occurred_at LIMIT 100`.
 3. Batches of 10 (`PutEvents` limit) → `Entries`.
 4. Failed entries are not marked (remain for next run).
@@ -101,7 +101,7 @@ RLS by `tenant_id` (pattern [sprint 03](03-tenants-and-rls.md)).
 
 ## EventBridge setup in LocalStack
 
-`docker/localstack-init.sh` creates the bus, queues with redrive policy (`maxReceiveCount=5`), the rule `audit-all` (`source: ["pyme-erp"]`) → target `audit-queue`. Full `awslocal` commands in the script. In Terraform `messaging/` the ARNs come from `aws_sqs_queue.audit.arn` (module output); Lambdas receive `LAMBDA_AUDIT_ARN` via env var. No hardcoded ARNs in prod.
+`docker/localstack-init.sh` creates the bus, queues with redrive policy (`maxReceiveCount=5`), the rule `audit-all` (`source: ["nica-erp"]`) → target `audit-queue`. Full `awslocal` commands in the script. In Terraform `messaging/` the ARNs come from `aws_sqs_queue.audit.arn` (module output); Lambdas receive `LAMBDA_AUDIT_ARN` via env var. No hardcoded ARNs in prod.
 
 `notif-queue` is populated in [sprint 08](08-notifications-ses.md) with a selective event pattern.
 
@@ -159,12 +159,12 @@ Swap `EventPublisher` against real EventBridge + two active Lambdas + daily hous
 
 ### Terraform additions
 
-- **New `messaging/` module**: `pyme-erp` EventBridge bus. Rules: `audit-rule` catch-all `pyme-erp.*`; `notif-rule` selective (SQS destination populated in [sprint 08](08-notifications-ses.md)). Queues `audit-queue`, `notif-queue` with DLQs `*-dlq`, `maxReceiveCount=5`.
+- **New `messaging/` module**: `nica-erp` EventBridge bus. Rules: `audit-rule` catch-all `nica-erp.*`; `notif-rule` selective (SQS destination populated in [sprint 08](08-notifications-ses.md)). Queues `audit-queue`, `notif-queue` with DLQs `*-dlq`, `maxReceiveCount=5`.
 - **`workers/` module extended** (on top of `fx_scraper` from [06](06-taxes-payments-reports.md)):
   - `outbox_publisher`: scheduled rule `outbox_publisher_every_minute` (`rate(1 minute)`).
   - `audit_consumer`: event source mapping from `audit-queue` (batch 10, partial batch responses).
   - `housekeeping_worker`: scheduled `housekeeping_daily` (`cron(0 9 * * ? *)` = 03:00 Managua). DELETE in batches with default retentions: `outbox` 30 days, `processed_events` 7 days, `idempotency_keys` 24 h. Retentions configurable via SSM. Detail in [`../07-events-and-outbox.md` § Housekeeping](../07-events-and-outbox.md#housekeeping) and [ADR-0006](../adr/0006-transactional-outbox.md).
-- **IAM**: roles `pyme-erp-lambda-{outbox,audit,housekeeping}-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt` over `/pyme-erp/db/master`, `events:PutEvents` (outbox), `sqs:{ReceiveMessage,DeleteMessage}` (audit).
+- **IAM**: roles `nica-erp-lambda-{outbox,audit,housekeeping}-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt` over `/nica-erp/db/master`, `events:PutEvents` (outbox), `sqs:{ReceiveMessage,DeleteMessage}` (audit).
 - **Migration 0007**: `audit_log_entries`, `processed_events` unique `(consumer, event_id)`.
 - **EMF metrics**: `outbox_pending_count`, `outbox_published_total`, `outbox_publish_failed_total`, `housekeeping_rows_deleted`, `dlq_depth`. Alarms in [`../10-infrastructure.md` § Metrics](../10-infrastructure.md#business-metrics-emf).
 
@@ -184,4 +184,4 @@ In AWS the use cases only write to the outbox. The Lambda drains every minute an
 See README §Post-deploy verification, plus:
 - Issue invoice from UI → wait ≤90 s (60 s scheduler + 5-10 s propagation) → `/audit/log` shows `InvoiceIssued`.
 - `aws sqs get-queue-attributes --queue-url <audit-dlq-url> --attribute-names ApproximateNumberOfMessages` → 0.
-- Manual drain: `aws lambda invoke --function-name pyme-erp-outbox --payload '{}' /tmp/out.json` → `published_count > 0`.
+- Manual drain: `aws lambda invoke --function-name nica-erp-outbox --payload '{}' /tmp/out.json` → `published_count > 0`.

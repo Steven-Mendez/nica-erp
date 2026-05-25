@@ -6,47 +6,53 @@ How tests are organized, what each level owns, and the patterns that catch the h
 
 ## Levels
 
-Four levels, each owns a specific failure class. Tests live next to the code they cover — no separate "tests/" mirror tree.
+Four levels, each owns a specific failure class. Tests live under `apps/<api|web>/tests/{unit,integration,contract,e2e}/` mirroring `src/`; `apps/api/conftest.py` auto-applies the marker matching the top-level folder.
 
 | Level | Where | What it owns | Speed budget |
 |---|---|---|---|
-| **Unit** | `<context>/domain/`, `<context>/application/` | Pure logic, invariants, value objects, use case orchestration. No I/O. | < 1 ms per test |
-| **Integration** | `<context>/adapters/` and infra | One adapter at a time against real dependencies (testcontainers Postgres, LocalStack S3/EventBridge, Mailpit) | < 1 s per test |
+| **Unit** | `tests/unit/<mirrors src/>` (e.g. `tests/unit/contexts/sales/domain/`, `tests/unit/shared_kernel/domain/`) | Pure logic, invariants, value objects, use case orchestration. No I/O. | < 1 ms per test |
+| **Integration** | `tests/integration/<mirrors src/>` (e.g. `tests/integration/contexts/sales/adapters/`, `tests/integration/shared_kernel/adapters/`) | One adapter at a time against real dependencies (testcontainers Postgres, LocalStack S3/EventBridge, Mailpit) | < 1 s per test |
 | **Contract** | `tests/contract/` | One test per port, parametrized over **all adapters** (e.g., `IdentityProviderLocal` + `IdentityProviderCognito`). Proves swap is safe. | < 5 s per test |
 | **End-to-end** | `tests/e2e/` | One canonical flow per sprint through HTTP → DB → outbox → consumer | < 30 s per test |
 
-Markers: `pytest -m unit`, `-m integration`, `-m contract`, `-m e2e`. `pytest` (no marker) runs only unit by default.
+Markers: `pytest -m unit`, `-m integration`, `-m contract`, `-m e2e`.
 
 ---
 
 ## Layout
 
+Tests live under `apps/<api|web>/tests/{unit,integration,contract,e2e}/`, mirroring the source layout — **not** co-located next to source modules.
+
 ```
 apps/api/
-├── src/pyme_erp/
+├── src/
 │   └── contexts/
 │       └── sales/
 │           ├── domain/
-│           │   ├── invoice.py
-│           │   └── invoice_test.py       # unit (markers via conftest)
+│           │   └── invoice.py
 │           ├── application/
-│           │   ├── issue_invoice.py
-│           │   └── issue_invoice_test.py # unit
+│           │   └── issue_invoice.py
 │           └── adapters/
 │               ├── persistence/
-│               │   ├── invoice_repository.py
-│               │   └── invoice_repository_test.py # integration
+│               │   └── invoice_repository.py
 │               └── http/
-│                   ├── invoice_router.py
-│                   └── invoice_router_test.py     # integration
+│                   └── invoice_router.py
 └── tests/
+    ├── unit/
+    │   └── contexts/sales/
+    │       ├── domain/test_invoice.py
+    │       └── application/test_issue_invoice.py
+    ├── integration/
+    │   └── contexts/sales/adapters/
+    │       ├── persistence/test_invoice_repository.py
+    │       └── http/test_invoice_router.py
     ├── contract/
     │   └── test_identity_provider_contract.py
     └── e2e/
         └── test_invoice_issuance_e2e.py
 ```
 
-`conftest.py` adds markers based on directory: anything under `<context>/domain/` or `<context>/application/` is `unit`; `<context>/adapters/` is `integration`; `tests/contract/` is `contract`; `tests/e2e/` is `e2e`. No per-file marker boilerplate.
+`apps/api/conftest.py` auto-marks tests by the top-level folder under `tests/`: `tests/unit/` → `unit`, `tests/integration/` → `integration`, `tests/contract/` → `contract`, `tests/e2e/` → `e2e`. No per-file marker boilerplate. `pytest -m unit` filters correctly out of the box.
 
 ---
 
@@ -133,7 +139,7 @@ Lives next to the migration that adds RLS for the table. If a table is added wit
 For any list/aggregate use case, assert a query budget. SQLAlchemy event hooks count queries; the test fails if the count exceeds the budget.
 
 ```python
-from pyme_erp.testing import assert_query_count
+from shared_kernel.testing import assert_query_count
 
 @pytest.mark.integration
 async def test_list_invoices_does_not_explode(session, with_tenant_a, ten_invoices):

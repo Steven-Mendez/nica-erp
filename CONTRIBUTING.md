@@ -226,7 +226,7 @@ What that covers — and where the rules live:
 | Hexagonal layering (`import-linter`)           | [`docs/02-architecture.md`](./docs/02-architecture.md)                                  |
 | Python style, naming, comments, file paths     | [`docs/16-tooling.md` §Code conventions](./docs/16-tooling.md#code-conventions)         |
 | TypeScript style, OpenAPI client, forms, state | [`docs/09-frontend.md`](./docs/09-frontend.md) + [`docs/16-tooling.md`](./docs/16-tooling.md) |
-| Test level + location (`*_test.py` next to code) | [`docs/14-testing.md`](./docs/14-testing.md)                                          |
+| Test level + location (`tests/{unit,integration,contract,e2e}/` mirroring `src/`, files named `test_*.py`) | [`docs/14-testing.md`](./docs/14-testing.md) |
 | Logging conventions (structured, no PII)       | [`docs/12-observability.md` §Writing logs](./docs/12-observability.md#writing-logs-for-contributors) |
 | Security do/don't (no PII logs, no `eval`, …)  | [`docs/06-security-model.md` §Contributor checklist](./docs/06-security-model.md#contributor-security-checklist) |
 | API contract changes (versioning, error codes) | [`docs/08-api-conventions.md`](./docs/08-api-conventions.md)                            |
@@ -244,7 +244,7 @@ You may use Claude Code, Copilot, Cursor, or any other AI assistant. The same ru
 - **The full PR has been read and understood by the submitter.** Don't paste a generated diff you haven't read.
 - **The diff respects the layering** (`domain ← application ← adapters`). `import-linter` catches the obvious ones; you catch the subtle ones (a "shared util" placed in `domain/` that uses SQLAlchemy).
 - **Comments follow [§Comments in `docs/16-tooling.md`](./docs/16-tooling.md#comments).** No `# Increment the counter`. No multi-paragraph docstrings restating the signature. No "added for the new flow" references that rot.
-- **Project naming.** Distribution package: `nica-erp`. Python source lives under `apps/api/src/` with top-level packages `bootstrap`, `shared_kernel`, `contexts` — no `nica_erp` / `pyme_erp` wrapping namespace (some baseline docs predate the rename).
+- **Project naming.** Distribution package: `nica-erp`. Python source lives under `apps/api/src/` with top-level packages `bootstrap`, `shared_kernel`, `contexts` — no wrapping namespace. Imports are `from bootstrap.X`, `from shared_kernel.X`, `from contexts.X` (never `from nica_erp.X`).
 - **Tests are real.** AI tools occasionally write tautologies — tests that assert what the implementation does rather than what the spec requires. Read the test and ask: would this fail if the implementation were wrong?
 - **No invented APIs or fields.** Verify every function call, import, and field reference points at something that actually exists.
 - **No bulk reformatting.** If you ran an AI tool that reformatted unrelated files, reset them before committing.

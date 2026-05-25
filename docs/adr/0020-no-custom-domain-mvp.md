@@ -15,7 +15,7 @@ Pre-launch there are no public URL commitments. Analyzing idle cost under [ADR-0
 |---|---|
 | Frontend (SPA) | `https://<dist-id>.cloudfront.net/` |
 | Backend API | `https://<dist-id>.cloudfront.net/api/*` |
-| Cognito user pool domain (OAuth endpoints) | `https://pyme-erp.auth.us-east-1.amazoncognito.com` (Hosted UI **not** used; MVP authenticates via `USER_PASSWORD_AUTH`) |
+| Cognito user pool domain (OAuth endpoints) | `https://nica-erp.auth.us-east-1.amazoncognito.com` (Hosted UI **not** used; MVP authenticates via `USER_PASSWORD_AUTH`) |
 | SES sender | `noreply@<verified-email>` (sandbox) |
 
 The SPA uses the relative path `VITE_API_BASE_URL=/api`; it does not hardcode the CloudFront URL.
@@ -28,7 +28,7 @@ The SPA uses the relative path `VITE_API_BASE_URL=/api`; it does not hardcode th
 - Same origin SPA + API → **no CORS**; session cookies without `SameSite=None`.
 
 ### Cognito user pool domain
-- `aws_cognito_user_pool_domain` with prefix `pyme-erp`; no custom domain. It enables the OAuth endpoints (`/oauth2/token`, JWKS) and remains available if Hosted UI is activated later; the MVP does not use it (`USER_PASSWORD_AUTH` flow from the API).
+- `aws_cognito_user_pool_domain` with prefix `nica-erp`; no custom domain. It enables the OAuth endpoints (`/oauth2/token`, JWKS) and remains available if Hosted UI is activated later; the MVP does not use it (`USER_PASSWORD_AUTH` flow from the API).
 - Callback/logout URLs read `aws_cloudfront_distribution.main.domain_name` in Terraform — declared for future OAuth flows, unused in MVP.
 
 ### SES permanent sandbox

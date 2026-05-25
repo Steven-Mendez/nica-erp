@@ -92,7 +92,7 @@ If a domain is registered for a serious prospect, this reopens as an additional 
 
 ## MVP cost audit
 
-- Cost Explorer with filter `Project=pyme-erp`, daily granularity, window from [sprint 01](01-aws-wiring-rolling-deploys.md).
+- Cost Explorer with filter `Project=nica-erp`, daily granularity, window from [sprint 01](01-aws-wiring-rolling-deploys.md).
 - Idle ≈ **$0/month** under [ADR-0020](../adr/0020-no-custom-domain-mvp.md) + [ADR-0021](../adr/0021-ssm-parameter-store.md) (no Route 53, no custom ACM, no Secrets Manager; persistent = S3 state/web + DynamoDB + ECR, all near-free without traffic). Verification sessions ~2.70 USD/day.
 - Total estimate: 9 sprints × ~3-5 USD/session = 25-50 USD. Verify.
 - Billing alarm 20 USD/month pre-launch; 1-3 fires expected during the MVP.
@@ -103,7 +103,7 @@ If a domain is registered for a serious prospect, this reopens as an additional 
 
 - EMF metrics (`outbox_pending_count`, `outbox_published_total`, `invoice_issue_duration_ms`, `dlq_depth`, `number_sequence_remaining_pct`, `tax_calculation_duration_ms`) in CloudWatch Metrics with alarms. See [`../10-infrastructure.md` § Metrics](../10-infrastructure.md#business-metrics-emf).
 - Confirm that platform alarms (5xx > 1% ALB, DLQ > 0, CPU > 80% RDS, Lambda errors) notify `alert_email`. Alarm test if it never fired.
-- CloudWatch dashboard `pyme-erp-overview`: ALB requests/s, API p95 latency, RDS CPU/memory, outbox depth, DLQ depth.
+- CloudWatch dashboard `nica-erp-overview`: ALB requests/s, API p95 latency, RDS CPU/memory, outbox depth, DLQ depth.
 - Predefined CloudWatch Logs Insights queries: by `request_id`, `tenant_id`, outbox `event_type`, recent error. Document in runbook.
 
 ---

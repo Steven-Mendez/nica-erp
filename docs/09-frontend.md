@@ -181,11 +181,11 @@ Static site in the persistent module (`infra/terraform/bootstrap/`): backend `ma
 
 Resources ([ADR-0020](adr/0020-no-custom-domain-mvp.md)):
 
-- **S3 `pyme-erp-web`** private with `dist/`. No website hosting; access only via CloudFront.
+- **S3 `nica-erp-web`** private with `dist/`. No website hosting; access only via CloudFront.
 - **CloudFront** with OAC and default `*.cloudfront.net` cert. Custom error responses `403`/`404` → `/index.html 200` (TanStack Router SPA). Behaviors: `/*` → S3, `/api/*` → ALB origin (HTTP-only, no cache).
 - **No Route 53, no custom ACM**. Custom domain activation in [11 §Activate custom domain](11-deployment.md#activate-custom-domain).
 
-`make deploy-web`: `pnpm build` + `aws s3 sync dist/ s3://pyme-erp-web/ --delete` with `cache-control "public,max-age=31536000,immutable"` for hashed assets, `index.html` separated with `no-cache,no-store,must-revalidate` + `aws cloudfront create-invalidation --paths '/index.html'` (hashed assets change name, no invalidation needed). Seconds. Implementation in [11 — Deployment §Makefile](11-deployment.md#makefile).
+`make deploy-web`: `pnpm build` + `aws s3 sync dist/ s3://nica-erp-web/ --delete` with `cache-control "public,max-age=31536000,immutable"` for hashed assets, `index.html` separated with `no-cache,no-store,must-revalidate` + `aws cloudfront create-invalidation --paths '/index.html'` (hashed assets change name, no invalidation needed). Seconds. Implementation in [11 — Deployment §Makefile](11-deployment.md#makefile).
 
 ### Per-build variables
 

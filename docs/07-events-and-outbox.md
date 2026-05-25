@@ -50,7 +50,7 @@ unpublished = SELECT event_id, tenant_id, event_type, event_version,
 for batch in chunks(unpublished, 10):
     response = eb.put_events(Entries=[
         {
-            "Source": "pyme-erp",
+            "Source": "nica-erp",
             "DetailType": e.event_type,
             "Detail": json.dumps({
                 "event_id": e.event_id,
@@ -62,7 +62,7 @@ for batch in chunks(unpublished, 10):
                 "occurred_at": e.occurred_at,
                 "correlation_id": e.correlation_id,
             }),
-            "EventBusName": "pyme-erp",
+            "EventBusName": "nica-erp",
         }
         for e in batch
     ])
@@ -90,10 +90,10 @@ PK `event_id` UUIDv7 guarantees insert idempotency in `outbox`: transaction retr
 
 ## Bus
 
-Custom bus `pyme-erp` (not default). Rules to SQS:
+Custom bus `nica-erp` (not default). Rules to SQS:
 
 - "Notif on InvoiceIssued" → `notif-queue` + DLQ (`maxReceiveCount=5`): `detail-type ∈ {InvoiceIssued, UserRegistered, MemberInvited, LowStockAlerted}`.
-- "Audit consume all" → `audit-queue` + DLQ: `source = ["pyme-erp"]`.
+- "Audit consume all" → `audit-queue` + DLQ: `source = ["nica-erp"]`.
 
 **256 KB/event limit**: large payloads are truncated keeping key fields, or uploaded to S3 with reference (`s3_bucket`, `s3_key`); consumers hydrate if they need the body.
 

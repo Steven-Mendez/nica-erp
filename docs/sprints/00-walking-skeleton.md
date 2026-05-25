@@ -30,7 +30,7 @@ flowchart LR
 nica-erp/
 ├── apps/
 │   ├── api/
-│   │   ├── src/pyme_erp/{shared_kernel,contexts,bootstrap}/
+│   │   ├── src/{shared_kernel,contexts,bootstrap}/
 │   │   ├── tests/{unit,integration,e2e}/
 │   │   ├── pyproject.toml
 │   │   ├── Dockerfile          # placeholder, production-grade in sprint 01
@@ -67,7 +67,7 @@ dependencies = [
 dev-dependencies = ["testcontainers[postgres]>=4,<5"]
 ```
 
-`apps/api/src/pyme_erp/bootstrap/api.py` — FastAPI app with CORS for `:5173` and `/healthz`:
+`apps/api/src/bootstrap/api.py` — FastAPI app with CORS for `:5173` and `/healthz`:
 
 ```python
 @app.get("/healthz")
@@ -170,7 +170,7 @@ Dev: `typescript`, `vite`, `@vitejs/plugin-react`, `eslint`, `prettier`, `vitest
 
 ## `import-linter`
 
-`importlinter.toml` with contract "Domain free of SQLAlchemy/FastAPI/boto3" over `pyme_erp.shared_kernel.domain` and `pyme_erp.contexts.*.domain`; forbids `sqlalchemy`, `fastapi`, `boto3`, `pyme_erp.shared_kernel.adapters`, `pyme_erp.contexts.*.{application,adapters}`.
+`importlinter.toml` with contract "Domain free of SQLAlchemy/FastAPI/boto3" over `shared_kernel.domain` and `contexts.*.domain`; forbids `sqlalchemy`, `fastapi`, `boto3`, `shared_kernel.adapters`, `contexts.*.{application,adapters}`.
 
 ---
 
@@ -190,7 +190,7 @@ local-down:
 	cd docker && docker compose down
 
 api:
-	cd apps/api && uv run uvicorn pyme_erp.bootstrap.api:app --reload
+	cd apps/api && uv run uvicorn bootstrap.api:app --reload
 
 web:
 	cd apps/web && pnpm dev
@@ -240,7 +240,7 @@ Literal tabs for recipes (indentation with spaces = `*** missing separator`).
 git clone <repo> nica-erp && cd nica-erp
 uv sync --project apps/api && pre-commit install
 make local-up && make migrate && make api                          # terminal 1
-pnpm --filter @pyme-erp/web install && pnpm --filter @pyme-erp/web gen:api
+pnpm --filter @nica-erp/web install && pnpm --filter @nica-erp/web gen:api
 make web                                                           # terminal 2
 
 curl http://localhost:8000/healthz

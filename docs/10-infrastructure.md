@@ -20,13 +20,13 @@ Frontend in the **same account**, in the persistent bootstrap module (S3 + Cloud
 | Storage | S3 `files` (env), `web` (bootstrap), `tf-state` (bootstrap) | Versioning on `files` and `tf-state`. `web` private via OAC. |
 | Email | SES email-only permanent sandbox | No domain; up to 50 verified identities ([ADR-0020](adr/0020-no-custom-domain-mvp.md)). Current sandbox quota: **3,000 emails/month and 200/day** (the historical 62k/month free tier from EC2 was removed in Sep 2024). Enough for MVP; at the first productive tenant exit the sandbox with a domain identity + ticket. |
 | Queues | SQS standard + DLQs, `maxReceiveCount=5` | `notif-queue`, `audit-queue`, DLQs. |
-| Bus | EventBridge custom `pyme-erp` | Rules to SQS. |
+| Bus | EventBridge custom `nica-erp` | Rules to SQS. |
 | Scheduler | EventBridge **scheduled rule** (`aws_cloudwatch_event_rule`) | Parity with LocalStack community. |
-| Secrets | **SSM Parameter Store SecureString** (`/pyme-erp/db/master`, `/pyme-erp/jwt/signing-key`, `/pyme-erp/integrations/*`) | KMS `aws/ssm`. Free tier. [ADR-0021](adr/0021-ssm-parameter-store.md). |
+| Secrets | **SSM Parameter Store SecureString** (`/nica-erp/db/master`, `/nica-erp/jwt/signing-key`, `/nica-erp/integrations/*`) | KMS `aws/ssm`. Free tier. [ADR-0021](adr/0021-ssm-parameter-store.md). |
 | Config | SSM Parameter Store (String) | URLs, flags. |
 | ECR | private repo, lifecycle 5 images | Same image API + workers. |
-| Auth | Cognito tier Lite, prefix `pyme-erp` | `https://pyme-erp.auth.us-east-1.amazoncognito.com`. Callbacks to the CloudFront default. |
-| Logs | CloudWatch Logs, retention 7 days | `/aws/ecs/pyme-erp-api`, `/aws/lambda/pyme-erp-<worker>`. |
+| Auth | Cognito tier Lite, prefix `nica-erp` | `https://nica-erp.auth.us-east-1.amazoncognito.com`. Callbacks to the CloudFront default. |
+| Logs | CloudWatch Logs, retention 7 days | `/aws/ecs/nica-erp-api`, `/aws/lambda/nica-erp-<worker>`. |
 | Metrics/Alarms | CloudWatch + SNS topic | ALB 5xx, DLQ depth, Lambda errors, RDS CPU. |
 | IaC | Terraform 1.7+ with state S3 + DynamoDB lock | Modules in `infra/terraform/modules/`. |
 
@@ -174,10 +174,10 @@ flowchart TB
 
 One identity per component, least privilege. No wildcards.
 
-- `pyme-erp-api-task-role` — `ssm:GetParameter*` over `/pyme-erp/*` + `kms:Decrypt` (`alias/aws/ssm`); CloudWatch Logs; `s3:PutObject` on `files`; `ses:SendEmail`; `cognito-idp:*` over the User Pool.
-- `pyme-erp-api-execution-role` — pull ECR, CloudWatch Logs.
-- `pyme-erp-migration-task-role` — SSM (`/pyme-erp/db/master`) + `kms:Decrypt`, Logs.
-- `pyme-erp-lambda-{outbox,audit,notif,fx,housekeeping}-role` — SSM + `kms:Decrypt`, RDS conn, `events:PutEvents` (outbox), SQS (audit/notif), `ses:SendEmail` (notif), egress HTTP (fx), `DELETE` on outbox/processed_events/idempotency_keys (housekeeping). **All** carry `AWSLambdaVPCAccessExecutionRole` (Lambda manages ENIs).
+- `nica-erp-api-task-role` — `ssm:GetParameter*` over `/nica-erp/*` + `kms:Decrypt` (`alias/aws/ssm`); CloudWatch Logs; `s3:PutObject` on `files`; `ses:SendEmail`; `cognito-idp:*` over the User Pool.
+- `nica-erp-api-execution-role` — pull ECR, CloudWatch Logs.
+- `nica-erp-migration-task-role` — SSM (`/nica-erp/db/master`) + `kms:Decrypt`, Logs.
+- `nica-erp-lambda-{outbox,audit,notif,fx,housekeeping}-role` — SSM + `kms:Decrypt`, RDS conn, `events:PutEvents` (outbox), SQS (audit/notif), `ses:SendEmail` (notif), egress HTTP (fx), `DELETE` on outbox/processed_events/idempotency_keys (housekeeping). **All** carry `AWSLambdaVPCAccessExecutionRole` (Lambda manages ENIs).
 
 ---
 
@@ -294,7 +294,7 @@ NAT is the component with the highest per-hour cost — the main reason to destr
 
 ## Custom domain and activation
 
-Under [ADR-0020](adr/0020-no-custom-domain-mvp.md) pre-launch there is no custom domain, no Route 53, no issued ACM. CloudFront uses `*.cloudfront.net`, Cognito uses `pyme-erp.auth.us-east-1.amazoncognito.com`, SES uses email-only.
+Under [ADR-0020](adr/0020-no-custom-domain-mvp.md) pre-launch there is no custom domain, no Route 53, no issued ACM. CloudFront uses `*.cloudfront.net`, Cognito uses `nica-erp.auth.us-east-1.amazoncognito.com`, SES uses email-only.
 
 Activation runbook in [`11-deployment.md` § Activate custom domain](11-deployment.md#activate-custom-domain). Idle delta: ~$1.58/month.
 

@@ -7,7 +7,7 @@
 ERP with multiple bounded contexts, fiscal compliance, and strict multi-tenancy. The domain must be testable without AWS or a database; modules must be addable without rewrites; adapters (Cognito ↔ local IdP, SES ↔ Mailpit) must be swappable without touching business code.
 
 ## Decision
-Modular Python monolith (`pyme_erp`) with ports & adapters and tactical DDD. Each bounded context lives under `contexts/<name>/{domain,application,adapters}`. The dependency rule — `domain ← application ← adapters` — is enforced by `import-linter`.
+Modular Python monolith (distribution package `nica-erp`; source under `apps/api/src/` with top-level packages `bootstrap`, `shared_kernel`, `contexts` and no wrapping namespace) with ports & adapters and tactical DDD. Each bounded context lives under `contexts/<name>/{domain,application,adapters}`. The dependency rule — `domain ← application ← adapters` — is enforced by `import-linter`.
 
 ## Consequences
 - (+) Domain testable without infra; unit tests in milliseconds.

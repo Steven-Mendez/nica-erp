@@ -18,7 +18,7 @@ The HTTP API is consumed by the SPA from day one ([ADR-0009](0009-frontend-stack
 - **Within a version, OpenAPI is the contract.** The generated TypeScript client ([ADR-0009](0009-frontend-stack.md)) is the proof that the SPA tracks the contract. Drift between OpenAPI and implementation is a CI fail.
 
 ### Out of scope for `/v1`
-- Header-based versioning (`Accept: application/vnd.pyme-erp.v2+json`). Rejected for being invisible in URLs/logs/CDN paths.
+- Header-based versioning (`Accept: application/vnd.nica-erp.v2+json`). Rejected for being invisible in URLs/logs/CDN paths.
 - Quarterly auto-bumps. Versions only exist when forced by a breaking change.
 - Per-endpoint versioning. Rejected for combinatorial growth.
 

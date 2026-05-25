@@ -7,12 +7,12 @@
 Pre-implementation, every sprint claims test coverage as part of DoD ([`../sprints/README.md`](../sprints/README.md)), but no document defines what each test level targets, what to mock, or what gates merge. The risk: in a hexagonal + multi-tenant + fiscal-compliance system, ad-hoc testing leaves the highest-value invariants (RLS isolation, fiscal numbering atomicity, port-contract parity across local/AWS adapters) under-covered while unit tests proliferate around the domain.
 
 ## Decision
-**Four test levels, each owns a specific failure class.** Tests live next to the code they cover — never in a separate "tests/" root that duplicates the source tree.
+**Four test levels, each owns a specific failure class.** Tests live under `apps/<api|web>/tests/{unit,integration,contract,e2e}/`, mirroring the layout of `src/` — the top-level folder under `tests/` selects the marker auto-applied by `conftest.py` (`pytest -m unit` / `-m integration` filter without per-file boilerplate).
 
 | Level | Where | What it owns | Speed budget |
 |---|---|---|---|
-| Unit | `<context>/domain/`, `<context>/application/` | Pure logic: invariants, value objects, use case orchestration. No I/O. | < 1 ms per test |
-| Integration | `<context>/adapters/` (and infra) | One adapter at a time against real dependencies (testcontainers Postgres, LocalStack S3/EventBridge, Mailpit). | < 1 s per test |
+| Unit | `tests/unit/<mirrors src/>` (covers `<context>/domain/`, `<context>/application/`, `shared_kernel/domain/`, `shared_kernel/application/`) | Pure logic: invariants, value objects, use case orchestration. No I/O. | < 1 ms per test |
+| Integration | `tests/integration/<mirrors src/>` (covers `<context>/adapters/`, `shared_kernel/adapters/`, and infra) | One adapter at a time against real dependencies (testcontainers Postgres, LocalStack S3/EventBridge, Mailpit). | < 1 s per test |
 | Contract | `tests/contract/` | One test per port, parametrized over **all adapters** (e.g., `IdentityProviderLocal` + `IdentityProviderCognito`). Proves swap is safe. | < 5 s per test |
 | End-to-end | `tests/e2e/` | One canonical flow per sprint through HTTP → DB → outbox → consumer. Run against the real local stack. | < 30 s per test |
 
@@ -36,7 +36,7 @@ Pre-implementation, every sprint claims test coverage as part of DoD ([`../sprin
 - (+) Each test failure points to a specific layer.
 - (+) Contract tests give confidence to swap adapters during rolling deploys ([ADR-0018](0018-rolling-deploys.md)).
 - (+) RLS and concurrency tests catch the failures that hurt most in multi-tenant fiscal systems.
-- (+) No "tests/" mirror tree to keep in sync.
+- (+) `tests/` mirror tree keeps source clean (no `*_test.py` neighbors) and makes the marker auto-tagger a single `conftest.py` rule keyed on the top-level folder.
 - (−) Integration tests need testcontainers + LocalStack — slower to bootstrap than pure-mock alternatives.
 - (−) Contract tests add a per-port one-time authoring cost — paid once, valued forever.
 - (−) Coverage gate creates pressure to test trivial paths — accepted: 70% is low enough that this risk is bounded.

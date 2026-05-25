@@ -171,7 +171,7 @@ Outbox detail in [07](07-events-and-outbox.md).
 nica-erp/
 ├── apps/
 │   ├── api/                       # Python backend
-│   │   ├── src/pyme_erp/
+│   │   ├── src/
 │   │   │   ├── shared_kernel/     # AggregateRoot, UoW, Money, OutboxWriter, etc.
 │   │   │   ├── contexts/          # identity, tenants, catalog, inventory, parties,
 │   │   │   │                      # sales, taxes, payments, reports, notifications, audit

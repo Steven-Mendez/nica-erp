@@ -1,6 +1,6 @@
 # Sprint 02 — `identity` context + local IdP + Cognito adapter + deploy
 
-**Goal.** Signup, verification, login and `/me` working locally (`IdentityProviderLocal`) and on AWS (`IdentityProviderCognito` against the real User Pool). First DDD vertical slice + first port swap under rolling deploys. Cognito user pool domain with default prefix `pyme-erp.auth.us-east-1.amazoncognito.com` (no Hosted UI; `USER_PASSWORD_AUTH` flow from the API); SES in **permanent sandbox with email-only verification** (no domain identity, no DKIM/SPF, [ADR-0020](../adr/0020-no-custom-domain-mvp.md)).
+**Goal.** Signup, verification, login and `/me` working locally (`IdentityProviderLocal`) and on AWS (`IdentityProviderCognito` against the real User Pool). First DDD vertical slice + first port swap under rolling deploys. Cognito user pool domain with default prefix `nica-erp.auth.us-east-1.amazoncognito.com` (no Hosted UI; `USER_PASSWORD_AUTH` flow from the API); SES in **permanent sandbox with email-only verification** (no domain identity, no DKIM/SPF, [ADR-0020](../adr/0020-no-custom-domain-mvp.md)).
 
 ---
 
@@ -116,7 +116,7 @@ curl localhost:8000/v1/me -H "Authorization: Bearer $TOKEN"             # → pr
 
 - **`auth/` enriched**: App Client without secret, flow `USER_PASSWORD_AUTH` (MVP by simplicity for a SPA without client secret; evaluate `USER_SRP_AUTH` for production — [`../06-security-model.md` §Cognito adapter](../06-security-model.md#cognito-adapter-identityprovidercognito)); IAM for `cognito-idp:AdminGetUser/AdminUpdateUserAttributes/AdminInitiateAuth`. Callback/logout URLs declared as `"https://${aws_cloudfront_distribution.main.domain_name}/auth/callback"` directly in HCL (no prior apply required). MVP does not consume these callbacks because it does not use Hosted UI; they remain pre-wired for future OAuth flows.
 - **`email/` new**: SES **email identity** verified by email of the sender address (`alert_email` or operator). No domain identity, no DKIM/SPF — no controlled DNS zone. The operator verifies their address from the SES console (`us-east-1`) **before** the first signup. SES stays in **permanent sandbox** (≤50 verified recipients, no exit ticket).
-- **SSM** ([ADR-0021](../adr/0021-ssm-parameter-store.md)): `/pyme-erp/demo/cognito/{user_pool_id,app_client_id,user_pool_domain}`, `/pyme-erp/demo/ses/from_address`.
+- **SSM** ([ADR-0021](../adr/0021-ssm-parameter-store.md)): `/nica-erp/demo/cognito/{user_pool_id,app_client_id,user_pool_domain}`, `/nica-erp/demo/ses/from_address`.
 
 ### Wiring
 

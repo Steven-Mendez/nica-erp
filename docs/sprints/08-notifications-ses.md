@@ -84,7 +84,7 @@ Implements the canonical Lambda consumer pattern ([sprint 07](07-outbox-eventbri
 
 Branches by `event_type`:
 - `InvoiceIssued` → email to `customer.email` with PDF attached (download from S3).
-- `MemberInvited` → email with link `https://<dist-id>.cloudfront.net/invitations/{token}/accept` (the SPA resolves the flow and calls `/api/v1/invitations/{token}/accept`). CloudFront domain read from SSM `/pyme-erp/demo/web/public_url` (written by `compute/`).
+- `MemberInvited` → email with link `https://<dist-id>.cloudfront.net/invitations/{token}/accept` (the SPA resolves the flow and calls `/api/v1/invitations/{token}/accept`). CloudFront domain read from SSM `/nica-erp/demo/web/public_url` (written by `compute/`).
 - `LowStockAlerted` → email to the owner.
 - `UserRegistered` → welcome email (signup confirmed; written to outbox by sprint 02).
 - `NumberSequenceLowAlerted` → email to the owner when the DGI range reaches `low_threshold_pct` ([`../17-compliance-nicaragua.md` §NumberSequence](../17-compliance-nicaragua.md#numbersequence)).
@@ -95,7 +95,7 @@ Per event: load context (customer, invoice, PDF from S3) — Lambda in private V
 
 ## EventBridge rule
 
-LocalStack: setup in `docker/localstack-init.sh` (queue `notif-queue` + DLQ, rule `notif-selective` with event pattern `{"source":["pyme-erp"], "detail-type":["InvoiceIssued","MemberInvited","LowStockAlerted","UserRegistered","NumberSequenceLowAlerted"]}` → target `notif-queue`). Precondition: identity (sprint 02) writes `UserRegistered` to outbox; if not implemented, remove from the pattern.
+LocalStack: setup in `docker/localstack-init.sh` (queue `notif-queue` + DLQ, rule `notif-selective` with event pattern `{"source":["nica-erp"], "detail-type":["InvoiceIssued","MemberInvited","LowStockAlerted","UserRegistered","NumberSequenceLowAlerted"]}` → target `notif-queue`). Precondition: identity (sprint 02) writes `UserRegistered` to outbox; if not implemented, remove from the pattern.
 
 Endpoints: [`../08-api-conventions.md` #notifications](../08-api-conventions.md#notifications).
 
@@ -148,9 +148,9 @@ open http://localhost:8025                                        # email with P
 ### Terraform additions
 
 - **`notifications_worker` Lambda**: container image in VPC, event source mapping from `notif-queue` ([sprint 07](07-outbox-eventbridge-audit.md)). Batch size 5 (slow email), partial batch responses.
-- **EventBridge rule `notif-rule`** → `notif-queue` with selective event pattern: `source=["pyme-erp"]`, `detail-type=["UserRegistered","InvoiceIssued","LowStockAlerted","MemberInvited","NumberSequenceLowAlerted"]`.
-- **SES Configuration Set** (optional, not urgent): without traffic outside sandbox, bounces/complaints ~0. If kept, `pyme-erp-default` with event publishing to SNS `pyme-erp-bounce-complaint`.
-- **IAM**: role `pyme-erp-lambda-notif-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt`, `ses:SendRawEmail` with condition `ses:FromAddress = <verified_email_identity>`, `sqs:{ReceiveMessage,DeleteMessage}` over `notif-queue`.
+- **EventBridge rule `notif-rule`** → `notif-queue` with selective event pattern: `source=["nica-erp"]`, `detail-type=["UserRegistered","InvoiceIssued","LowStockAlerted","MemberInvited","NumberSequenceLowAlerted"]`.
+- **SES Configuration Set** (optional, not urgent): without traffic outside sandbox, bounces/complaints ~0. If kept, `nica-erp-default` with event publishing to SNS `nica-erp-bounce-complaint`.
+- **IAM**: role `nica-erp-lambda-notif-role` with `AWSLambdaVPCAccessExecutionRole`, `ssm:GetParameter` + `kms:Decrypt`, `ses:SendRawEmail` with condition `ses:FromAddress = <verified_email_identity>`, `sqs:{ReceiveMessage,DeleteMessage}` over `notif-queue`.
 - **Migration 0008**: RLS applied.
 
 ### Wiring

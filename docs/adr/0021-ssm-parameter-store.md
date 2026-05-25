@@ -20,14 +20,14 @@ SSM Parameter Store SecureString offers exactly what's actually used (KMS-encryp
 ## Decision
 **All persistent secrets in SSM Parameter Store as `SecureString`, with `.env.local` (gitignored) for dev.**
 
-- **Persistent secrets** (`/pyme-erp/db/master`, `/pyme-erp/jwt/signing-key`, `/pyme-erp/integrations/*`): SSM Parameter Store SecureString, KMS `alias/aws/ssm`, standard tier.
-- **Non-sensitive config** (URLs, flags, endpoints): SSM Parameter Store standard String under `/pyme-erp/config/*`.
+- **Persistent secrets** (`/nica-erp/db/master`, `/nica-erp/jwt/signing-key`, `/nica-erp/integrations/*`): SSM Parameter Store SecureString, KMS `alias/aws/ssm`, standard tier.
+- **Non-sensitive config** (URLs, flags, endpoints): SSM Parameter Store standard String under `/nica-erp/config/*`.
 - **Local dev**: `.env.local` with the same names; `SecretsProviderLocal` reads from `os.environ`. Mailpit/Postgres use fixed credentials documented in [`../15-local-development.md`](../15-local-development.md).
 - **Runtime**:
   - ECS task definition references SSM ARNs in `secrets[]`.
   - Lambdas read via `boto3.client("ssm").get_parameter(WithDecryption=True)` at cold start and cache.
   - `SecretsProvider` port isolates the swap (~20 LOC adapter).
-- **IAM**: task role + Lambdas get `ssm:GetParameter[s]` on `parameter/pyme-erp/*` + `kms:Decrypt` on `alias/aws/ssm`. No `secretsmanager:*` permissions.
+- **IAM**: task role + Lambdas get `ssm:GetParameter[s]` on `parameter/nica-erp/*` + `kms:Decrypt` on `alias/aws/ssm`. No `secretsmanager:*` permissions.
 
 ### Rotation policy
 - **RDS credentials** — not rotated automatically in MVP. Reconsider at first productive tenant.
@@ -36,7 +36,7 @@ SSM Parameter Store SecureString offers exactly what's actually used (KMS-encryp
 
 ### JWT compromise runbook
 1. `openssl rand -hex 32` → new key.
-2. `aws ssm put-parameter --name /pyme-erp/jwt/signing-key --value <new> --overwrite --type SecureString`.
+2. `aws ssm put-parameter --name /nica-erp/jwt/signing-key --value <new> --overwrite --type SecureString`.
 3. `aws ecs update-service --force-new-deployment` to pick up the new key.
 4. Log the incident and date. All sessions invalidated.
 
@@ -64,7 +64,7 @@ Formalize as `runbooks/jwt-key-rotation.md` ([`../13-operations.md`](../13-opera
 
 ## Reversal plan (when needed)
 When managed RDS rotation becomes required:
-1. Create `aws_secretsmanager_secret` for `pyme-erp/db/master`, copy value from SSM.
+1. Create `aws_secretsmanager_secret` for `nica-erp/db/master`, copy value from SSM.
 2. Update `secrets[].valueFrom` for `DB_CREDENTIALS` to the new ARN.
 3. Enable `aws_secretsmanager_secret_rotation` with the AWS-managed Lambda.
 4. JWT and other secrets stay in SSM.

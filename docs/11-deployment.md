@@ -39,10 +39,10 @@ infra/terraform/
 
 | Resource | Reason |
 |---|---|
-| S3 bucket `pyme-erp-tf-state` (versioned) | Terraform state. |
-| DynamoDB `pyme-erp-tf-lock` | Concurrent lock. |
-| ECR `pyme-erp` | API + worker images. |
-| S3 bucket `pyme-erp-web` private + CloudFront + OAC | SPA. CloudFront `<dist-id>.cloudfront.net` with `/*` behavior → S3; `/api/*` is added in `envs/demo`. |
+| S3 bucket `nica-erp-tf-state` (versioned) | Terraform state. |
+| DynamoDB `nica-erp-tf-lock` | Concurrent lock. |
+| ECR `nica-erp` | API + worker images. |
+| S3 bucket `nica-erp-web` private + CloudFront + OAC | SPA. CloudFront `<dist-id>.cloudfront.net` with `/*` behavior → S3; `/api/*` is added in `envs/demo`. |
 
 Bootstrap state is **local** (`.tfstate-local/`, in `.gitignore`). Back up manually — without it you can't destroy the bootstrap.
 
@@ -56,9 +56,9 @@ Bootstrap state is **local** (`.tfstate-local/`, in `.gitignore`). Back up manua
 
 | Resource | Entrypoint |
 |---|---|
-| API task | `uvicorn pyme_erp.bootstrap.api:app --host 0.0.0.0 --port 8000` |
+| API task | `uvicorn bootstrap.api:app --host 0.0.0.0 --port 8000` |
 | Migration task | `alembic upgrade head` |
-| Lambda outbox/audit/notif/fx/housekeeping | `pyme_erp.bootstrap.entrypoints.<worker>.handler` |
+| Lambda outbox/audit/notif/fx/housekeeping | `bootstrap.entrypoints.<worker>.handler` |
 
 `build-and-push-image.sh` writes the tag to `$REPO_ROOT/.deploy-image-tag` (gitignored). **Single source of truth**: Makefile, `plan`, `apply`, `destroy` read it from there.
 
@@ -68,7 +68,7 @@ CloudFront **does not** rewrite the path: the API receives `/api/v1/...`. FastAP
 
 Migrations run as a **one-off ECS task** with override `command = ["alembic", "upgrade", "head"]`, `aws ecs wait tasks-stopped` validates exit code.
 
-`print-urls.sh` reads outputs and prints: `App: https://<dist-id>.cloudfront.net/`, `API: /api`, `OpenAPI: /api/docs`, `Health: /api/healthz`, `Cognito: https://pyme-erp.auth.us-east-1.amazoncognito.com`. The `<dist-id>` is preserved between destroy and deploy (the distribution lives in bootstrap); it only changes after `make wipe` + re-bootstrap.
+`print-urls.sh` reads outputs and prints: `App: https://<dist-id>.cloudfront.net/`, `API: /api`, `OpenAPI: /api/docs`, `Health: /api/healthz`, `Cognito: https://nica-erp.auth.us-east-1.amazoncognito.com`. The `<dist-id>` is preserved between destroy and deploy (the distribution lives in bootstrap); it only changes after `make wipe` + re-bootstrap.
 
 ---
 
@@ -101,7 +101,7 @@ Default: empty DB + all migrations. Restore procedure in [`13-operations.md`](13
 |---|---|
 | `.tfstate-local/` lost | Back up to external S3 after each `make bootstrap`. Without it: `terraform import` or manual cleanup via console. |
 | CloudFront destroyed → URL changes | All references via Terraform output (Cognito callbacks, SPA `/api` relative). A URL stable across wipes requires a custom domain. |
-| Cognito prefix `pyme-erp` reserved after destroy | AWS retains it for a few minutes; wait ~5 min and retry. |
+| Cognito prefix `nica-erp` reserved after destroy | AWS retains it for a few minutes; wait ~5 min and retry. |
 
 ### Re-bootstrap
 
@@ -254,17 +254,17 @@ seed:
 	cd apps/api && uv run python scripts/seed-dev.py
 
 api:
-	cd apps/api && uv run uvicorn pyme_erp.bootstrap.api:app --reload
+	cd apps/api && uv run uvicorn bootstrap.api:app --reload
 
 web:
 	cd apps/web && pnpm dev
 
 worker-outbox:
-	cd apps/api && uv run python -m pyme_erp.bootstrap.entrypoints.outbox_publisher
+	cd apps/api && uv run python -m bootstrap.entrypoints.outbox_publisher
 worker-audit:
-	cd apps/api && uv run python -m pyme_erp.bootstrap.entrypoints.audit_consumer
+	cd apps/api && uv run python -m bootstrap.entrypoints.audit_consumer
 worker-notif:
-	cd apps/api && uv run python -m pyme_erp.bootstrap.entrypoints.notifications_worker
+	cd apps/api && uv run python -m bootstrap.entrypoints.notifications_worker
 
 test:
 	cd apps/api && uv run pytest
@@ -306,12 +306,12 @@ check() {
 
 echo "Post-destroy verification in account $(aws sts get-caller-identity --query Account --output text):"
 check "NAT Gateways"     "$(aws ec2 describe-nat-gateways --filter 'Name=state,Values=available' --query 'length(NatGateways)' --output text)"
-check "ALBs"             "$(aws elbv2 describe-load-balancers --query 'length(LoadBalancers[?starts_with(LoadBalancerName, \`pyme-erp\`)])' --output text)"
-check "RDS instances"    "$(aws rds describe-db-instances --query 'length(DBInstances[?starts_with(DBInstanceIdentifier, \`pyme-erp\`)])' --output text)"
-check "ECS services"     "$(aws ecs list-services --cluster pyme-erp --query 'length(serviceArns)' --output text 2>/dev/null || echo 0)"
-check "Fargate tasks"    "$(aws ecs list-tasks --cluster pyme-erp --query 'length(taskArns)' --output text 2>/dev/null || echo 0)"
-check "Lambda functions" "$(aws lambda list-functions --query 'length(Functions[?starts_with(FunctionName, \`pyme-erp\`)])' --output text)"
-check "VPCs pyme-erp"    "$(aws ec2 describe-vpcs --filter 'Name=tag:Project,Values=pyme-erp' --query 'length(Vpcs)' --output text)"
+check "ALBs"             "$(aws elbv2 describe-load-balancers --query 'length(LoadBalancers[?starts_with(LoadBalancerName, \`nica-erp\`)])' --output text)"
+check "RDS instances"    "$(aws rds describe-db-instances --query 'length(DBInstances[?starts_with(DBInstanceIdentifier, \`nica-erp\`)])' --output text)"
+check "ECS services"     "$(aws ecs list-services --cluster nica-erp --query 'length(serviceArns)' --output text 2>/dev/null || echo 0)"
+check "Fargate tasks"    "$(aws ecs list-tasks --cluster nica-erp --query 'length(taskArns)' --output text 2>/dev/null || echo 0)"
+check "Lambda functions" "$(aws lambda list-functions --query 'length(Functions[?starts_with(FunctionName, \`nica-erp\`)])' --output text)"
+check "VPCs nica-erp"    "$(aws ec2 describe-vpcs --filter 'Name=tag:Project,Values=nica-erp' --query 'length(Vpcs)' --output text)"
 
 [[ "$FAIL" -ne 0 ]] && { echo "Some resources survived. Review and clean up."; exit 1; }
 echo "Destroyed correctly."
@@ -325,9 +325,9 @@ Handling S3 versioning (delete markers) and ECR emptying is non-trivial — `ter
 #!/usr/bin/env bash
 set -euo pipefail
 
-STATE_BUCKET=pyme-erp-tf-state
-WEB_BUCKET=pyme-erp-web
-ECR_REPO=pyme-erp
+STATE_BUCKET=nica-erp-tf-state
+WEB_BUCKET=nica-erp-web
+ECR_REPO=nica-erp
 ENV_STATE_KEY=envs/demo/terraform.tfstate
 
 echo "WARNING: TOTAL destruction of bootstrap (irreversible)."
@@ -378,7 +378,7 @@ read -rp "Confirm with 'destroy': " confirm
 
 ## State and locking
 
-S3 `pyme-erp-tf-state` key `envs/demo/terraform.tfstate`, DynamoDB `pyme-erp-tf-lock` (LockID), bucket versioned + encrypted.
+S3 `nica-erp-tf-state` key `envs/demo/terraform.tfstate`, DynamoDB `nica-erp-tf-lock` (LockID), bucket versioned + encrypted.
 
 ---
 
@@ -390,7 +390,7 @@ S3 `pyme-erp-tf-state` key `envs/demo/terraform.tfstate`, DynamoDB `pyme-erp-tf-
 alert_email      = "ops@example.com"
 aws_region       = "us-east-1"
 ses_from_address = "noreply@example.com"
-ses_from_name    = "pyme-erp"
+ses_from_name    = "nica-erp"
 ```
 
 No `domain_name` under [ADR-0020](adr/0020-no-custom-domain-mvp.md). **Override `alert_email` to a real address before applying** or alarms go to a nonexistent inbox. The address must be verified in the SES console before the first send.
@@ -429,7 +429,7 @@ required_providers {
 
 ## Tagging
 
-Provider `default_tags`: `Project=pyme-erp`, `Environment=$var.environment` (`demo` → `prod-tenant-X`), `ManagedBy=terraform`, `Owner=$var.owner_email`, `CostCenter=pre-launch` (→ `tenant:<slug>`), `Component=infrastructure` (override per resource). Enables Cost Explorer grouping from day 1.
+Provider `default_tags`: `Project=nica-erp`, `Environment=$var.environment` (`demo` → `prod-tenant-X`), `ManagedBy=terraform`, `Owner=$var.owner_email`, `CostCenter=pre-launch` (→ `tenant:<slug>`), `Component=infrastructure` (override per resource). Enables Cost Explorer grouping from day 1.
 
 ---
 
