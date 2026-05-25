@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test lint format
+.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -46,8 +46,17 @@ makemigration: ## alembic revision -m "$M"
 makemigration-auto: ## alembic revision --autogenerate -m "$M"
 	cd apps/api && uv run alembic revision --autogenerate -m "$(M)"
 
-test: ## pytest (default = unit)
+test: test-api test-web ## run backend + frontend (all suites)
+
+test-api: ## pytest backend (unit + integration + e2e)
 	cd apps/api && uv run pytest
+
+test-web: ## vitest run (no watch)
+	cd apps/web && pnpm test:run
+
+test-unit: ## backend unit only + frontend unit only
+	cd apps/api && uv run pytest tests/unit
+	cd apps/web && pnpm test:run tests/unit
 
 lint: ## ruff + mypy + import-linter + pnpm lint
 	cd apps/api && uv run ruff check . && uv run mypy && uv run lint-imports
