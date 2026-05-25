@@ -30,7 +30,7 @@ flowchart LR
 
 ## Local stack
 
-`docker/docker-compose.yml`: Postgres 16, LocalStack community (`S3,SQS,events,ssm`), Mailpit. `localstack-init.sh` creates the `pyme-erp-files` bucket, queues + DLQs (`notif-queue`, `audit-queue`), the `pyme-erp` bus, and rules with the same shape as production.
+`docker/docker-compose.yml`: Postgres 17, LocalStack community (`S3,SQS,events,ssm`), Mailpit. `localstack-init.sh` creates the `nica-erp-files` bucket, queues + DLQs (`notif-queue`, `audit-queue`), the `nica-erp` bus, and rules with the same shape as production.
 
 LocalStack community **does not** support standalone EventBridge Scheduler. The outbox publisher runs as a Python loop locally via `make worker-outbox` (`asyncio.sleep(60)`); the rule's `schedule_expression` is exercised end-to-end when wired to LocalStack if parity with prod is required.
 
@@ -38,19 +38,36 @@ LocalStack community **does not** support standalone EventBridge Scheduler. The 
 
 ## Commands
 
-```bash
-make local-up               # Postgres + LocalStack + Mailpit
-make migrate && make seed   # alembic + demo data
-make api                    # http://localhost:8000 (Swagger at /docs)
-make web                    # http://localhost:5173
+`make help` lists every available target. Grouped by purpose:
 
-# Workers (separate terminals)
-make worker-outbox
-make worker-audit
-make worker-notif
+```bash
+# Setup (once)
+make doctor                              # verify uv, node, pnpm, docker on PATH
+make install                             # uv sync + pnpm install
+make hooks                               # install pre-commit git hooks
+cp .env.local.example apps/api/.env.local
+
+# Daily flow
+make local-up                            # Postgres + LocalStack + Mailpit
+make migrate                             # alembic upgrade head
+make api                                 # http://localhost:8000 (Swagger at /docs)
+make web                                 # http://localhost:5173
+make local-down                          # stop containers (volume persists)
+
+# Migrations
+make migrate-down                        # alembic downgrade -1
+make makemigration M="add foo table"     # empty revision
+make makemigration-auto M="add foo col"  # autogenerate from models
+
+# Quality
+make test                                # pytest
+make lint                                # ruff + mypy + import-linter + pnpm typecheck + lint
+make format                              # ruff format + prettier
 ```
 
-Local workers = Python processes running the same handler as the Lambda; only the harness (loop) and the wiring (LocalStack) differ.
+First time on the web side: `cd apps/web && pnpm gen:api` regenerates the typed OpenAPI client from `/openapi.json`.
+
+> Future-sprint targets (not yet wired): `make seed` (demo data), `make worker-outbox` / `make worker-audit` / `make worker-notif` (Python loops mirroring the prod Lambdas). Sprint 00 doc notes the full list of deferred targets.
 
 ---
 
@@ -80,28 +97,32 @@ Why not Cognito on LocalStack: [ADR-0005](adr/0005-cognito-with-local-idp.md). T
 
 ```ini
 APP_ENV=local
-DATABASE_URL=postgresql+asyncpg://pyme_erp:pyme_erp@localhost:5432/pyme_erp
+DATABASE_URL=postgresql+asyncpg://nica_erp:nica_erp@localhost:5432/nica_erp
 # Alembic CLI is sync → psycopg. API runtime is async → asyncpg.
-ALEMBIC_DATABASE_URL=postgresql+psycopg://pyme_erp:pyme_erp@localhost:5432/pyme_erp
+ALEMBIC_DATABASE_URL=postgresql+psycopg://nica_erp:nica_erp@localhost:5432/nica_erp
 
 AWS_ENDPOINT_URL=http://localhost:4566
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
 
-S3_FILES_BUCKET=pyme-erp-files
-EVENTBRIDGE_BUS_NAME=pyme-erp
+S3_FILES_BUCKET=nica-erp-files
+EVENTBRIDGE_BUS_NAME=nica-erp
 SQS_NOTIF_QUEUE_URL=http://localhost:4566/000000000000/notif-queue
 SQS_AUDIT_QUEUE_URL=http://localhost:4566/000000000000/audit-queue
 
 SMTP_HOST=localhost
 SMTP_PORT=1025
-SMTP_FROM=noreply@local.pyme-erp.dev
+SMTP_FROM=noreply@local.nica-erp.dev
 
+CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
+
+# Added in sprint 02 when the local IdP lands:
 LOCAL_JWT_SECRET=...   # openssl rand -hex 32
-LOCAL_JWT_ISSUER=pyme-erp-local
-LOCAL_JWT_AUDIENCE=pyme-erp-app
+LOCAL_JWT_ISSUER=nica-erp-local
+LOCAL_JWT_AUDIENCE=nica-erp-app
 
+# Added in sprint 06 (FX/taxes):
 FX_RATE_USD_NIO=36.5
 ```
 
@@ -140,7 +161,7 @@ Almost never. Justified cases: validate the Cognito adapter once per auth featur
 - LocalStack forgets state on restart. Set `LOCALSTACK_PERSISTENCE=1` if that becomes a problem.
 - EventBridge → SQS on LocalStack takes 1-2 s; tests should `asyncio.sleep` or poll with timeout.
 - PgBouncer transaction mode: verify `SET LOCAL` still works if introduced.
-- `ModuleNotFoundError: pyme_erp` → missing `uv sync` (src-layout).
+- `ModuleNotFoundError: bootstrap` / `shared_kernel` → missing `uv sync` (src-layout; imports are flat, no wrapping package).
 
 ---
 

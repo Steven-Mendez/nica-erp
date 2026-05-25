@@ -1,0 +1,17 @@
+[importlinter]
+root_packages =
+    bootstrap
+    shared_kernel
+    contexts
+include_external_packages = True
+
+[importlinter:contract:domain-purity]
+name = Domain free of SQLAlchemy/FastAPI/boto3
+type = forbidden
+source_modules =
+    shared_kernel.domain
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    boto3
+    shared_kernel.adapters

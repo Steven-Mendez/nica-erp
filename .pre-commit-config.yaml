@@ -1,0 +1,39 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: bash -c 'cd apps/api && uv run ruff format'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: ruff-check
+        name: ruff check
+        entry: bash -c 'cd apps/api && uv run ruff check --fix'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: mypy
+        name: mypy (domain + application)
+        entry: bash -c 'cd apps/api && uv run mypy'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: import-linter
+        name: import-linter contracts
+        entry: bash -c 'cd apps/api && uv run lint-imports'
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: web-typecheck
+        name: tsc --noEmit
+        entry: bash -c 'cd apps/web && pnpm typecheck'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx)$
+        pass_filenames: false
+      - id: web-lint
+        name: eslint
+        entry: bash -c 'cd apps/web && pnpm lint'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false

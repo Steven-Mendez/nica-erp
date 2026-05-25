@@ -1,0 +1,42 @@
+name: nica-erp
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nica-erp-postgres
+    environment:
+      POSTGRES_USER: nica_erp
+      POSTGRES_PASSWORD: nica_erp
+      POSTGRES_DB: nica_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nica_erp -d nica_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3.7
+    container_name: nica-erp-localstack
+    environment:
+      SERVICES: s3,sqs,events,ssm
+      DEBUG: "0"
+      PERSISTENCE: "0"
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: nica-erp-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  pg_data:

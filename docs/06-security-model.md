@@ -254,6 +254,23 @@ Future migration to Keycloak self-hosted, Okta, Auth0, or Azure AD:
 
 **Zero changes** in `domain/`, `application/use_cases/`, or any other context. This is what the port abstraction pays for.
 
+---
+
+## Contributor security checklist
+
+When writing code, do not:
+
+| Never                                                          | Do instead                                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Commit `.env`, AWS keys, JWTs, signing keys, RDS passwords     | Use `.env.local.example` as the template; secrets via SSM ([ADR-0021](adr/0021-ssm-parameter-store.md)) |
+| Log PII (names, emails, RUCs, phones, addresses)               | Log IDs only; `structlog` strips known PII as a safety net ([12 — Observability](12-observability.md)) |
+| Log JWTs, refresh tokens, passwords                            | Trace via `correlation_id`                                                   |
+| Bypass RLS in queries (`SET ROLE`, `SECURITY DEFINER` views)   | Always go through the tenant-scoped repository ([05 — Multi-tenancy](05-multi-tenancy.md)) |
+| Build SQL strings via f-string interpolation                   | Use SQLAlchemy expressions; let the driver bind parameters                   |
+| Use `eval`, `exec`, `pickle` on untrusted input                | Use Pydantic for validation, `json` for serialization                        |
+
+If you spot a security issue, open a **private** GitHub Security Advisory rather than a public issue.
+
 ## References
 - [ADR-0005](adr/0005-cognito-with-local-idp.md) — Cognito + local IdP
 - [ADR-0021](adr/0021-ssm-parameter-store.md) — SSM secrets

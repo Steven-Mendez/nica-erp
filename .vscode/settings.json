@@ -1,0 +1,153 @@
+{
+  // ─────────────────────────────────────────────────────────────────────────
+  // Python / Backend (apps/api)
+  // ─────────────────────────────────────────────────────────────────────────
+  "python.defaultInterpreterPath": "${workspaceFolder}/apps/api/.venv/bin/python",
+  "python.analysis.extraPaths": ["apps/api/src"],
+  "python.analysis.typeCheckingMode": "off",
+  "python.terminal.activateEnvironment": true,
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["apps/api"],
+
+  // Mypy: use the project's venv + pyproject.toml so every dev sees the same errors
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+  "mypy-type-checker.preferDaemon": true,
+  "mypy-type-checker.cwd": "${workspaceFolder}/apps/api",
+  "mypy-type-checker.args": ["--config-file=${workspaceFolder}/apps/api/pyproject.toml"],
+  "mypy-type-checker.reportingScope": "workspace",
+
+  // Ruff: use the project's venv so version matches CI.
+  // Do NOT set `ruff.configuration` — let the extension auto-discover the
+  // nearest pyproject.toml from each file. Forcing a config path makes ruff
+  // resolve `src` and `per-file-ignores` against the workspace root instead
+  // of `apps/api/`, which breaks first-party import detection and per-file
+  // overrides.
+  "ruff.importStrategy": "fromEnvironment",
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TypeScript / Frontend (apps/web)
+  // ─────────────────────────────────────────────────────────────────────────
+  "eslint.workingDirectories": [{ "pattern": "apps/web" }],
+  "eslint.useFlatConfig": true,
+  "eslint.validate": ["javascript", "typescript", "typescriptreact"],
+  "prettier.requireConfig": true,
+
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  // Tailwind directives (@tailwind, @apply, @layer, @screen, @variants) are
+  // PostCSS-time at-rules; the built-in VSCode CSS validator doesn't know
+  // them and flags every globals.css line. The Tailwind IntelliSense
+  // extension (bradlc.vscode-tailwindcss, recommended in extensions.json)
+  // provides the proper completions; we silence the built-in warning so the
+  // Problems panel stays clean for contributors with or without it.
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Editor / Workspace
+  // ─────────────────────────────────────────────────────────────────────────
+  "editor.rulers": [100],
+  "editor.tabSize": 2,
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/pnpm-lock.yaml": true,
+    "**/uv.lock": true
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Spell checker — project-specific vocabulary
+  // ─────────────────────────────────────────────────────────────────────────
+  "cSpell.words": [
+    "alembic",
+    "asgi",
+    "asyncpg",
+    "autouse",
+    "Depends",
+    "fastapi",
+    "healthz",
+    "httpx",
+    "modifyitems",
+    "psycopg",
+    "pydantic",
+    "pyproject",
+    "pytest",
+    "pythonpath",
+    "respx",
+    "sessionmaker",
+    "sqlalchemy",
+    "structlog",
+    "tanstack",
+    "testcontainer",
+    "testcontainers",
+    "testpaths",
+    "uvicorn",
+    "vitest"
+  ]
+}

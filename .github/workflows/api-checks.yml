@@ -1,0 +1,31 @@
+name: api-checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/api-checks.yml"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: uv sync
+        run: uv sync --frozen
+      - name: ruff check
+        run: uv run ruff check
+      - name: ruff format --check
+        run: uv run ruff format --check
+      - name: mypy
+        run: uv run mypy
+      - name: import-linter
+        run: uv run lint-imports
+      - name: pytest -m unit
+        run: uv run pytest -m unit

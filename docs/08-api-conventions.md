@@ -200,6 +200,28 @@ Per-endpoint permission requirements are documented in the OpenAPI operation's `
 
 ---
 
+## Adding or changing an endpoint (contributor workflow)
+
+1. Add the route + Pydantic schemas in the adapter (`apps/api/nica_erp/contexts/<context>/adapters/http/`).
+2. Implement the use case in `application/`, orchestrating domain logic.
+3. Write tests at the appropriate level — integration test for the router, unit test for the use case ([14 — Testing](14-testing.md)).
+4. Run the API locally (`make api`) and regenerate the frontend client:
+   ```bash
+   cd apps/web && pnpm gen:api
+   ```
+5. The web feature now consumes the typed client (`src/api/`). Compile errors mean a consumer broke — fix the consumer or revisit the contract.
+6. If the change is breaking (different shape, removed field, different status code), do **not** reshape `/v1` in place. Bump to `/v2` per [ADR-0027](adr/0027-api-versioning.md); add `Sunset` + `Deprecation: true` headers on `/v1`.
+
+### Errors
+
+All 4xx/5xx use RFC 7807 (`application/problem+json`) with a stable `code` field. New errors get a new code following `<context>.<error>` (e.g. `sales.number_sequence_exhausted`) and an entry in the exception map. See [ADR-0015](adr/0015-rfc7807-errors.md).
+
+### Idempotency
+
+Mutating endpoints dangerous to retry (issue invoice, apply payment, reverse payment) **require** an `Idempotency-Key` header — see [Idempotency-Key](#idempotency-key) above for the contract.
+
+---
+
 ## References
 - [ADR-0015](adr/0015-rfc7807-errors.md) — Problem Details
 - [ADR-0016](adr/0016-cursor-pagination.md) — Pagination

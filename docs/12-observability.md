@@ -149,6 +149,47 @@ More queries in [13 — Operations §Debug runbook](13-operations.md#debug-runbo
 
 ---
 
+## Writing logs (for contributors)
+
+### Per-event fields
+
+Auto-injected by the structlog middleware — **do not add manually**: `timestamp`, `level`, `request_id`, `correlation_id`, `tenant_id`, `user_id`.
+
+Add what makes the event debuggable: IDs (`invoice_id`, `payment_id`), counts (`items_count`), durations (`duration_ms`), document types.
+
+```python
+# Good — structured, queryable in Logs Insights
+logger.info(
+    "invoice.issued",
+    invoice_id=str(invoice.id),
+    document_type=invoice.document_type,
+    total_cents=invoice.total.amount_cents,
+    duration_ms=duration_ms,
+)
+
+# Bad — unstructured, untraceable
+logger.info(f"Issued invoice {invoice.id} for {invoice.total} in {duration_ms}ms")
+```
+
+### Levels
+
+| Level   | Use for                                                              |
+| ------- | -------------------------------------------------------------------- |
+| `debug` | Per-operation detail (cache hits, query plans). Off in production.   |
+| `info`  | Business events (`invoice.issued`, `payment.applied`).               |
+| `warn`  | Recoverable problems (retry succeeded, fell back to default).        |
+| `error` | Failures the user notices. Always include `exc_info=True`.           |
+
+### Never log
+
+- PII: names, emails, RUCs, phone numbers, addresses.
+- Secrets: JWTs, refresh tokens, passwords, signing keys.
+- Full fiscal document bodies — IDs and totals only.
+- `print()`. Use `logger.debug(...)`.
+- f-string formatting **of the message** — use structured fields so CloudWatch Logs Insights can query them.
+
+---
+
 ## What is not measured
 
 Explicit non-goals:

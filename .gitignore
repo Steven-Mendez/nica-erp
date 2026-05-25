@@ -179,3 +179,64 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / Vitest / TS build outputs
+apps/web/dist/
+apps/web/.vite/
+apps/web/coverage/
+*.tsbuildinfo
+
+# Local env (everything ending in .local is gitignored by Vite convention)
+.env
+.env.local
+.env.*.local
+apps/*/.env
+apps/*/.env.local
+apps/*/.env.*.local
+*.local
+!.env.local.example
+!apps/*/.env.local.example
+
+# Frontend generated OpenAPI client (regenerated via `pnpm gen:api`)
+apps/web/src/api/schema.d.ts
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+
+# uv / pip / pyright caches
+.uv_cache/
+.pyright/
+.pytest_cache/
+
+# Alembic local artifacts (none expected, but just in case)
+apps/api/alembic.log
+
+# Docker
+docker/.localstack/
+docker/.volumes/
+
+# Terraform (sprint 01+; placeholders for now)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
+# Secrets — never commit
+*.pem
+*.key
+*.p12
+secrets/
