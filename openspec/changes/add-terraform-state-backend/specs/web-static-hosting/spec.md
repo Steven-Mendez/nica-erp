@@ -1,20 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: S3 bucket `nica-erp-web` holds the built SPA privately
+### Requirement: S3 SPA bucket `nica-erp-web-<account-id>` holds the built SPA privately
 
 The bootstrap Terraform root SHALL create an S3 bucket named
-`nica-erp-web` with server-side encryption set to `AES256` (SSE-S3),
-`BlockPublicAccess` with all four flags (`BlockPublicAcls`,
-`BlockPublicPolicy`, `IgnorePublicAcls`, `RestrictPublicBuckets`) set
-to `true`, and the tag `Project=nica-erp`. The bucket policy SHALL
-grant `s3:GetObject` only to the CloudFront service principal whose
-`AWS:SourceArn` matches the distribution created by this change, and
-SHALL deny all other principals.
+`nica-erp-web-${data.aws_caller_identity.current.account_id}` with
+server-side encryption set to `AES256` (SSE-S3), `BlockPublicAccess`
+with all four flags (`BlockPublicAcls`, `BlockPublicPolicy`,
+`IgnorePublicAcls`, `RestrictPublicBuckets`) set to `true`, and the
+tag `Project=nica-erp`. The bucket policy SHALL grant `s3:GetObject`
+only to the CloudFront service principal whose `AWS:SourceArn` matches
+the distribution created by this change, and SHALL deny all other
+principals. The bucket name is exposed as the `web_bucket` Terraform
+output.
 
 #### Scenario: SPA bucket is not publicly readable
 
-- **WHEN** an unauthenticated HTTPS request hits
-  `https://nica-erp-web.s3.us-east-1.amazonaws.com/index.html`
+- **WHEN** an unauthenticated HTTPS request hits the bucket regional
+  domain for the SPA bucket (e.g.
+  `https://${web_bucket}.s3.us-east-1.amazonaws.com/index.html`)
 - **THEN** the response status SHALL be `403`
 
 #### Scenario: CloudFront can read the SPA bucket via OAC
@@ -27,7 +30,7 @@ SHALL deny all other principals.
 ### Requirement: CloudFront distribution fronts the SPA over the default cert
 
 The bootstrap Terraform root SHALL create one CloudFront distribution
-attached to `nica-erp-web` via an Origin Access Control (OAC, signing
+attached to the SPA bucket via an Origin Access Control (OAC, signing
 protocol `sigv4`, signing behavior `always`). The distribution SHALL
 use the default `*.cloudfront.net` viewer certificate with TLSv1.2_2021
 minimum protocol version (no ACM, no `Aliases`). Price class SHALL be
@@ -46,25 +49,28 @@ minimum protocol version (no ACM, no `Aliases`). Price class SHALL be
 
 The distribution SHALL declare exactly two behaviors:
 
-- **Default `/*` behavior** SHALL target the `nica-erp-web` origin via
+- **Default `/*` behavior** SHALL target the SPA bucket origin via
   OAC, allowed methods `GET, HEAD, OPTIONS`, cached methods
   `GET, HEAD`, `ViewerProtocolPolicy=redirect-to-https`, and the
-  AWS managed cache policy `CachingOptimized`.
+  AWS managed cache policy `CachingOptimized` (looked up via
+  `data "aws_cloudfront_cache_policy" "caching_optimized"` rather than
+  hardcoded by UUID).
 - **Path-pattern `/api/*` behavior** SHALL be present with allowed
   methods `GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE`,
   `ViewerProtocolPolicy=redirect-to-https`, AWS managed cache policy
   `CachingDisabled`, AWS managed origin-request policy
-  `AllViewerExceptHostHeader`, and a custom HTTP-only origin whose
-  `DomainName` is `placeholder.invalid` and whose
-  `OriginProtocolPolicy` is `http-only`. This origin is a deliberate
-  placeholder; the `add-aws-runtime-stack` change SHALL swap
-  `DomainName` to the ALB DNS name without recreating the
-  distribution.
+  `AllViewerExceptHostHeader` (both looked up by name via
+  `data` sources), and a custom HTTP-only origin whose `DomainName`
+  is `placeholder.invalid` and whose `OriginProtocolPolicy` is
+  `http-only`. This origin is a deliberate placeholder; the
+  `add-aws-runtime-stack` change SHALL swap `DomainName` to the ALB
+  DNS name without recreating the distribution.
 
 #### Scenario: Default behavior serves the SPA bucket
 
 - **WHEN** `GET https://<dist-id>.cloudfront.net/` is requested after
-  the operator uploads an `index.html` to `nica-erp-web`
+  the operator uploads an `index.html` to the SPA bucket
+  (`aws s3 cp index.html "s3://$(terraform -chdir=infra/terraform/bootstrap output -raw web_bucket)/index.html"`)
 - **THEN** the response SHALL return that `index.html` with HTTP 200
 
 #### Scenario: `/api/*` behavior is declared but non-functional

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format
+.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,3 +65,9 @@ lint: ## ruff + mypy + import-linter + pnpm lint
 format: ## ruff format + prettier
 	cd apps/api && uv run ruff format .
 	cd apps/web && pnpm format
+
+bootstrap: ## provision persistent AWS resources (state bucket, ECR, SPA CloudFront)
+	./scripts/bootstrap.sh
+
+destroy-bootstrap: ## tear down persistent AWS resources (refuses if ephemeral stack alive)
+	./scripts/destroy-bootstrap.sh

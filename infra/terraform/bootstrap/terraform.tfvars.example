@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (gitignored) and edit if needed.
+#
+# AWS region for all bootstrap resources. CloudFront itself is global, but
+# the S3 buckets, the ECR repository, and the DynamoDB lock table all live
+# in this region. The whole project assumes a single region for the MVP.
+aws_region = "us-east-1"
+
+# Named AWS CLI profile used by Terraform and by the bootstrap scripts.
+# The project mandates the `nica-erp` profile — the default profile must
+# never be used. Configure it once with:
+#   aws configure --profile nica-erp
+aws_profile = "nica-erp"
