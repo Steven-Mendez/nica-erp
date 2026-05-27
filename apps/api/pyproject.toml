@@ -83,6 +83,13 @@ ignore_missing_imports = true
 module = ["boto3", "boto3.*", "botocore", "botocore.*"]
 ignore_missing_imports = true
 
+# Tests are out of `make lint`'s scope (see `files=` above). This override
+# tells mypy to swallow errors when the editor (e.g. VSCode mypy extension)
+# invokes it directly on a test file, so editor squigglies match CI silence.
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]
