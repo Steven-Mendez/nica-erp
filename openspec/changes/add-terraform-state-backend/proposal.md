@@ -57,9 +57,39 @@ shared state to coordinate against.
   full `deploy/destroy/wipe/plan/logs/deploy-web` set lands in
   `add-deploy-destroy-automation`). `make wipe` is **not** added here
   because it composes with `destroy` from sprint 01's later change.
+  Both `bootstrap` and `destroy-bootstrap` SHALL run on the
+  administrator's workstation against the `nica-erp` AWS CLI profile —
+  they are admin-only and intentionally do NOT have a GitHub Actions
+  workflow surface (sprint 01 §Operations explains why: the bootstrap
+  creates the very OIDC provider and CI IAM roles a workflow would
+  need to authenticate; chicken-and-egg).
 - New `infra/terraform/bootstrap/terraform.tfvars.example` documenting
   `aws_region` (default `us-east-1`) and any optional toggle; the
   actual `terraform.tfvars` is gitignored.
+- **GitHub Actions OIDC federation, provisioned here so the CI roles
+  the deploy/destroy workflows assume exist by the time `add-deploy-destroy-automation`
+  ships its workflows.** New
+  `infra/terraform/bootstrap/oidc.tf` declares:
+  - One `aws_iam_openid_connect_provider` for
+    `token.actions.githubusercontent.com` (AWS hard-limit: one per
+    `url` per account), `client_id_list = ["sts.amazonaws.com"]`.
+  - Two `aws_iam_role` resources: `nica-erp-ci-deploy` and
+    `nica-erp-ci-destroy`. Trust policy on each binds the federated
+    principal to `repo:Steven-Mendez/nica-erp:ref:refs/heads/main`
+    only — feature-branch workflows SHALL NOT be able to assume
+    them. Inline policies are scoped per role: deploy gets ECR push
+    + ephemeral-stack apply + state-backend r/w + SPA-bucket put +
+    CloudFront invalidation; destroy gets ephemeral-stack destroy +
+    state-backend r/w and is explicitly denied the bootstrap-surface
+    actions (`s3:DeleteBucket` on state/SPA buckets,
+    `ecr:DeleteRepository`, `cloudfront:DeleteDistribution`,
+    `iam:DeleteOpenIDConnectProvider`, `iam:DeleteRole`).
+  - Two new Terraform outputs `ci_deploy_role_arn` and
+    `ci_destroy_role_arn`.
+- `scripts/bootstrap.sh` prints the two new role ARNs at the end and
+  emits two literal `gh variable set` commands the administrator
+  pastes once to register them as repo variables
+  `AWS_DEPLOY_ROLE_ARN` / `AWS_DESTROY_ROLE_ARN`.
 
 ## Capabilities
 
@@ -83,6 +113,11 @@ shared state to coordinate against.
   `make destroy-bootstrap` targets, including the operator-confirmation
   workflow and the rule that destroy refuses to run while ephemeral
   resources still exist.
+- `aws-iam-ci-federation`: the GitHub-Actions OIDC provider and the
+  two IAM roles (`nica-erp-ci-deploy`, `nica-erp-ci-destroy`) the
+  workflows in `add-deploy-destroy-automation` assume. The
+  bootstrap script's print-out for the two `gh variable set`
+  registration commands.
 
 ### Modified Capabilities
 

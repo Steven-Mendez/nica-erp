@@ -165,3 +165,47 @@ resources) and all sub-tasks below pass on that same run.
       and confirm an empty result. (Already verified on 2026-05-25
       after the partial-bootstrap destroy; will be re-verified on the
       first complete cycle.)
+
+## 7. GitHub Actions OIDC federation (added scope)
+
+> The two IAM roles created here are assumed by the `deploy.yml` and
+> `destroy.yml` workflows that ship in `add-deploy-destroy-automation`.
+> They live in this change because the bootstrap is the only surface
+> that can create IAM resources, and because the chicken-and-egg
+> "first bootstrap must run on the operator host" rule is what makes this
+> the right home. See sprint 01 §Operations and ADR-0030.
+
+- [x] 7.1 Add `infra/terraform/bootstrap/oidc.tf` with one
+      `aws_iam_openid_connect_provider` for
+      `token.actions.githubusercontent.com`,
+      `client_id_list = ["sts.amazonaws.com"]`,
+      `tags = { Project = "nica-erp" }`. Output the ARN as
+      `github_oidc_provider_arn`.
+- [x] 7.2 Declare `aws_iam_role` `nica-erp-ci-deploy` with trust
+      policy bound to
+      `repo:Steven-Mendez/nica-erp:ref:refs/heads/main`. Inline
+      policy: ECR push on the `nica-erp` repo ARN; state-backend
+      r/w; the apply-side actions on the ephemeral resource set
+      (cross-reference `add-aws-runtime-stack` for the exhaustive
+      list); SPA-bucket PutObject + CloudFront invalidation. Output
+      the ARN as `ci_deploy_role_arn`.
+- [x] 7.3 Declare `aws_iam_role` `nica-erp-ci-destroy` with the
+      same trust policy. Inline policy: destroy-side actions on
+      the ephemeral resource set + state-backend r/w. Explicit Deny
+      on `s3:DeleteBucket` for the state/SPA buckets,
+      `ecr:DeleteRepository`, `cloudfront:DeleteDistribution`,
+      `iam:DeleteOpenIDConnectProvider`, `iam:DeleteRole`. Output
+      the ARN as `ci_destroy_role_arn`.
+- [x] 7.4 `terraform fmt` + `terraform validate` are green.
+- [x] 7.5 `scripts/bootstrap.sh` reads back the three new outputs
+      and prints them alongside the existing four.
+- [x] 7.6 `scripts/bootstrap.sh` emits two literal commands —
+      `gh variable set AWS_DEPLOY_ROLE_ARN --body "<arn>"` and
+      `gh variable set AWS_DESTROY_ROLE_ARN --body "<arn>"` —
+      populated from the role ARNs, so the administrator pastes
+      them once.
+- [ ] 7.7 Add to §6 verification: after `make bootstrap` succeeds,
+      confirm `aws iam get-role --role-name nica-erp-ci-deploy` and
+      `aws iam get-role --role-name nica-erp-ci-destroy` both
+      succeed. After `make destroy-bootstrap`, confirm both fail
+      with `NoSuchEntity`.

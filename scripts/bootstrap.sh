@@ -87,7 +87,27 @@ terraform -chdir="${TF_DIR}" apply -auto-approve -input=false
 
 echo
 echo "==> Bootstrap outputs"
-for key in cloudfront_distribution_domain tf_state_bucket ecr_repository_url web_bucket; do
+for key in cloudfront_distribution_domain tf_state_bucket ecr_repository_url web_bucket \
+           github_oidc_provider_arn ci_deploy_role_arn ci_destroy_role_arn; do
   value="$(terraform -chdir="${TF_DIR}" output -raw "${key}")"
   printf '%s = %s\n' "${key}" "${value}"
 done
+
+# CI hand-off: the two role ARNs need to land in GitHub repository
+# variables so .github/workflows/deploy.yml and destroy.yml can
+# assume them. Print copy-pasteable commands rather than leaving the
+# administrator to look the ARNs up.
+ci_deploy_arn="$(terraform -chdir="${TF_DIR}" output -raw ci_deploy_role_arn)"
+ci_destroy_arn="$(terraform -chdir="${TF_DIR}" output -raw ci_destroy_role_arn)"
+
+cat <<EOF
+
+==> Register the CI role ARNs with GitHub
+    Run these two commands once (requires \`gh auth login\` first):
+
+    gh variable set AWS_DEPLOY_ROLE_ARN  --body "${ci_deploy_arn}"
+    gh variable set AWS_DESTROY_ROLE_ARN --body "${ci_destroy_arn}"
+
+    Or paste them manually under
+    Settings → Secrets and variables → Actions → Variables.
+EOF

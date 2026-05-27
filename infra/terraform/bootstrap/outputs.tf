@@ -47,3 +47,18 @@ output "cloudfront_distribution_domain" {
   description = "Public CloudFront domain name (default *.cloudfront.net cert)."
   value       = aws_cloudfront_distribution.web.domain_name
 }
+
+output "github_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider (one per AWS account)."
+  value       = aws_iam_openid_connect_provider.github.arn
+}
+
+output "ci_deploy_role_arn" {
+  description = "IAM role assumed by .github/workflows/deploy.yml via OIDC. Register as the AWS_DEPLOY_ROLE_ARN GitHub repository variable."
+  value       = aws_iam_role.ci_deploy.arn
+}
+
+output "ci_destroy_role_arn" {
+  description = "IAM role assumed by .github/workflows/destroy.yml via OIDC. Register as the AWS_DESTROY_ROLE_ARN GitHub repository variable."
+  value       = aws_iam_role.ci_destroy.arn
+}

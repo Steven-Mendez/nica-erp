@@ -65,7 +65,7 @@ as DoD), and [ADR-0020](../../../docs/adr/0020-no-custom-domain-mvp.md)
 
 `infra/terraform/bootstrap/` ships **without** a `backend "s3"` block:
 the state file lives at `infra/terraform/bootstrap/terraform.tfstate`
-on the operator's laptop and is gitignored. Only the ephemeral root
+on the operator's host and is gitignored. Only the ephemeral root
 (`envs/demo/`) configures the S3 backend with the bucket and lock
 table this change creates.
 
@@ -273,10 +273,10 @@ lifecycles.
   the runtime stack landing. → **Mitigation**: only the operator
   knows the URL; no DNS, no advertising. The state is intentional and
   short-lived.
-- **Risk**: Local bootstrap state on a single operator laptop is a
+- **Risk**: Local bootstrap state on a single operator host is a
   single point of failure. → **Mitigation**: the state is trivially
   recreatable (`terraform import` the 5 resources by ARN if the
-  laptop dies); the assets it protects (the state bucket, ECR repo,
+  operator host dies); the assets it protects (the state bucket, ECR repo,
   SPA bucket) carry their own data.
 - **Risk**: ECR `IMMUTABLE` tags block a re-push of the same tag on a
   failed deploy. → **Trade-off**: accepted; `build-and-push-image.sh`
