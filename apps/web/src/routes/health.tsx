@@ -1,7 +1,14 @@
+// apps/web/src/routes/health.tsx
+//
+// Operator-facing health dashboard. Reads /healthz and renders status, db,
+// version, git_sha, alembic_revision. Not linked from the auth UI — direct
+// URL only, for debugging.
+
 import { useHealthz } from "@/api/healthz";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 type FieldState =
   | { kind: "loading" }
@@ -22,7 +29,8 @@ function MonoCell({ state }: { state: FieldState }) {
   return <span className="font-mono text-foreground">{state.value ?? "—"}</span>;
 }
 
-export function IndexRoute() {
+export function HealthRoute() {
+  useDocumentTitle("System health");
   const { data, isLoading, isError } = useHealthz();
   const offline = isError || (!isLoading && !data);
 
@@ -36,7 +44,7 @@ export function IndexRoute() {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center p-8">
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>nica-erp</CardTitle>
+          <CardTitle>Nica ERP</CardTitle>
           <CardDescription>Backend health, read from /healthz.</CardDescription>
         </CardHeader>
         <CardContent>
