@@ -101,31 +101,68 @@ commands from a clean account:
   - Helper sourced by `destroy.sh` and `destroy-bootstrap.sh` (in
     `add-terraform-state-backend`) — interactive `read -r` of a
     confirmation string. Avoids re-implementing the prompt twice.
+- **GitHub Actions workflows for the deploy/destroy cycle** (sprint
+  01 §Operations + ADR-0030 — the deploy cycle moves to CI because
+  the administrator's Apple Silicon host cannot build the production
+  image under QEMU emulation; the bootstrap/destroy-bootstrap cycle
+  stays operator-host-side because it owns the IAM/OIDC plumbing that the
+  workflows would otherwise need to exist before they can run):
+  - **New `.github/workflows/deploy.yml`** — `workflow_dispatch`
+    only, no `push:` trigger. Assumes `nica-erp-ci-deploy` via OIDC
+    (the role is created by `add-terraform-state-backend`). Body:
+    build + push image; `terraform apply` on the ephemeral root;
+    `scripts/run-migrations.sh`; ECS `update-service
+    --force-new-deployment`; `scripts/deploy-web.sh`; poll
+    `/api/healthz` until `db: "ok"`. Emits a step summary with the
+    pushed tag, alembic revision, CloudFront URL, and ECS task
+    definition ARN.
+  - **New `.github/workflows/destroy.yml`** — `workflow_dispatch`
+    only, requires a `confirm=nica-erp-ephemeral` input. Assumes
+    `nica-erp-ci-destroy` via OIDC. Body: `terraform destroy` on
+    the ephemeral root; optional `clean_web_assets` input that
+    empties the SPA bucket; `verify-destroyed.sh` as a report
+    (not a gate).
+  - Auto-trigger on `push: branches: [main]` is intentionally
+    not enabled. Switching it on later is a one-line YAML diff in
+    `deploy.yml`; the IAM role already trusts that ref.
 - **Makefile target surface** (extends what
   `add-terraform-state-backend` and `add-api-container-image`
   shipped):
-  - `deploy` → `scripts/deploy.sh`
-  - `destroy` → `scripts/destroy.sh`
+  - `deploy` → `gh workflow run deploy.yml --ref main` (NOT
+    `scripts/deploy.sh` directly — the script body now runs inside
+    the workflow on `ubuntu-latest`).
+  - `destroy` → `gh workflow run destroy.yml --ref main -f confirm=nica-erp-ephemeral`
+    (NOT `scripts/destroy.sh` directly).
   - `plan` → `terraform -chdir=infra/terraform/envs/demo plan`
-  - `logs` → `scripts/tail-logs.sh`
-  - `deploy-web` → `scripts/deploy-web.sh`
-  - `urls` → `scripts/print-urls.sh`
+    (operator-host-side read-only helper).
+  - `logs` → `scripts/tail-logs.sh` (operator-host-side read-only
+    helper).
+  - `urls` → `scripts/print-urls.sh` (operator-host-side read-only
+    helper).
   - `wipe` → `destroy` + `destroy-bootstrap` chained
-    (project-close operation, never recurring DoD).
+    (project-close operation; the second sub-target is
+    operator-host-side per `add-terraform-state-backend`).
   - `help` (already exists) extended to list the new targets.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `deploy-pipeline`: the orchestrated `deploy.sh` script and its
-  `make deploy` target, including the migration-run-task step, the
-  forced ECS service redeploy, and the post-deploy `/api/healthz`
-  poll.
-- `destroy-pipeline`: the `destroy.sh`, `verify-destroyed.sh`,
-  `confirm-destroy.sh` family plus the `make destroy` / `make wipe`
-  targets and the rule that `make wipe` chains
-  `destroy → destroy-bootstrap`.
+- `deploy-pipeline`: `.github/workflows/deploy.yml`, the
+  orchestration scripts it invokes (`build-and-push-image.sh`,
+  `run-migrations.sh`, `deploy-web.sh`), and the
+  `make deploy` Makefile target that dispatches the workflow via
+  `gh workflow run`. Includes the migration-run-task step, the
+  forced ECS service redeploy, the post-deploy `/api/healthz`
+  poll, the OIDC auth contract, and the `workflow_dispatch`-only
+  trigger.
+- `destroy-pipeline`: `.github/workflows/destroy.yml`,
+  `verify-destroyed.sh`, `confirm-destroy.sh` (still used by the
+  operator-host-side `destroy-bootstrap.sh`), plus the
+  `make destroy` Makefile target that dispatches the workflow with
+  the `confirm=nica-erp-ephemeral` input pre-filled, and the rule
+  that `make wipe` chains the remote `destroy` workflow with the
+  operator-host-side `destroy-bootstrap`.
 - `web-deploy-pipeline`: the `deploy-web.sh` script, the
   `VITE_API_BASE_URL=/api` build-time convention, the
   `apps/web/.env.production` file, and the CloudFront invalidation

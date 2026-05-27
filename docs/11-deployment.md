@@ -1,8 +1,193 @@
 # 11 — Terraform and Deployment
 
-Two commands: `make deploy` / `make destroy`. Persistent state, ephemeral infra. No CI/CD ([ADR-0023](adr/0023-no-ci-cd-mvp.md)). One environment: `demo`. Assumes [ADR-0020](adr/0020-no-custom-domain-mvp.md) (no custom domain) and [ADR-0021](adr/0021-ssm-parameter-store.md) (SSM instead of Secrets Manager).
+Four operations, two surfaces:
+
+- **Operator host, operator-only:** `make bootstrap`, `make destroy-bootstrap`. Direct `terraform apply/destroy` against the `nica-erp` AWS CLI profile. These create / remove the persistent infrastructure that the workflows depend on (state bucket, ECR, CloudFront, GitHub OIDC provider, CI IAM roles).
+- **GitHub Actions, `workflow_dispatch` only:** `make deploy`, `make destroy`. Thin `gh workflow run` wrappers; the actual work runs on `ubuntu-latest` and assumes a short-lived OIDC role. Push to `main` does NOT auto-deploy.
+
+[ADR-0030](adr/0030-ci-image-publish.md) explains the surface split (supersedes [ADR-0023](adr/0023-no-ci-cd-mvp.md)). One environment: `demo`. Assumes [ADR-0020](adr/0020-no-custom-domain-mvp.md) (no custom domain) and [ADR-0021](adr/0021-ssm-parameter-store.md) (SSM instead of Secrets Manager).
 
 Infrastructure description (service inventory, network topology, sizing) in [`10-infrastructure.md`](10-infrastructure.md). Backup/restore operations in [`13-operations.md`](13-operations.md).
+
+---
+
+## First-time setup
+
+Read this once when you start the project. After step 6 you can run `make deploy` from any machine that has `gh` installed; you only come back to `make bootstrap` if the persistent stack itself changes.
+
+### 1. Host tools (operator's host, one-time)
+
+Two `make` targets verify everything is in place, each fails fast at the first missing tool with the exact install command:
+
+```sh
+make doctor              # uv, node, pnpm, docker  (dev tools, needed for local dev + tests)
+make doctor-deploy       # terraform, aws, gh      (deploy tools, needed for bootstrap + workflow dispatch)
+```
+
+`make doctor-deploy` also checks that the `nica-erp` AWS CLI profile resolves and that `gh` is authenticated — so it doubles as the precondition gate for the rest of this section.
+
+Versions required: Terraform `>= 1.6`, AWS CLI v2, `gh >= 2.0`. macOS install one-liner if anything is missing:
+
+```sh
+brew install terraform awscli gh
+```
+
+### 2. AWS CLI profile `nica-erp` (operator's host, one-time)
+
+```sh
+aws configure --profile nica-erp
+# AWS Access Key ID:     <your IAM access key>
+# AWS Secret Access Key: <your IAM secret>
+# Default region:        us-east-1
+# Default output:        json
+```
+
+The profile MUST be named exactly `nica-erp` — scripts pin `AWS_PROFILE=nica-erp` and refuse to use the default profile.
+
+The IAM user / role behind that profile needs the following permissions for the bootstrap to succeed:
+
+- **S3**: `CreateBucket`, `Put*`, `Get*`, `Delete*`, `ListBucket`, `ListAllMyBuckets`, `PutBucketVersioning`, `PutBucketPolicy`, `PutBucketPublicAccessBlock`, `PutBucketEncryption`.
+- **DynamoDB**: `CreateTable`, `DescribeTable`, `ListTables`, `DeleteTable`, `TagResource`, `UntagResource`, `ListTagsOfResource`.
+- **ECR**: `CreateRepository`, `DescribeRepositories`, `DeleteRepository`, `PutLifecyclePolicy`, `GetLifecyclePolicy`, `BatchDeleteImage`, `ListImages`, `TagResource`.
+- **CloudFront**: `CreateDistribution`, `GetDistribution`, `UpdateDistribution`, `DeleteDistribution`, `CreateOriginAccessControl`, `GetOriginAccessControl`, `DeleteOriginAccessControl`, `ListDistributions`, `TagResource`.
+- **IAM**: `CreateOpenIDConnectProvider`, `GetOpenIDConnectProvider`, `DeleteOpenIDConnectProvider`, `TagOpenIDConnectProvider`, `CreateRole`, `GetRole`, `DeleteRole`, `PutRolePolicy`, `GetRolePolicy`, `DeleteRolePolicy`, `AttachRolePolicy`, `DetachRolePolicy`, `TagRole`, `UntagRole`, `CreateServiceLinkedRole` (first CloudFront use per account).
+- **tag**: `tag:GetResources` (for the destroy-bootstrap allow-list check).
+
+`scripts/bootstrap.sh` runs a permissions canary against S3 / DynamoDB / ECR / CloudFront before any `terraform apply`, so a missing permission fails fast with a clear message instead of mid-apply.
+
+Verify the profile works:
+
+```sh
+AWS_PROFILE=nica-erp aws sts get-caller-identity
+```
+
+### 3. `gh` CLI authenticated (operator's host, one-time)
+
+```sh
+gh auth login
+# GitHub.com → HTTPS → Login with a web browser
+# pick the repository `Steven-Mendez/nica-erp` scope
+gh auth status
+```
+
+The operator's GitHub account needs write access to the repository, because `gh variable set` (step 5) and `gh workflow run` (step 6) both require it.
+
+### 4. `make bootstrap` (operator's host, one-time per project)
+
+```sh
+make bootstrap
+```
+
+Provisions, in order, against the `nica-erp` profile:
+
+1. S3 state bucket `nica-erp-tf-state-<account-id>` (versioned, KMS-encrypted).
+2. DynamoDB lock table `nica-erp-tf-lock`.
+3. ECR repository `nica-erp` (immutable tags, 5-image lifecycle).
+4. S3 bucket `nica-erp-web-<account-id>` (private, OAC-bound) and the CloudFront distribution that serves it. CloudFront declares an `/api/*` behavior with `placeholder.invalid` as origin — the deploy script swaps it later.
+5. GitHub OIDC provider for `token.actions.githubusercontent.com`.
+6. IAM roles `nica-erp-ci-deploy` and `nica-erp-ci-destroy`, each with a trust policy bound to `repo:Steven-Mendez/nica-erp:ref:refs/heads/main` and an inline policy scoped to its workflow's surface (Deny explicit on bootstrap-surface destructive actions — only `destroy-bootstrap` can touch those).
+
+Idempotent: re-running on an already-bootstrapped account is a no-op (`terraform plan` reports "No changes"). The last lines of stdout look like:
+
+```
+==> Bootstrap outputs
+cloudfront_distribution_domain = d1234abcd.cloudfront.net
+tf_state_bucket                = nica-erp-tf-state-469351852594
+ecr_repository_url             = 469351852594.dkr.ecr.us-east-1.amazonaws.com/nica-erp
+web_bucket                     = nica-erp-web-469351852594
+github_oidc_provider_arn       = arn:aws:iam::469351852594:oidc-provider/token.actions.githubusercontent.com
+ci_deploy_role_arn             = arn:aws:iam::469351852594:role/nica-erp-ci-deploy
+ci_destroy_role_arn            = arn:aws:iam::469351852594:role/nica-erp-ci-destroy
+
+==> Register the CI role ARNs with GitHub
+    Run these two commands once (requires `gh auth login` first):
+
+    gh variable set AWS_DEPLOY_ROLE_ARN  --body "arn:aws:iam::469351852594:role/nica-erp-ci-deploy"
+    gh variable set AWS_DESTROY_ROLE_ARN --body "arn:aws:iam::469351852594:role/nica-erp-ci-destroy"
+```
+
+### 5. Register GitHub repository variables (operator's host, one-time per project)
+
+Copy/paste the two `gh variable set` lines `make bootstrap` printed. Or, equivalently, in the GitHub UI: **Settings → Secrets and variables → Actions → Variables tab → New repository variable** with names `AWS_DEPLOY_ROLE_ARN` and `AWS_DESTROY_ROLE_ARN`.
+
+Verify both are registered:
+
+```sh
+gh variable list | grep AWS_
+```
+
+These are **variables**, not secrets — the ARN by itself is not a credential. STS only mints a token for a workflow whose `sub` claim matches the trust policy (`refs/heads/main` of this repo).
+
+### 6. First `make deploy` (operator's host triggers a remote workflow)
+
+```sh
+make deploy
+```
+
+`make deploy` is a thin wrapper around `gh workflow run deploy.yml --ref main`. The command exits in seconds; the actual deploy runs on a GitHub-hosted `ubuntu-latest` runner. Watch the run:
+
+```sh
+gh run watch $(gh run list --workflow=deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+```
+
+What the workflow does, in order:
+
+1. `actions/checkout@v6` with full history (`fetch-depth: 0`) so `git rev-parse HEAD` resolves correctly.
+2. AWS auth via OIDC (assumes `nica-erp-ci-deploy`).
+3. `docker buildx setup` → `scripts/build-and-push-image.sh` builds the API image (native `linux/amd64`, no QEMU) and pushes it to ECR.
+4. Terraform setup + `init -backend-config="bucket=nica-erp-tf-state-<account-id>"` + `apply -var image_tag=<short-sha>` on `infra/terraform/envs/demo`.
+5. `scripts/run-migrations.sh` invokes the `nica-erp-migrate` task definition via ECS RunTask and waits for `alembic upgrade head` to finish.
+6. `aws ecs update-service --force-new-deployment` rolls the API service to the new task definition.
+7. `scripts/deploy-web.sh` runs `pnpm build`, uploads `apps/web/dist/` to the SPA bucket, and creates a CloudFront invalidation on `/*`.
+8. Polls `https://<dist>.cloudfront.net/api/healthz` with exponential backoff until the JSON body contains `"db":"ok"` (timeout `DEPLOY_HEALTH_TIMEOUT=300` seconds).
+9. Writes a step summary to the run page with: image tag, commit SHA, CloudFront URL, Alembic revision, ECS task definition ARN.
+
+First deploy takes ~20–25 minutes (RDS provisioning dominates). Subsequent deploys on top of a live stack take ~10 minutes.
+
+### 7. Verification
+
+After the workflow turns green:
+
+```sh
+make verify                     # curls /api/healthz + SPA root, asserts db:ok + non-null alembic_revision
+```
+
+A passing run prints the parsed healthz JSON and the two URLs. A failing run names the failed assertion and exits non-zero, so `make verify` is also safe to chain (`make deploy && make verify`).
+
+Open the SPA URL printed by `make verify` in a browser — the healthz card should show the same values returned by the curl. Then optionally:
+
+```sh
+make logs                       # tails CloudWatch /nica-erp/api
+make plan                       # terraform plan against demo; expect "No changes"
+```
+
+---
+
+### Daily cycle (after first-time setup)
+
+| Action | Command | Surface | Duration |
+|---|---|---|---|
+| Deploy current `main` | `make deploy` | GHA workflow | ~10 min (warm) |
+| Destroy ephemeral stack (keep bootstrap) | `make destroy` | GHA workflow | ~10 min |
+| Read API logs | `make logs` | operator's host, read-only | live tail |
+| Show public URLs | `make urls` | operator's host, read-only | < 1 s |
+| Dry-run Terraform | `make plan` | operator's host, read-only | ~15 s |
+
+### Project close (rare)
+
+`make destroy-bootstrap` runs on the operator's host and removes the persistent stack. It prompts for `nica-erp-bootstrap` at the terminal, refuses if the ephemeral stack is still alive, then empties buckets + ECR before `terraform destroy`. `make wipe` is the convenience that chains `make destroy && make destroy-bootstrap`.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `make deploy` says `gh: command not found` | `gh` CLI not installed | `brew install gh` |
+| `make deploy` says `not logged in to gh` | Token expired or never ran `gh auth login` | `gh auth login` |
+| Workflow fails at AWS auth step with `Could not load credentials` | The two GitHub variables are missing or misnamed | `gh variable list` — should show `AWS_DEPLOY_ROLE_ARN` and `AWS_DESTROY_ROLE_ARN` |
+| Workflow fails at AWS auth with `Not authorized to perform sts:AssumeRoleWithWebIdentity` | The trust policy on the IAM role does not match the workflow's `sub` claim | Workflow must run on `refs/heads/main`. Feature branches cannot assume the role by design. |
+| `make bootstrap` fails at the permissions canary | The `nica-erp` profile lacks one of the IAM actions listed in step 2 | Inspect the canary output — it names the failing call. Attach the missing permission to the user/role. |
+| Workflow fails at health check (timeout 300 s) | Image started but `/api/healthz` returns 5xx; usually RDS not reachable or migrations failed | Inspect the previous step's logs (`run-migrations.sh`) and the ECS task logs via `make logs`. |
+| `make destroy-bootstrap` says "ephemeral stack still alive" | The demo env was not destroyed first | Run `make destroy` (the workflow), wait for green, then re-run `make destroy-bootstrap`. |
 
 ---
 
@@ -115,9 +300,15 @@ Per [ADR-0018](adr/0018-rolling-deploys.md): each sprint from 01 onwards exercis
 
 ---
 
-## No CI/CD
+## CI surface
 
-Per [ADR-0023](adr/0023-no-ci-cd-mvp.md): GitHub Actions runs static verification only (lint, type-check, unit tests). Deploy is manual — `make deploy` from a developer workstation with AWS credentials. Rationale: a single operator, ephemeral environments, no productive tenants pre-launch. CD will be introduced when the first productive tenant arrives.
+Per [ADR-0030](adr/0030-ci-image-publish.md) (supersedes [ADR-0023](adr/0023-no-ci-cd-mvp.md)):
+
+- `api-checks.yml` and `web-checks.yml` run automatically on push/PR (lint, type-check, unit tests). No AWS access.
+- `deploy.yml` and `destroy.yml` run on `workflow_dispatch` only. They assume narrowly-scoped IAM roles via OIDC (no static keys in GitHub). Push to `main` does NOT auto-deploy.
+- `make bootstrap` and `make destroy-bootstrap` stay on the operator's host, operator-only. The chicken-and-egg (the bootstrap creates the OIDC provider + the IAM roles the workflows need) makes this unavoidable.
+
+Auto-trigger on push to `main` is a one-line YAML diff in `deploy.yml` (the `nica-erp-ci-deploy` role already trusts that ref). Switch it on when the team grows past one developer.
 
 ---
 
@@ -169,118 +360,38 @@ Remove `domain_name`, remove `aliases` + `viewer_certificate` from CloudFront, r
 
 ## Makefile
 
-```makefile
-REPO_ROOT       := $(shell git rev-parse --show-toplevel)
-IMAGE_TAG_FILE  := $(REPO_ROOT)/.deploy-image-tag
+The root `Makefile` is the single operator surface. Targets fall into three groups by execution location, per ADR-0030:
 
-.PHONY: help install bootstrap deploy deploy-web destroy destroy-bootstrap wipe plan \
-        local-up local-down migrate seed \
-        api web test lint format logs \
-        worker-outbox worker-audit worker-notif \
-        _check-credentials _build-and-push-image
+**Operator host (direct on `nica-erp` AWS profile):**
 
-help:
-	@echo "Local:"
-	@echo "  make install            # uv sync + pnpm install + pre-commit install"
-	@echo "  make local-up           # docker compose: postgres + localstack + mailpit"
-	@echo "  make local-down"
-	@echo "  make migrate            # alembic upgrade head"
-	@echo "  make seed"
-	@echo "  make api / make web"
-	@echo "  make worker-outbox / worker-audit / worker-notif"
-	@echo "  make test"
-	@echo ""
-	@echo "AWS:"
-	@echo "  make bootstrap          # once: state + ECR + S3 web + CloudFront"
-	@echo "  make deploy             # build + push + apply + migrate"
-	@echo "  make deploy-web         # pnpm build + s3 sync + invalidation"
-	@echo "  make destroy            # tear down ephemeral"
-	@echo "  make destroy-bootstrap  # irreversible, hard confirm"
-	@echo "  make wipe               # destroy + destroy-bootstrap"
-	@echo "  make logs / make plan"
+| Target | Effect |
+|---|---|
+| `make bootstrap` | `scripts/bootstrap.sh` — creates the persistent stack (state bucket, DynamoDB lock, ECR, S3 SPA + CloudFront, GitHub OIDC provider, CI IAM roles). Idempotent. |
+| `make destroy-bootstrap` | `scripts/destroy-bootstrap.sh` — refuses while the ephemeral stack is alive; demands a typed `nica-erp-bootstrap` confirmation; empties S3/ECR; runs `terraform destroy` against the bootstrap module. |
+| `make build-image` | `scripts/build-and-push-image.sh` — builds the API image on the operator host and pushes to ECR. Hits the Apple-Silicon QEMU segfault; prefer the GHA workflow's build step instead. |
+| `make plan` | `terraform plan` against `envs/demo` (read-only). |
+| `make logs` | `scripts/tail-logs.sh` — `aws logs tail /nica-erp/api --follow --since 5m --format short`. |
+| `make urls` | `scripts/print-urls.sh` — prints the SPA and `/api/healthz` URLs from bootstrap outputs. |
+| `make verify` | `scripts/verify-deploy.sh` — smoke-tests the live stack (curl `/api/healthz` + SPA root, asserts `db: ok` + non-null `alembic_revision`). |
+| `make wipe` | `destroy` + `destroy-bootstrap` chained. Project-close convenience. |
 
-install:
-	cd apps/api && uv sync
-	cd apps/web && pnpm install --frozen-lockfile
-	uv run pre-commit install
+**GHA dispatch (thin `gh workflow run` wrappers):**
 
-bootstrap:
-	cd infra/terraform/bootstrap && terraform init && terraform apply -auto-approve
+| Target | Effect |
+|---|---|
+| `make deploy` | `gh workflow run deploy.yml --ref main` — dispatches the deploy workflow which (on `ubuntu-latest`, via OIDC) runs `scripts/deploy.sh`: build-and-push image → terraform apply → run-migrations → ECS force-new-deployment → `scripts/deploy-web.sh` (SPA build + S3 sync + CloudFront invalidation) → healthcheck poll. Ships backend AND frontend in a single run. |
+| `make destroy` | `gh workflow run destroy.yml --ref main -f confirm=nica-erp-ephemeral` — dispatches the destroy workflow; fails before any AWS call if `confirm` is not the literal `nica-erp-ephemeral`. |
 
-deploy: _check-credentials _build-and-push-image
-	cd infra/terraform/envs/demo && terraform init && \
-	  terraform apply -auto-approve -var "image_tag=$$(cat $(IMAGE_TAG_FILE))"
-	@./scripts/run-migrations.sh
-	@./scripts/print-urls.sh
+**Escape hatches (operator host, same scripts the workflows call):**
 
-deploy-web: _check-credentials
-	cd apps/web && pnpm install --frozen-lockfile && pnpm build
-	@WEB_BUCKET=$$(cd infra/terraform/bootstrap && terraform output -raw web_bucket_name); \
-	  DIST_ID=$$(cd infra/terraform/bootstrap && terraform output -raw web_distribution_id); \
-	  DIST_DOMAIN=$$(cd infra/terraform/bootstrap && terraform output -raw web_distribution_domain_name); \
-	  aws s3 sync apps/web/dist/ "s3://$$WEB_BUCKET/" --delete --cache-control "public,max-age=31536000,immutable" --exclude "index.html"; \
-	  aws s3 cp apps/web/dist/index.html "s3://$$WEB_BUCKET/index.html" --cache-control "no-cache,no-store,must-revalidate"; \
-	  aws cloudfront create-invalidation --distribution-id "$$DIST_ID" --paths '/index.html' >/dev/null; \
-	  echo "Frontend deployed: https://$$DIST_DOMAIN/"
+| Target | Effect |
+|---|---|
+| `make deploy-local` | `scripts/deploy.sh` — runs the same chain locally. Requires a linux/amd64 host (or a working QEMU) for the image build step. |
+| `make destroy-local` | `scripts/destroy.sh` — runs the destroy chain locally. |
 
-destroy:
-	@./scripts/confirm-destroy.sh
-	cd infra/terraform/envs/demo && terraform destroy -auto-approve \
-	  -var "image_tag=$$(cat $(IMAGE_TAG_FILE) 2>/dev/null || echo latest)" \
-	  -var "final_snapshot_suffix=$$(date +%Y%m%d%H%M%S)"
-	@./scripts/verify-destroyed.sh
+There is no `make deploy-web` standalone target. The SPA deploy is owned by `scripts/deploy-web.sh`, which `scripts/deploy.sh` invokes after the backend rollout. Operators who only want to refresh the SPA still go through `make deploy` (or `make deploy-local`) — the backend steps are idempotent when nothing changed.
 
-destroy-bootstrap:
-	@./scripts/destroy-bootstrap.sh
-
-wipe: destroy destroy-bootstrap
-	@echo "Infrastructure fully removed. AWS cost: 0 USD/month."
-
-plan:
-	cd infra/terraform/envs/demo && terraform init && \
-	  terraform plan -var "image_tag=$$(cat $(IMAGE_TAG_FILE) 2>/dev/null || echo latest)"
-
-local-up:
-	cd docker && docker compose up -d
-	@echo "Postgres :5432, LocalStack :4566, Mailpit :8025"
-
-local-down:
-	cd docker && docker compose down
-
-migrate:
-	cd apps/api && uv run alembic upgrade head
-
-seed:
-	cd apps/api && uv run python scripts/seed-dev.py
-
-api:
-	cd apps/api && uv run uvicorn bootstrap.api:app --reload
-
-web:
-	cd apps/web && pnpm dev
-
-worker-outbox:
-	cd apps/api && uv run python -m bootstrap.entrypoints.outbox_publisher
-worker-audit:
-	cd apps/api && uv run python -m bootstrap.entrypoints.audit_consumer
-worker-notif:
-	cd apps/api && uv run python -m bootstrap.entrypoints.notifications_worker
-
-test:
-	cd apps/api && uv run pytest
-
-logs:
-	@./scripts/tail-logs.sh
-
-_check-credentials:
-	@./scripts/check-credentials.sh
-_build-and-push-image:
-	@./scripts/build-and-push-image.sh
-```
-
-**Literal TAB indentation** (spaces → `*** missing separator`). `IMAGE_TAG_FILE` is the single source of truth for the tag — Makefile, `plan`, `apply`, `destroy` read it from there.
-
-`deploy-web` syncs assets with `cache-control "public,max-age=31536000,immutable"` except `index.html` (`no-cache`); invalidates only `/index.html`.
+The Makefile pins `AWS_PROFILE=nica-erp` indirectly via the scripts it delegates to (the scripts skip the pin when `AWS_ACCESS_KEY_ID` is in env, so the same scripts work under GHA OIDC). Targets use literal TAB indentation; help text is generated from `## ` doc comments by `make help`.
 
 ---
 

@@ -1,0 +1,74 @@
+# destroy — tear down the ephemeral demo stack.
+#
+# Bootstrap (state bucket, ECR, CloudFront, OIDC, IAM roles) survives.
+# To remove those, run `make destroy-bootstrap` locally (admin-only).
+
+name: destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'nica-erp-ephemeral' to confirm"
+        type: string
+        required: true
+      clean_web_assets:
+        description: "Also empty the SPA bucket (default: keep)"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: destroy
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    name: Destroy demo stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: us-east-1
+      DESTROY_WEB_ASSETS: ${{ inputs.clean_web_assets && '1' || '0' }}
+
+    steps:
+      - name: Assert confirmation string
+        run: |
+          if [[ "${{ inputs.confirm }}" != "nica-erp-ephemeral" ]]; then
+            echo "ERROR: confirm input must equal 'nica-erp-ephemeral' (got: '${{ inputs.confirm }}')." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DESTROY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Destroy
+        run: ./scripts/destroy.sh
+
+      - name: Summarize
+        if: always()
+        run: |
+          status="${{ job.status }}"
+          {
+            echo "## Destroy ${status}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Confirmation | \`${{ inputs.confirm }}\` |"
+            echo "| Cleaned SPA bucket | \`${{ inputs.clean_web_assets }}\` |"
+            echo "| Verify-destroyed | see log step output |"
+          } >> "$GITHUB_STEP_SUMMARY"

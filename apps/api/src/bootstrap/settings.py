@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,7 +28,17 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://nica_erp:nica_erp@localhost:5432/nica_erp",
     )
 
-    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # In AWS, CloudFront fronts both the SPA and the API at the same origin,
+    # so CORS is a no-op and the list is empty. Locally, the Vite dev server
+    # (:5173) calls uvicorn (:8000) cross-origin and needs the explicit
+    # allow-list. The default is overridable by `CORS_ALLOWED_ORIGINS` in env.
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _default_cors_for_local(self) -> Settings:
+        if self.app_env != "aws" and not self.cors_allowed_origins:
+            object.__setattr__(self, "cors_allowed_origins", ["http://localhost:5173"])
+        return self
 
 
 @lru_cache(maxsize=1)

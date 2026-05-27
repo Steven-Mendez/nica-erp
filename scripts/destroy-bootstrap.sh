@@ -41,12 +41,7 @@ ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 STATE_BUCKET="nica-erp-tf-state-${ACCOUNT_ID}"
 WEB_BUCKET="nica-erp-web-${ACCOUNT_ID}"
 
-printf "Type '%s' to confirm destruction: " "${CONFIRM_TOKEN}"
-read -r reply || true
-if [[ "${reply}" != "${CONFIRM_TOKEN}" ]]; then
-  echo "Aborted: confirmation string did not match. No AWS calls issued." >&2
-  exit 1
-fi
+"${ROOT_DIR}/scripts/confirm-destroy.sh" "${CONFIRM_TOKEN}"
 
 echo "==> Checking for ephemeral nica-erp resources"
 # Bootstrap allow-list: any ARN that contains one of these substrings is part

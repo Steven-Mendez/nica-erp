@@ -1,12 +1,44 @@
+## ADDED Requirements
+
+### Requirement: API routes mount under `/api` when `app_env == "aws"`
+
+`bootstrap.api.create_app()` SHALL mount every router under the
+prefix `/api` when `settings.app_env == "aws"` and at the root
+(`""`) otherwise. The CloudFront `/api/*` behavior forwards the
+full path unchanged to the ALB, so the `/healthz` endpoint is
+reachable at `/api/healthz` in AWS and at `/healthz` locally. The
+ALB target group's health check path SHALL be `/api/healthz`
+(matching the AWS-mode mount).
+
+#### Scenario: AWS-mode healthz is reachable at /api/healthz
+
+- **WHEN** the app is created with `APP_ENV=aws` and
+  `GET /api/healthz` is invoked
+- **THEN** the response SHALL be HTTP 200 with the standard healthz
+  payload
+
+#### Scenario: AWS-mode root healthz is not reachable
+
+- **WHEN** the app is created with `APP_ENV=aws` and `GET /healthz`
+  is invoked
+- **THEN** the response SHALL be HTTP 404
+
+#### Scenario: Local-mode healthz is reachable at /healthz
+
+- **WHEN** the app is created with `APP_ENV=local` and `GET /healthz`
+  is invoked
+- **THEN** the response SHALL be HTTP 200 with the standard healthz
+  payload
+
 ## MODIFIED Requirements
 
 ### Requirement: Local CORS for the Vite dev origin
 
-When `settings.app_env` is any value other than `"aws"`,
-`bootstrap.api.create_app()` SHALL register `CORSMiddleware`
-configured from `settings.cors_allowed_origins` (default
-`["http://localhost:5173"]`). The middleware MUST allow credentials,
-all methods, and all headers from those origins.
+`bootstrap.api.create_app()` SHALL register `CORSMiddleware` whenever
+`settings.app_env` is any value other than `"aws"`, configured from
+`settings.cors_allowed_origins` (default `["http://localhost:5173"]`).
+The middleware MUST allow credentials, all methods, and all headers
+from those origins.
 
 When `settings.app_env == "aws"`, `bootstrap.api.create_app()`
 SHALL NOT register `CORSMiddleware` at all. In that environment

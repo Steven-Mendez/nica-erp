@@ -48,11 +48,11 @@ production build resolves the API base URL the same way.
 
 ### Requirement: SPA reads `VITE_API_BASE_URL` for its API base path
 
-The frontend module that issues the healthz fetch (or any other
-API call) SHALL resolve its base URL via
-`import.meta.env.VITE_API_BASE_URL`. The module SHALL fall back to
-a sensible default for local development (e.g.
-`http://localhost:8000/api`) when the env var is unset, mirroring
+The SPA SHALL resolve its API base URL via
+`import.meta.env.VITE_API_BASE_URL` in the module that issues the
+healthz fetch (and any other API call). The module SHALL fall back
+to a sensible default for local development (e.g.
+`http://localhost:8000`) when the env var is unset, mirroring
 `apps/web/.env.local.example`.
 
 #### Scenario: Local dev hits the API on :8000

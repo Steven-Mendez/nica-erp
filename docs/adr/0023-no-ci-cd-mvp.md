@@ -1,6 +1,6 @@
 # ADR-0023 — No automatic CI/CD for the MVP
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-0030](0030-ci-image-publish.md) (every AWS-touching operation moves to `workflow_dispatch` workflows; manual trigger only, no `push:` triggers; the `make` targets become `gh workflow run` wrappers)
 **Date**: 2026-05-23
 
 ## Context

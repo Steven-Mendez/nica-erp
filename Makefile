@@ -1,14 +1,22 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap build-image
+.PHONY: help doctor doctor-deploy install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap build-image deploy deploy-local destroy destroy-local plan logs urls verify wipe
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-doctor: ## verify host tools (uv, pnpm, docker) are installed
+doctor: ## verify dev tools (uv, node, pnpm, docker) needed for local dev + tests
 	@printf "uv     : "; command -v uv     >/dev/null && uv     --version       || { echo "MISSING — install: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
 	@printf "node   : "; command -v node   >/dev/null && node   --version       || { echo "MISSING — install: brew install node"; exit 1; }
 	@printf "pnpm   : "; command -v pnpm   >/dev/null && pnpm   --version       || { echo "MISSING — install: brew install pnpm   (or: npm i -g pnpm@9)"; exit 1; }
 	@printf "docker : "; command -v docker >/dev/null && docker --version | head -1 || { echo "MISSING — install Docker Desktop or 'brew install --cask docker'"; exit 1; }
+	@echo "OK."
+
+doctor-deploy: ## verify deploy tools (terraform, aws, gh) needed for bootstrap + workflow dispatch
+	@printf "terraform : "; command -v terraform >/dev/null && terraform version | head -1 || { echo "MISSING — install: brew install terraform   (need >= 1.6)"; exit 1; }
+	@printf "aws       : "; command -v aws       >/dev/null && aws       --version       || { echo "MISSING — install: brew install awscli      (need v2)"; exit 1; }
+	@printf "gh        : "; command -v gh        >/dev/null && gh        --version | head -1 || { echo "MISSING — install: brew install gh"; exit 1; }
+	@printf "aws sts   : "; AWS_PROFILE=$${AWS_PROFILE:-nica-erp} aws sts get-caller-identity --query Account --output text 2>/dev/null || { echo "FAIL — profile '$${AWS_PROFILE:-nica-erp}' not configured. Run: aws configure --profile nica-erp"; exit 1; }
+	@printf "gh auth   : "; gh auth status >/dev/null 2>&1 && echo "OK" || { echo "FAIL — not logged in. Run: gh auth login"; exit 1; }
 	@echo "OK."
 
 install: ## uv sync + pnpm install (run `make doctor` first if anything is missing)
@@ -74,3 +82,41 @@ destroy-bootstrap: ## tear down persistent AWS resources (refuses if ephemeral s
 
 build-image: ## build the API image (linux/amd64) and push to ECR (ALLOW_DIRTY=1 to opt in to a dirty tag). Note: --platform linux/amd64 emulates under QEMU on Apple Silicon and may segfault; use the deploy workflow's build step instead.
 	./scripts/build-and-push-image.sh
+
+deploy: ## dispatch the deploy GHA workflow (build image + apply ephemeral infra + migrate + SPA upload + healthcheck)
+	@command -v gh >/dev/null || { echo "ERROR: gh CLI not found. Install: brew install gh"; exit 1; }
+	@gh auth status >/dev/null 2>&1 || { echo "ERROR: not logged in to gh. Run: gh auth login"; exit 1; }
+	gh workflow run deploy.yml --ref main
+	@echo
+	@echo "==> Dispatched deploy.yml. Tail logs with:"
+	@echo "    gh run watch \$$(gh run list --workflow=deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+
+deploy-local: ## run scripts/deploy.sh directly on this host (escape hatch — requires linux/amd64 for the image build step)
+	./scripts/deploy.sh
+
+destroy: ## dispatch the destroy GHA workflow (tears down the ephemeral demo stack; bootstrap survives)
+	@command -v gh >/dev/null || { echo "ERROR: gh CLI not found. Install: brew install gh"; exit 1; }
+	@gh auth status >/dev/null 2>&1 || { echo "ERROR: not logged in to gh. Run: gh auth login"; exit 1; }
+	gh workflow run destroy.yml --ref main -f confirm=nica-erp-ephemeral
+	@echo
+	@echo "==> Dispatched destroy.yml. Tail logs with:"
+	@echo "    gh run watch \$$(gh run list --workflow=destroy.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+
+destroy-local: ## run scripts/destroy.sh directly on this host (escape hatch)
+	./scripts/destroy.sh
+
+plan: ## terraform plan against the demo env (operator-host read-only)
+	@account_id=$$(AWS_PROFILE=$${AWS_PROFILE:-nica-erp} aws sts get-caller-identity --query Account --output text); \
+	  terraform -chdir=infra/terraform/envs/demo init -input=false -reconfigure -backend-config="bucket=nica-erp-tf-state-$${account_id}" && \
+	  terraform -chdir=infra/terraform/envs/demo plan
+
+logs: ## tail the API CloudWatch Logs group
+	./scripts/tail-logs.sh
+
+urls: ## print the public CloudFront URLs
+	./scripts/print-urls.sh
+
+verify: ## smoke-test the live deploy (curl /api/healthz + SPA root, assert db:ok + non-null alembic_revision)
+	./scripts/verify-deploy.sh
+
+wipe: destroy destroy-bootstrap ## project-close: destroy ephemeral via workflow, then destroy bootstrap locally

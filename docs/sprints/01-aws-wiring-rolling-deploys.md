@@ -69,17 +69,17 @@ No WAF, X-Ray, or Interface VPC endpoints (see [`../10-infrastructure.md` § Exc
 
 ## Production Dockerfile
 
-Multi-stage, installs native `weasyprint` libs from the start (real usage in [sprint 05](05-parties-and-sales.md)) to avoid a second iteration:
+Multi-stage, installs native `weasyprint` libs from the start (real usage in [sprint 05](05-parties-and-sales.md)) to avoid a second iteration. Base image is `python:3.13-slim` to match `apps/api/pyproject.toml` (`requires-python = ">=3.13,<3.14"`):
 
 ```dockerfile
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 WORKDIR /app
 RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 RUN uv sync --frozen --no-dev --no-install-project && uv pip install --no-deps .
 
-FROM python:3.12-slim
+FROM python:3.13-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libcairo2 libgdk-pixbuf-2.0-0 libpangoft2-1.0-0 libpango-1.0-0 \
@@ -94,15 +94,72 @@ EXPOSE 8000
 CMD ["uvicorn", "bootstrap.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-Makefile invokes `docker build --build-arg GIT_SHA=$(git rev-parse HEAD) ...`.
+Per Python `weasyprint` package: the *native* apt libraries are baked in here; the Python package itself is added in sprint 05.
+
+---
+
+## Operations: 4 make targets, 2 surfaces
+
+Sprint 01 closes with four operator-facing operations. Two of them — the project-lifecycle ones — run on the operator's local host because they create or destroy the foundation that everything else depends on (Terraform state backend, ECR repository, CloudFront distribution, GitHub OIDC provider, CI IAM roles). The other two — the recurring deploy/destroy cycle — run in GitHub Actions because the operator's host is Apple Silicon (arm64) and `docker build --platform linux/amd64` under QEMU segfaults during `uv sync`. Same reason, simpler model:
+
+[ADR-0030](../adr/0030-ci-image-publish.md) supersedes [ADR-0023](../adr/0023-no-ci-cd-mvp.md).
+
+| Make target | Surface | Trigger | What it does |
+|---|---|---|---|
+| `make bootstrap` | **local host, operator-only** | direct `terraform apply` against the `nica-erp` profile | provisions persistent infra: S3 state bucket, DynamoDB lock, ECR, S3 SPA + CloudFront, **GitHub OIDC provider, and the two CI IAM roles**. Idempotent. Run once at project setup; re-run only when the persistent infra changes. |
+| `make destroy-bootstrap` | **local host, operator-only** | direct `terraform destroy` after terminal-prompt confirmation (`Type 'nica-erp-bootstrap' to confirm`) | tears down the persistent set after refusing if the ephemeral stack is still alive. Project-close operation only. |
+| `make deploy` | **GHA workflow** (`.github/workflows/deploy.yml`, `workflow_dispatch`) | `gh workflow run deploy.yml` | end-to-end deploy: builds and pushes the API image, applies the ephemeral Terraform stack (VPC, RDS, ECS, ALB, Cognito, SSM, observability), runs `alembic upgrade head` via ECS RunTask, registers the new ECS task definition, builds the SPA, pushes to the SPA bucket, invalidates CloudFront. One command, one image tag, one CloudFront URL at the end. |
+| `make destroy` | **GHA workflow** (`.github/workflows/destroy.yml`, `workflow_dispatch` + `confirm=nica-erp-ephemeral` input) | `gh workflow run destroy.yml -f confirm=nica-erp-ephemeral` | destroys the ephemeral stack only. Bootstrap, ECR images, and the SPA bucket survive (per [ADR-0003](../adr/0003-deploy-destroy-per-env.md), so the next `make deploy` is ~10 min, not ~30 min). |
+
+`make deploy` and `make destroy` are the typical CI/CD path with the trigger gated behind `workflow_dispatch`; the day the team grows, adding `push: branches: [main]` to `deploy.yml` is a one-line YAML diff (the IAM role already trusts that ref).
+
+### Why bootstrap stays on the operator's host
+
+Bootstrap creates the GitHub OIDC provider and the IAM roles that the workflows assume. Chicken-and-egg: a workflow cannot create the role it would need to authenticate. The operator's `nica-erp` AWS CLI profile is the only path that exists before bootstrap has run, so bootstrap must use it. Once bootstrap exists, `make deploy` and `make destroy` use the roles via OIDC — no static keys in GitHub.
+
+Destruction of the bootstrap is also operator-only and runs on the local host, for the same reason in reverse and because the bootstrap holds irrecoverable assets (state versions, CloudFront domain). The terminal-prompt confirmation in `scripts/destroy-bootstrap.sh` is the existing safety; no workflow improves on it.
+
+### Auth: OIDC, one provider, two roles
+
+The bootstrap Terraform declares one `aws_iam_openid_connect_provider` for `token.actions.githubusercontent.com` plus two `aws_iam_role` resources:
+
+- **`nica-erp-ci-deploy`** — assumed by `deploy.yml`. Inline policy grants ECR push on the `nica-erp` repo ARN, Terraform-state read/write on `nica-erp-tf-state-*` and `nica-erp-tf-lock`, and the apply-side actions for the ephemeral resource set (VPC, RDS, ECS, ALB, Cognito, SSM, observability, S3 SPA put, CloudFront create-invalidation).
+- **`nica-erp-ci-destroy`** — assumed by `destroy.yml`. Inline policy grants the destroy-side actions on the same ephemeral resource set plus Terraform-state read/write. Does NOT grant any action on the bootstrap resource set (S3 state bucket, ECR repository delete, CloudFront delete, IAM/OIDC mutation).
+
+Both roles' trust policies bind to `repo:Steven-Mendez/nica-erp:ref:refs/heads/main` only — feature branches cannot assume them. Each ARN is exposed as a Terraform output (`ci_deploy_role_arn`, `ci_destroy_role_arn`); `scripts/bootstrap.sh` prints both at the end alongside the two literal `gh variable set` lines the operator pastes once.
+
+### One-time operator setup (after the first `make bootstrap`)
+
+1. Paste the two `gh variable set AWS_DEPLOY_ROLE_ARN ...` / `AWS_DESTROY_ROLE_ARN ...` lines the bootstrap script printed.
+2. Done. No GitHub environment to configure — there is no `destroy-bootstrap` workflow.
+
+From here on, the operator runs `make deploy` and `make destroy` exclusively via `gh workflow run`; the local host only needs `gh` and a browser to read the run page.
+
+### Destructive gate on `make destroy`
+
+`destroy.yml` requires a literal `confirm=nica-erp-ephemeral` input. The `make destroy` Makefile target pre-fills it; a manual `gh workflow run destroy.yml` without the flag (or with the wrong value) fails in the workflow's first step before any AWS API call.
+
+### Auto-trigger on push to `main` is intentionally not enabled
+
+`deploy.yml`'s `on:` block is structured so adding `push: branches: [main]` is a one-line diff. The `nica-erp-ci-deploy` role already trusts that ref. The day the team grows past one dev, the brake comes off with a YAML one-liner — no AWS-side change.
 
 ---
 
 ## Scripts in `scripts/`
 
-`bootstrap.sh`, `build-and-push-image.sh` (writes `.deploy-image-tag`), `run-migrations.sh` (ECS RunTask one-off with `entrypoint=["alembic","upgrade","head"]`), `check-credentials.sh`, `print-urls.sh` (reads `cloudfront_distribution_domain`), `tail-logs.sh`, `verify-destroyed.sh` (fails if NAT/ALB/RDS/ECS/Fargate/VPC with `Project=nica-erp` still alive), `deploy-web.sh` (`VITE_API_BASE_URL=/api` + `s3 sync` + invalidation), `confirm-destroy.sh`, `destroy-bootstrap.sh` (strong confirmation, empties S3/ECR).
+`bootstrap.sh` (operator-host-only; prints the two `ci_*_role_arn` outputs + the `gh variable set` lines after apply), `destroy-bootstrap.sh` (operator-host-only; terminal-prompt confirmation, empties S3/ECR, refuses while the ephemeral stack is alive via `verify-destroyed.sh`).
 
-Makefile: `bootstrap`, `deploy`, `destroy`, `destroy-bootstrap`, `wipe`, `plan`, `deploy-web`, `logs`. See [`../11-deployment.md` § Makefile](../11-deployment.md#makefile). `wipe` (= destroy + destroy-bootstrap) is a project-close operation, not a recurring DoD step.
+`build-and-push-image.sh` (invoked by `deploy.yml` on the GHA runner; writes `.deploy-image-tag` in the runner's workspace — surfaced via the workflow's run summary), `run-migrations.sh` (called by `deploy.yml`; ECS RunTask one-off with `entrypoint=["alembic","upgrade","head"]`), `deploy-web.sh` (called by `deploy.yml`; `VITE_API_BASE_URL=/api` + `s3 sync` + CloudFront invalidation), `verify-destroyed.sh` (called by `destroy.yml`; fails if NAT/ALB/RDS/ECS/Fargate/VPC with `Project=nica-erp` still alive). All four are CI-aware: when `AWS_ACCESS_KEY_ID` is in env (OIDC path), they do not pin `AWS_PROFILE=nica-erp`.
+
+Operator helpers (operator's host, read-only): `check-credentials.sh`, `print-urls.sh` (reads `cloudfront_distribution_domain`), `tail-logs.sh`.
+
+Makefile (sprint 01 surface):
+- `bootstrap` / `destroy-bootstrap` — direct execution on the operator's host, operator-only.
+- `deploy` / `destroy` — `gh workflow run` wrappers.
+- `wipe` = `destroy` + `destroy-bootstrap`; project-close convenience, not a DoD step.
+- `plan`, `urls`, `logs` — operator's host helpers, read-only (`urls` invokes `scripts/print-urls.sh`).
+
+See [`../11-deployment.md` § Makefile](../11-deployment.md#makefile) for the full target list.
 
 ---
 

@@ -1,0 +1,95 @@
+# deploy — bring the demo stack up to date.
+#
+# Builds the API image, applies the ephemeral Terraform stack, runs
+# alembic migrations, force-redeploys the ECS service, uploads the SPA,
+# invalidates CloudFront, then polls /api/healthz until db:"ok".
+#
+# Trigger: workflow_dispatch only. Push to main does NOT auto-deploy.
+# To switch on auto-deploy later, add:
+#   push:
+#     branches: [main]
+#     paths: ["apps/**", "infra/terraform/**", ".github/workflows/deploy.yml"]
+
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy demo stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: us-east-1
+      DEPLOY_HEALTH_TIMEOUT: "300"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sanity-check identity + bootstrap reachability
+        run: |
+          aws sts get-caller-identity
+          aws ecr describe-repositories --repository-names nica-erp --query 'repositories[0].repositoryUri' --output text
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Set up Node + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+
+      - name: Build & push API image
+        run: ./scripts/build-and-push-image.sh
+
+      - name: Deploy (terraform + migrate + ECS + SPA + healthcheck)
+        run: ./scripts/deploy.sh
+
+      - name: Summarize
+        if: success()
+        run: |
+          tag="$(cat .deploy-image-tag)"
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          terraform -chdir=infra/terraform/envs/demo init -input=false -reconfigure \
+            -backend-config="bucket=nica-erp-tf-state-${account_id}" >/dev/null
+          cf_domain="$(terraform -chdir=infra/terraform/envs/demo output -raw cloudfront_distribution_domain)"
+          api_td="$(terraform -chdir=infra/terraform/envs/demo output -raw api_task_definition_arn)"
+          healthz="$(curl -s "https://${cf_domain}/api/healthz" || echo '{}')"
+          revision="$(echo "${healthz}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("alembic_revision","?"))' 2>/dev/null || echo '?')"
+          {
+            echo "## Deploy complete"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Image tag | \`${tag}\` |"
+            echo "| Commit | \`$(git rev-parse HEAD)\` |"
+            echo "| CloudFront URL | https://${cf_domain}/ |"
+            echo "| healthz | https://${cf_domain}/api/healthz |"
+            echo "| Alembic revision | \`${revision}\` |"
+            echo "| API task definition | \`${api_td}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
