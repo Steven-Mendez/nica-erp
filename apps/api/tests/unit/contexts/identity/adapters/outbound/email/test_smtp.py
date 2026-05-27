@@ -9,6 +9,7 @@ and ``html`` parts must survive into the message body in that order.
 from __future__ import annotations
 
 from email.message import EmailMessage
+from typing import cast
 from unittest.mock import AsyncMock
 
 import aiosmtplib
@@ -48,8 +49,9 @@ async def test_smtp_builds_multipart_with_text_and_html(
     assert msg["From"] == "noreply@local.nica-erp.dev"
     assert msg["To"] == "ops@example.com"
     assert msg["Subject"] == "hi"
-    payload = msg.get_payload()
-    assert isinstance(payload, list)
+    raw_payload = msg.get_payload()
+    assert isinstance(raw_payload, list)
+    payload = cast(list[EmailMessage], raw_payload)
     # The text part is set first; the HTML alternative is added second.
     assert payload[0].get_content_type() == "text/plain"
     assert payload[1].get_content_type() == "text/html"

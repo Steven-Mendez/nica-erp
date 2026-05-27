@@ -205,9 +205,6 @@ apps/*/.env.*.local
 !.env.local.example
 !apps/*/.env.local.example
 
-# Frontend generated OpenAPI client (regenerated via `pnpm gen:api`)
-apps/web/src/api/schema.d.ts
-
 # Re-include the frontend lib/ dir (Python `lib/` rule above is too broad)
 !apps/web/src/lib/
 !apps/web/src/lib/**
