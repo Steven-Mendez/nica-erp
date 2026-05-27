@@ -27,6 +27,14 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+# Default APP_ENV / LOCAL_JWT_SECRET so `bootstrap.settings.Settings` (which
+# rejects an unset APP_ENV per the api-bootstrap spec) imports cleanly during
+# test collection. `os.environ.setdefault` runs before any module-level
+# `Settings()` call further down the import graph, which `monkeypatch` can't
+# guarantee since fixtures run after collection.
+os.environ.setdefault("APP_ENV", "local")
+os.environ.setdefault("LOCAL_JWT_SECRET", "test-secret-very-long-32-chars-yes-please-1234")
+
 _API_ROOT = Path(__file__).resolve().parent  # apps/api/
 
 _MARKER_BY_FOLDER = {
