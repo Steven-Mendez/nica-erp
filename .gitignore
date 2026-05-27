@@ -239,6 +239,10 @@ infra/terraform/.terraform.lock.hcl
 *.tfvars
 !*.tfvars.example
 
+# Hand-off from `make build-image` to deploy automation (add-deploy-destroy-automation).
+# Tag of the last image pushed to ECR; regenerated on every successful build.
+.deploy-image-tag
+
 # Secrets — never commit
 *.pem
 *.key

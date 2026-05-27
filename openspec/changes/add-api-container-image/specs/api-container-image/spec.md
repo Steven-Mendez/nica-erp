@@ -3,12 +3,13 @@
 ### Requirement: Multistage Dockerfile builds a `linux/amd64` runtime image
 
 `apps/api/Dockerfile` SHALL declare two stages. The `builder` stage
-SHALL use `python:3.12-slim` and SHALL install `uv` via
+SHALL use `python:3.13-slim` (matching `apps/api/pyproject.toml`'s
+`requires-python = ">=3.13,<3.14"`) and SHALL install `uv` via
 `pip install --no-cache-dir uv`, copy `pyproject.toml`, `uv.lock`,
 `README.md`, and `src/` into `/app`, and run
 `uv sync --frozen --no-dev --no-install-project` followed by
 `uv pip install --no-deps .`. The `runtime` stage SHALL use
-`python:3.12-slim`, SHALL copy `/app/.venv` and `/app/src` from
+`python:3.13-slim`, SHALL copy `/app/.venv` and `/app/src` from
 `builder`, and SHALL set `PATH="/app/.venv/bin:$PATH"`. The runtime
 stage SHALL `EXPOSE 8000` and SHALL declare
 `CMD ["uvicorn","bootstrap.api:app","--host","0.0.0.0","--port","8000"]`.
@@ -30,12 +31,36 @@ The runtime stage SHALL install via
 `rm -rf /var/lib/apt/lists/*` so apt cache does not persist in the
 image layer.
 
-#### Scenario: WeasyPrint imports inside the container
+The Python `weasyprint` package itself is not added until
+[sprint 05](../../../docs/sprints/05-parties-and-sales.md);
+sprint 01 commits only to having the *native* libraries already
+present so adding the Python dependency later is a small `uv sync`
+diff and not an apt rebuild.
 
-- **WHEN** `docker run --entrypoint python <image-tag> -c "import weasyprint; print(weasyprint.__version__)"`
+#### Scenario: WeasyPrint native libraries are present
+
+- **WHEN** `docker run --rm --entrypoint dpkg <image-tag> -s libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0 libpangoft2-1.0-0 shared-mime-info fonts-liberation libffi-dev`
   is executed
-- **THEN** the command SHALL exit `0` and print a non-empty version
-  string
+- **THEN** the command SHALL exit `0` and SHALL report
+  `Status: install ok installed` for each package
+
+### Requirement: Alembic env and revisions ship inside the runtime image
+
+The runtime stage SHALL `COPY` `alembic.ini` and the `alembic/`
+directory (containing `env.py` and `versions/`) into `/app/` so
+the same image can serve `uvicorn` and run
+`alembic upgrade head` without a second image or a separate
+build context. This is what
+`add-deploy-destroy-automation`'s migration RunTask invokes via
+the `nica-erp-migrate` ECS task definition's command override
+`["alembic","upgrade","head"]`.
+
+#### Scenario: Alembic CLI runs against the built image
+
+- **WHEN** `docker run --rm --entrypoint alembic <image-tag> heads`
+  is executed with `DATABASE_URL` / `ALEMBIC_DATABASE_URL` set
+- **THEN** the command SHALL exit `0` and print the current head
+  revision rather than failing with `FileNotFoundError: alembic.ini`
 
 ### Requirement: `GIT_SHA` build arg becomes the runtime environment variable
 
@@ -63,8 +88,11 @@ image SHALL NOT include `apps/web/` (excluded via
 `apps/api/.dockerignore` because the Dockerfile is invoked with
 `docker build apps/api/`).
 
-#### Scenario: Test directories do not bloat the image
+#### Scenario: Project test directories do not bloat the image
 
-- **WHEN** `docker history --no-trunc <image-tag>` is inspected
-- **THEN** no layer SHALL contain any file under `tests/` or
-  `__pycache__/`
+- **WHEN** `docker run --rm --entrypoint sh <image-tag> -c 'ls /app/tests 2>&1'`
+  is executed
+- **THEN** the output SHALL contain `No such file or directory` (the
+  project's `tests/` SHALL NOT be present in the image; third-party
+  package test directories that live inside `.venv/lib/.../site-packages/`
+  are out of scope for this check)

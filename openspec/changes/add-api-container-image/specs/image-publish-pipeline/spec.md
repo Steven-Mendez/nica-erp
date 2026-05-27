@@ -33,12 +33,12 @@ The build script SHALL compute `GIT_SHA=$(git rev-parse HEAD)` and
 
 ### Requirement: Build refuses to run on a dirty working tree by default
 
-If `git diff --quiet` or `git diff --cached --quiet` returns
-non-zero, the build script SHALL exit non-zero with a diagnostic
-message naming the dirty files, UNLESS the environment variable
-`ALLOW_DIRTY` is set to `1`. When `ALLOW_DIRTY=1`, the script SHALL
-substitute the tag with `<short-sha>-dirty-<unix-ts>` and SHALL
-print a warning to stderr before proceeding.
+The build script SHALL exit non-zero with a diagnostic message
+naming the dirty files when `git diff --quiet` or
+`git diff --cached --quiet` returns non-zero, UNLESS the environment
+variable `ALLOW_DIRTY` is set to `1`. When `ALLOW_DIRTY=1`, the
+script SHALL substitute the tag with `<short-sha>-dirty-<unix-ts>`
+and SHALL print a warning to stderr before proceeding.
 
 #### Scenario: Uncommitted change aborts the build
 

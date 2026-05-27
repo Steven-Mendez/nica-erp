@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap
+.PHONY: help doctor install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap build-image
 
 help: ## list targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -71,3 +71,6 @@ bootstrap: ## provision persistent AWS resources (state bucket, ECR, SPA CloudFr
 
 destroy-bootstrap: ## tear down persistent AWS resources (refuses if ephemeral stack alive)
 	./scripts/destroy-bootstrap.sh
+
+build-image: ## build the API image (linux/amd64) and push to ECR (ALLOW_DIRTY=1 to opt in to a dirty tag). Note: --platform linux/amd64 emulates under QEMU on Apple Silicon and may segfault; use the deploy workflow's build step instead.
+	./scripts/build-and-push-image.sh

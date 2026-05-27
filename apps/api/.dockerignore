@@ -1,0 +1,51 @@
+# Build context for apps/api/Dockerfile. Keep this list permissive enough
+# that pyproject.toml / uv.lock / src / alembic / README.md all reach the
+# build, but strict enough that test trees and caches do not bloat layers
+# or bust the cache when an unrelated file changes.
+
+# Python build / runtime caches
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py,cover
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Tests are not shipped in the runtime image
+tests/
+
+# Alembic revision bytecode (revisions themselves are kept)
+alembic/versions/__pycache__/
+
+# Local env files — never bake into an image
+.env
+.env.local
+.env.local.example
+.env.*
+*.local
+
+# IDE / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker / git metadata (already implicit but explicit is clearer)
+.git/
+.gitignore
+Dockerfile
+.dockerignore

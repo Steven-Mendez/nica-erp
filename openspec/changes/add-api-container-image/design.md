@@ -21,7 +21,7 @@ Two constraints make the answer non-trivial:
 
 This change is also where the operational convention "no CI/CD in
 the MVP" ([ADR-0023](../../../docs/adr/0023-no-ci-cd-mvp.md)) becomes
-visible: image builds happen on the operator laptop, not in GitHub
+visible: image builds happen on the operator host, not in GitHub
 Actions. The script has to be defensible enough for a human to run
 unattended.
 
@@ -77,7 +77,12 @@ Alternative considered: a single-stage image that runs `uv sync` at
 build. Rejected — leaves the build cache and uv toolchain in the
 runtime image and conflates dev/prod sync flags.
 
-### Runtime base `python:3.12-slim`, not `distroless` or `alpine`
+### Runtime base `python:3.13-slim`, not `distroless` or `alpine`
+
+`apps/api/pyproject.toml` pins `requires-python = ">=3.13,<3.14"`
+and `uv.lock` declares `requires-python = "==3.13.*"`, so the image
+base SHALL be `python:3.13-slim` (any earlier minor would make
+`uv sync --frozen` fail at build time).
 
 `weasyprint` requires glibc-linked libraries (`libcairo2` and
 friends); Alpine's musl is a poor fit and shipping shims would
@@ -138,12 +143,12 @@ Rationale: a too-strict ignore breaks the build; a too-loose ignore
 busts the layer cache when unrelated files change. Tests and
 caches are the biggest cache-busters in practice.
 
-### No CI/CD; image builds run from the operator laptop
+### No CI/CD; image builds run from the operator host
 
 Per [ADR-0023](../../../docs/adr/0023-no-ci-cd-mvp.md) there is no
 GitHub Actions step that runs `make build-image`. The script
 authenticates via the operator's AWS credentials
-(`aws ecr get-login-password`) and pushes from the laptop.
+(`aws ecr get-login-password`) and pushes from the operator host.
 
 Trade-off: a build is reproducible to the operator who ran it but
 not centrally audited. Acceptable at the MVP stage; revisit when

@@ -20,12 +20,13 @@ SHA instead of `unknown`.
 ## What Changes
 
 - New `apps/api/Dockerfile` (multistage):
-  - **builder** stage: `python:3.12-slim`, installs `uv`, copies
+  - **builder** stage: `python:3.13-slim` (matches the project's
+    `requires-python = ">=3.13,<3.14"`), installs `uv`, copies
     `pyproject.toml`, `uv.lock`, `README.md`, `src/`, then
     `uv sync --frozen --no-dev --no-install-project` followed by
     `uv pip install --no-deps .` so the app is installed into a
     self-contained `.venv` without touching dev dependencies.
-  - **runtime** stage: `python:3.12-slim`, installs the
+  - **runtime** stage: `python:3.13-slim`, installs the
     `weasyprint` native libs (`libcairo2`, `libgdk-pixbuf-2.0-0`,
     `libpangoft2-1.0-0`, `libpango-1.0-0`, `shared-mime-info`,
     `fonts-liberation`, `libffi-dev`), copies `.venv` and `src/`
