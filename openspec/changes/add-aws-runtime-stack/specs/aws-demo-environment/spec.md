@@ -74,13 +74,12 @@ allowed methods SHALL remain unchanged from
 
 ### Requirement: `terraform destroy` removes every demo-env resource
 
-`terraform -chdir=infra/terraform/envs/demo destroy -auto-approve`
-SHALL delete every resource declared by the six modules and SHALL
-revert the CloudFront `/api/*` origin to the
-`placeholder.invalid` value declared by
-`add-terraform-state-backend`. After completion, the Resource
-Groups Tagging API filtered by `Project=nica-erp` SHALL return
-only the bootstrap resources.
+`terraform destroy` against the demo env SHALL delete every
+resource declared by the six modules and SHALL revert the
+CloudFront `/api/*` origin to the `placeholder.invalid` value
+declared by `add-terraform-state-backend`. After completion, the
+Resource Groups Tagging API filtered by `Project=nica-erp` SHALL
+return only the bootstrap resources.
 
 #### Scenario: Destroy returns the account to a bootstrap-only state
 

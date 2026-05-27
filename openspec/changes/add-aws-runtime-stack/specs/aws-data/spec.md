@@ -41,21 +41,26 @@ created at the default values.
 - **THEN** the RDS instance SHALL be destroyed in under 15 minutes
   without a manual final-snapshot prompt
 
-### Requirement: Credentials stored only in SSM SecureString
+### Requirement: Credentials generated in the data module, persisted only via the secrets module
 
 The module SHALL generate the master username (`nica_erp_demo`) and
-a random 32-character password via `random_password`. The module
-SHALL write three SSM SecureString parameters:
-`/nica-erp/demo/rds/url` (full SQLAlchemy URL of the form
-`postgresql+asyncpg://<user>:<pass>@<endpoint>:5432/<db>`),
-`/nica-erp/demo/rds/username`, `/nica-erp/demo/rds/password`. The
-module SHALL NOT emit the password as a Terraform output, nor in
-any non-SecureString SSM parameter.
+a random 32-character password via `random_password`. The credentials
+SHALL be exposed as `sensitive = true` Terraform outputs
+(`rds_username`, `rds_password`, `rds_database_name`,
+`rds_endpoint`, `rds_port`) consumed exclusively by the
+`infra/terraform/modules/secrets/` module, which is the SOLE writer
+of the SSM SecureString parameters
+`/nica-erp/demo/rds/url`, `/nica-erp/demo/rds/username`, and
+`/nica-erp/demo/rds/password` (see `aws-secrets`). The `envs/demo`
+root SHALL NOT re-export any password output at the env level —
+there SHALL be no non-secrets path through which the password
+reaches stdout, the state file in plaintext, or any non-SecureString
+parameter.
 
-#### Scenario: Password is not a Terraform output
+#### Scenario: Password is not an env-level output
 
-- **WHEN** `terraform output -json` is invoked against the data
-  module
+- **WHEN** `terraform -chdir=infra/terraform/envs/demo output -json`
+  is invoked after apply
 - **THEN** the JSON response SHALL NOT contain a key whose value
   matches the random password
 
@@ -63,5 +68,5 @@ any non-SecureString SSM parameter.
 
 - **WHEN** `aws ssm describe-parameters --filters Key=Name,Values=/nica-erp/demo/rds/`
   is called after apply
-- **THEN** the three parameters above SHALL each have
-  `Type=SecureString`
+- **THEN** the three `/nica-erp/demo/rds/*` parameters SHALL each
+  have `Type=SecureString`, written by the `secrets` module

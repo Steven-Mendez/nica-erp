@@ -1,0 +1,31 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+#
+# AWS region (must match the bootstrap region).
+aws_region = "us-east-1"
+
+# Named AWS CLI profile used by Terraform LOCAL runs. Skip in CI —
+# the deploy workflow uses OIDC and the AWS SDK reads
+# AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN from env instead.
+aws_profile = "nica-erp"
+
+# Email subscribed to the alerts SNS topic. AWS sends a confirmation
+# link to this address; the subscription doesn't deliver until the
+# operator clicks it.
+alert_email = "you@example.com"
+
+# ECR image tag (short SHA). The deploy script writes the tag of the
+# image it just pushed to `.deploy-image-tag`; you can paste that here
+# or pass it via `-var image_tag=$(cat .deploy-image-tag)`.
+image_tag = "REPLACE_ME"
+
+# Bootstrap CloudFront distribution ID. Read once after `make bootstrap`:
+#   terraform -chdir=infra/terraform/bootstrap output -raw cloudfront_distribution_id
+cloudfront_distribution_id = "REPLACE_ME"
+
+# API service scaling. MVP default: single task, no autoscaling.
+api_min_capacity = 1
+api_max_capacity = 1
+
+# Cognito hosted domain prefix; final domain is
+# <prefix>.auth.us-east-1.amazoncognito.com.
+cognito_domain_prefix = "nica-erp"

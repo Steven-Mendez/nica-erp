@@ -244,3 +244,7 @@ infra/terraform/.terraform.lock.hcl
 *.key
 *.p12
 secrets/
+# Whitelist: Terraform IaC module that manages SSM SecureString resources —
+# the module itself carries no secret material (values are random_password
+# resources resolved at apply time).
+!infra/terraform/modules/secrets/
