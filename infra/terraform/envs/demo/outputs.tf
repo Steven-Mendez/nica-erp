@@ -77,3 +77,8 @@ output "sns_alerts_topic_arn" {
   description = "SNS topic ARN for ops alerts."
   value       = module.observability.sns_alerts_topic_arn
 }
+
+output "ses_verification_reminder" {
+  description = "Human-readable reminder that the operator must click the SES verification link before the first signup. Surfaced by `make deploy`."
+  value       = module.email.verification_reminder
+}

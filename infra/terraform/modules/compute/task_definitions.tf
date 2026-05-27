@@ -21,6 +21,14 @@ locals {
       name      = "COGNITO_CLIENT_ID"
       valueFrom = var.ssm_parameter_arns["cognito_client_id"]
     },
+    {
+      name      = "COGNITO_USER_POOL_DOMAIN"
+      valueFrom = var.ssm_parameter_arns["cognito_user_pool_domain"]
+    },
+    {
+      name      = "SES_FROM_ADDRESS"
+      valueFrom = var.ssm_parameter_arns["ses_from_address"]
+    },
   ]
 
   container_environment = [

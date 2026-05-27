@@ -12,6 +12,11 @@ resource "random_password" "rds" {
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
+# Pre-launch posture (ADR-0017): the ephemeral demo intentionally runs with
+# `backup_retention_period = 0` and `skip_final_snapshot = true` so a `make
+# destroy` cycle leaves no orphan snapshots or PITR artifacts. PITR + 7-day
+# retention will be reintroduced when the stack becomes long-lived.
+# nosemgrep: terraform.aws.security.aws-rds-backup-no-retention.aws-rds-backup-no-retention
 resource "aws_db_instance" "this" {
   identifier             = "${var.name_prefix}-pg"
   engine                 = "postgres"
@@ -36,6 +41,13 @@ resource "aws_db_instance" "this" {
   performance_insights_enabled = false
   auto_minor_version_upgrade   = true
   apply_immediately            = true
+
+  # Stream Postgres engine logs to CloudWatch so the observability module's
+  # ALB alarm has a parallel signal stream for RDS-side errors (slow
+  # queries, deadlocks, role failures). The log group is created on demand
+  # by RDS and inherits the account-default 1-day retention; the API log
+  # group (managed in `observability/main.tf`) is the authoritative one.
+  enabled_cloudwatch_logs_exports = ["postgresql"]
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-pg" })
 }

@@ -36,6 +36,11 @@ resource "aws_internet_gateway" "this" {
   tags = merge(var.tags, { Name = "${var.name_prefix}-igw" })
 }
 
+# Public subnets only host the ALB and NAT gateway — both AWS-managed
+# services that need elastic IPs to be reachable. ECS tasks and RDS live
+# in the private subnets below, so no application workload receives a
+# public IP from this setting.
+# nosemgrep: terraform.aws.security.aws-subnet-has-public-ip-address.aws-subnet-has-public-ip-address
 resource "aws_subnet" "public" {
   for_each                = local.public_subnets
   vpc_id                  = aws_vpc.this.id

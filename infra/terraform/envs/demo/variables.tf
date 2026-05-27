@@ -42,3 +42,8 @@ variable "cloudfront_distribution_id" {
   description = "ID of the bootstrap-created CloudFront distribution. Read from `terraform -chdir=infra/terraform/bootstrap output -raw cloudfront_distribution_id` after `make bootstrap`."
   type        = string
 }
+
+variable "from_address" {
+  description = "Operator's email address registered as the SES sender. AWS sends a verification link to this address; the operator must click it before the first signup. See ADR-0020."
+  type        = string
+}

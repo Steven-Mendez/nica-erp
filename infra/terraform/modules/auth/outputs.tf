@@ -14,6 +14,6 @@ output "user_pool_client_id" {
 }
 
 output "user_pool_domain" {
-  description = "Cognito hosted domain prefix (full domain is <prefix>.auth.<region>.amazoncognito.com)."
-  value       = aws_cognito_user_pool_domain.this.domain
+  description = "Fully-qualified Cognito hosted domain (e.g. nica-erp.auth.us-east-1.amazoncognito.com). No scheme prefix."
+  value       = "${aws_cognito_user_pool_domain.this.domain}.auth.us-east-1.amazoncognito.com"
 }

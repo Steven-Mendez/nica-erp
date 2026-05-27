@@ -59,6 +59,11 @@ variable "ssm_parameter_arns" {
   type        = map(string)
 }
 
+variable "cognito_user_pool_arn" {
+  description = "Cognito User Pool ARN. Used to scope the cognito-idp IAM allow-list on the API Fargate task role."
+  type        = string
+}
+
 variable "log_group_name" {
   description = "CloudWatch Logs group consumed by the awslogs driver."
   type        = string

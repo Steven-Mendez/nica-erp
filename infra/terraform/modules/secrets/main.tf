@@ -78,6 +78,27 @@ resource "aws_ssm_parameter" "cognito_client_id" {
   tags = var.tags
 }
 
+# Plain `String` — the Cognito hosted domain is public; encrypting it
+# at rest buys nothing and complicates retrieval. Same goes for the SES
+# sender address below.
+resource "aws_ssm_parameter" "cognito_user_pool_domain" {
+  name        = "${var.ssm_prefix}/cognito/user-pool-domain"
+  description = "Fully-qualified Cognito hosted domain (no scheme)."
+  type        = "String"
+  value       = var.cognito_user_pool_domain
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "ses_from_address" {
+  name        = "${var.ssm_prefix}/ses/from-address"
+  description = "Operator's SES-verified sender address consumed by the API as SES_FROM_ADDRESS."
+  type        = "String"
+  value       = var.from_address
+
+  tags = var.tags
+}
+
 # Placeholder, intentionally empty. AWS does not use LOCAL_JWT_SECRET —
 # Cognito-issued JWTs replace it. Sprint 02 fills it in if/when needed.
 resource "aws_ssm_parameter" "jwt_secret_placeholder" {

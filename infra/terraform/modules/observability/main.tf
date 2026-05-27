@@ -1,3 +1,8 @@
+# CloudWatch log groups are encrypted at rest with the AWS-managed key by
+# default. A customer-managed KMS key would add IAM key-policy maintenance
+# and a recurring per-key cost for marginal benefit on an ephemeral demo;
+# revisit when this stack becomes long-lived (ADR-0024 follow-up).
+# nosemgrep: terraform.aws.security.aws-cloudwatch-log-group-unencrypted.aws-cloudwatch-log-group-unencrypted
 resource "aws_cloudwatch_log_group" "api" {
   name              = var.log_group_name
   retention_in_days = var.log_retention_days

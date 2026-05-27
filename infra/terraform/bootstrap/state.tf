@@ -66,6 +66,26 @@ resource "aws_s3_bucket_policy" "tf_state" {
   depends_on = [aws_s3_bucket_public_access_block.tf_state]
 }
 
+# Customer-managed KMS key for the Terraform state-lock table. The
+# bootstrap stack is long-lived (it survives `make destroy`), so the
+# small recurring KMS cost is appropriate; an AWS-managed key would
+# rotate outside our control and the table holds operational metadata.
+resource "aws_kms_key" "tf_lock" {
+  description             = "CMK for Terraform state-lock DynamoDB table."
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  tags = {
+    Project = "nica-erp"
+    Name    = "nica-erp-tf-lock-cmk"
+  }
+}
+
+resource "aws_kms_alias" "tf_lock" {
+  name          = "alias/nica-erp-tf-lock"
+  target_key_id = aws_kms_key.tf_lock.id
+}
+
 resource "aws_dynamodb_table" "tf_lock" {
   name         = "nica-erp-tf-lock"
   billing_mode = "PAY_PER_REQUEST"
@@ -74,6 +94,15 @@ resource "aws_dynamodb_table" "tf_lock" {
   attribute {
     name = "LockID"
     type = "S"
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.tf_lock.arn
+  }
+
+  point_in_time_recovery {
+    enabled = true
   }
 
   tags = {

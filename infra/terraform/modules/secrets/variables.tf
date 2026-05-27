@@ -46,3 +46,13 @@ variable "cognito_client_id" {
   description = "Cognito SPA app client ID."
   type        = string
 }
+
+variable "cognito_user_pool_domain" {
+  description = "Fully-qualified Cognito hosted domain (e.g. nica-erp.auth.us-east-1.amazoncognito.com). Public; stored as plain `String`."
+  type        = string
+}
+
+variable "from_address" {
+  description = "Operator's email address used as the SES sender identity. Plumbed in from module.email."
+  type        = string
+}

@@ -29,3 +29,7 @@ api_max_capacity = 1
 # Cognito hosted domain prefix; final domain is
 # <prefix>.auth.us-east-1.amazoncognito.com.
 cognito_domain_prefix = "nica-erp"
+
+# Operator email for the SES sender identity. After apply, click the SES verification
+# link AWS sends to this address (us-east-1) BEFORE the first signup. ADR-0020.
+# from_address = "ops@example.com"

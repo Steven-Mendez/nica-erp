@@ -67,3 +67,62 @@ resource "aws_iam_role" "task" {
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-ecs-task" })
 }
+
+# ---- Task role: cognito-idp allow-list -------------------------------------
+#
+# The API forwards SPA credentials to Cognito (the SPA does NOT call
+# Cognito directly — see ADR-0020). The allow-list below is the exact
+# set of cognito-idp actions the identity context calls. Destructive
+# actions (AdminDeleteUser, DeleteUserPool*, AdminSetUserPassword) are
+# intentionally omitted; the API does not perform them.
+
+data "aws_iam_policy_document" "task_cognito_idp" {
+  statement {
+    sid    = "CognitoIdpAllowList"
+    effect = "Allow"
+    actions = [
+      "cognito-idp:SignUp",
+      "cognito-idp:ConfirmSignUp",
+      "cognito-idp:ResendConfirmationCode",
+      "cognito-idp:InitiateAuth",
+      "cognito-idp:GlobalSignOut",
+      "cognito-idp:ForgotPassword",
+      "cognito-idp:ConfirmForgotPassword",
+      "cognito-idp:ChangePassword",
+      "cognito-idp:AdminUpdateUserAttributes",
+      "cognito-idp:AdminGetUser",
+    ]
+    resources = [var.cognito_user_pool_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "task_cognito_idp" {
+  name   = "${var.name_prefix}-ecs-task-cognito-idp"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_cognito_idp.json
+}
+
+# ---- Task role: SES send (sandbox) -----------------------------------------
+#
+# SESv1 SendEmail / SendRawEmail does not support resource-level ARN
+# granularity in the MVP region. Scoped to `*`; the verified-sender
+# rules in SES (sandbox + single email-identity) provide the actual
+# enforcement.
+
+data "aws_iam_policy_document" "task_ses_send" {
+  statement {
+    sid    = "SesSend"
+    effect = "Allow"
+    actions = [
+      "ses:SendEmail",
+      "ses:SendRawEmail",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_ses_send" {
+  name   = "${var.name_prefix}-ecs-task-ses-send"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_ses_send.json
+}

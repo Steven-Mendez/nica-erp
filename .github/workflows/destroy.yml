@@ -33,12 +33,17 @@ jobs:
     env:
       AWS_REGION: us-east-1
       DESTROY_WEB_ASSETS: ${{ inputs.clean_web_assets && '1' || '0' }}
+      # Mirror untrusted user inputs into env vars before any `run:` step
+      # interpolates them — protects against shell injection if someone
+      # types backticks or `$(...)` into the workflow_dispatch form.
+      INPUT_CONFIRM: ${{ inputs.confirm }}
+      INPUT_CLEAN_WEB_ASSETS: ${{ inputs.clean_web_assets }}
 
     steps:
       - name: Assert confirmation string
         run: |
-          if [[ "${{ inputs.confirm }}" != "nica-erp-ephemeral" ]]; then
-            echo "ERROR: confirm input must equal 'nica-erp-ephemeral' (got: '${{ inputs.confirm }}')." >&2
+          if [[ "$INPUT_CONFIRM" != "nica-erp-ephemeral" ]]; then
+            echo "ERROR: confirm input must equal 'nica-erp-ephemeral' (got: '$INPUT_CONFIRM')." >&2
             exit 1
           fi
 
@@ -61,14 +66,18 @@ jobs:
 
       - name: Summarize
         if: always()
+        # `job.status` is a GitHub-controlled context value (success/failure/cancelled),
+        # not user input — mirrored into env here per the semgrep run-shell-injection rule.
+        env:
+          # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection
+          JOB_STATUS: ${{ job.status }}
         run: |
-          status="${{ job.status }}"
           {
-            echo "## Destroy ${status}"
+            echo "## Destroy ${JOB_STATUS}"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
-            echo "| Confirmation | \`${{ inputs.confirm }}\` |"
-            echo "| Cleaned SPA bucket | \`${{ inputs.clean_web_assets }}\` |"
+            echo "| Confirmation | \`${INPUT_CONFIRM}\` |"
+            echo "| Cleaned SPA bucket | \`${INPUT_CLEAN_WEB_ASSETS}\` |"
             echo "| Verify-destroyed | see log step output |"
           } >> "$GITHUB_STEP_SUMMARY"

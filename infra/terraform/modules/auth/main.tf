@@ -44,8 +44,12 @@ resource "aws_cognito_user_pool_client" "spa" {
 
   generate_secret = false
 
+  # The SPA does NOT call Cognito directly — the API forwards
+  # credentials over HTTPS via AdminInitiateAuth-equivalent flows.
+  # USER_PASSWORD_AUTH must be enabled on the client for the API to
+  # use it. SRP is intentionally omitted (MVP). ADR-0020.
   explicit_auth_flows = [
-    "ALLOW_USER_SRP_AUTH",
+    "ALLOW_USER_PASSWORD_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
 
@@ -59,14 +63,16 @@ resource "aws_cognito_user_pool_client" "spa" {
 
   prevent_user_existence_errors = "ENABLED"
 
+  # Token TTLs pinned to docs/06-security-model.md §TTLs. Minutes-based
+  # units chosen to avoid Cognito's region-dependent defaults.
+  access_token_validity  = 60
+  id_token_validity      = 60
   refresh_token_validity = 30
-  access_token_validity  = 1
-  id_token_validity      = 1
 
   token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
     refresh_token = "days"
-    access_token  = "hours"
-    id_token      = "hours"
   }
 }
 

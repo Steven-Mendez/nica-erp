@@ -55,33 +55,42 @@ module "auth" {
   cognito_domain_prefix = var.cognito_domain_prefix
 }
 
+module "email" {
+  source = "../../modules/email"
+
+  from_address = var.from_address
+}
+
 module "secrets" {
   source = "../../modules/secrets"
 
-  rds_endpoint         = module.data.rds_endpoint
-  rds_port             = module.data.rds_port
-  rds_username         = module.data.rds_username
-  rds_password         = module.data.rds_password
-  rds_database_name    = module.data.rds_database_name
-  cognito_user_pool_id = module.auth.user_pool_id
-  cognito_client_id    = module.auth.user_pool_client_id
+  rds_endpoint             = module.data.rds_endpoint
+  rds_port                 = module.data.rds_port
+  rds_username             = module.data.rds_username
+  rds_password             = module.data.rds_password
+  rds_database_name        = module.data.rds_database_name
+  cognito_user_pool_id     = module.auth.user_pool_id
+  cognito_client_id        = module.auth.user_pool_client_id
+  cognito_user_pool_domain = module.auth.user_pool_domain
+  from_address             = module.email.from_address
 }
 
 module "compute" {
   source = "../../modules/compute"
 
-  aws_region         = data.aws_region.current.name
-  vpc_id             = module.network.vpc_id
-  public_subnet_ids  = module.network.public_subnet_ids
-  private_subnet_ids = module.network.private_subnet_ids
-  sg_alb_id          = module.network.sg_alb_id
-  sg_ecs_tasks_id    = module.network.sg_ecs_tasks_id
-  ecr_repository_url = data.aws_ecr_repository.api.repository_url
-  image_tag          = var.image_tag
-  ssm_parameter_arns = module.secrets.ssm_parameter_arns
-  log_group_name     = local.api_log_group_name
-  api_min_capacity   = var.api_min_capacity
-  api_max_capacity   = var.api_max_capacity
+  aws_region            = data.aws_region.current.name
+  vpc_id                = module.network.vpc_id
+  public_subnet_ids     = module.network.public_subnet_ids
+  private_subnet_ids    = module.network.private_subnet_ids
+  sg_alb_id             = module.network.sg_alb_id
+  sg_ecs_tasks_id       = module.network.sg_ecs_tasks_id
+  ecr_repository_url    = data.aws_ecr_repository.api.repository_url
+  image_tag             = var.image_tag
+  ssm_parameter_arns    = module.secrets.ssm_parameter_arns
+  cognito_user_pool_arn = module.auth.user_pool_arn
+  log_group_name        = local.api_log_group_name
+  api_min_capacity      = var.api_min_capacity
+  api_max_capacity      = var.api_max_capacity
 }
 
 module "observability" {
