@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from bootstrap.api import create_app
+from bootstrap.container import build_identity_provider_for_middleware
 from bootstrap.settings import get_settings
 
 
@@ -20,8 +21,9 @@ def _route_paths(app) -> set[str]:  # type: ignore[no-untyped-def]
 
 class TestLocalPrefix:
     def test_healthz_mounted_at_root(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setenv("APP_ENV", "local")
         get_settings.cache_clear()
+        build_identity_provider_for_middleware.cache_clear()
 
         app = create_app()
         paths = _route_paths(app)
@@ -33,6 +35,7 @@ class TestAwsPrefix:
     def test_healthz_mounted_under_api(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("APP_ENV", "aws")
         get_settings.cache_clear()
+        build_identity_provider_for_middleware.cache_clear()
 
         app = create_app()
         paths = _route_paths(app)

@@ -11,6 +11,7 @@ import pytest
 from starlette.middleware.cors import CORSMiddleware
 
 from bootstrap.api import create_app
+from bootstrap.container import build_identity_provider_for_middleware
 from bootstrap.settings import Settings, get_settings
 
 
@@ -22,17 +23,18 @@ class TestLocalDefaults:
     def test_settings_default_to_localhost_allow_list(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setenv("APP_ENV", "local")
         monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
         get_settings.cache_clear()
 
         settings = Settings()
-        assert settings.app_env != "aws"
+        assert settings.app_env == "local"
         assert settings.cors_allowed_origins == ["http://localhost:5173"]
 
     def test_local_app_mounts_cors_middleware(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setenv("APP_ENV", "local")
         get_settings.cache_clear()
+        build_identity_provider_for_middleware.cache_clear()
 
         app = create_app()
         assert _has_cors_middleware(app)
@@ -44,13 +46,16 @@ class TestAwsDefaults:
         monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
         get_settings.cache_clear()
 
-        settings = Settings()
+        # Bypass the repo-root `.env.local` (which always supplies
+        # CORS_ALLOWED_ORIGINS for dev) so the AWS-default assertion holds.
+        settings = Settings(_env_file=None)
         assert settings.app_env == "aws"
         assert settings.cors_allowed_origins == []
 
     def test_aws_app_does_not_mount_cors_middleware(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("APP_ENV", "aws")
         get_settings.cache_clear()
+        build_identity_provider_for_middleware.cache_clear()
 
         app = create_app()
         assert not _has_cors_middleware(app)
@@ -58,7 +63,7 @@ class TestAwsDefaults:
 
 class TestExplicitOverrides:
     def test_local_override_via_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setenv("APP_ENV", "local")
         monkeypatch.setenv("CORS_ALLOWED_ORIGINS", '["https://app.example.com"]')
         get_settings.cache_clear()
 

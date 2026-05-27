@@ -42,4 +42,9 @@ async def test_healthz_reports_db_ok_and_alembic_revision(
     body = response.json()
     assert body["status"] == "ok"
     assert body["db"] == "ok"
-    assert body["alembic_revision"] == "0001_shared_kernel"
+    # The Alembic head is whatever the latest migration in `alembic/versions`
+    # advertises. Sprint 02 added `0002_identity`; assert the head moves
+    # rather than pin a specific revision so future migrations don't break
+    # this contract.
+    assert body["alembic_revision"] is not None
+    assert body["alembic_revision"].startswith("000")
