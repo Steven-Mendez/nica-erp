@@ -17,7 +17,10 @@ export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEleme
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 p-6 has-[data-slot=card-action]:grid-cols-[1fr_auto]", className)}
+      className={cn(
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 p-6 has-[data-slot=card-action]:grid-cols-[1fr_auto]",
+        className,
+      )}
       {...props}
     />
   ),

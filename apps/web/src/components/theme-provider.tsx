@@ -53,7 +53,7 @@ export function ThemeProvider({
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(() =>
-    typeof window === "undefined" ? "light" : (theme === "system" ? getSystemTheme() : theme),
+    typeof window === "undefined" ? "light" : theme === "system" ? getSystemTheme() : theme,
   );
 
   useEffect(() => {

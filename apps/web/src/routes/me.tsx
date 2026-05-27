@@ -36,7 +36,10 @@ export function MeRoute() {
             <CardDescription>You need to be signed in to view this page.</CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link to="/login" className={buttonVariants({ variant: "default", className: "w-full" })}>
+            <Link
+              to="/login"
+              className={buttonVariants({ variant: "default", className: "w-full" })}
+            >
               Go to sign in
             </Link>
           </CardFooter>

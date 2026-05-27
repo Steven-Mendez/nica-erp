@@ -62,20 +62,14 @@ const confirmRoute = createRoute({
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/forgot-password",
-  component: lazyRouteComponent(
-    () => import("@/routes/forgot-password"),
-    "ForgotPasswordRoute",
-  ),
+  component: lazyRouteComponent(() => import("@/routes/forgot-password"), "ForgotPasswordRoute"),
 });
 
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reset-password",
   validateSearch: emailSearchSchema,
-  component: lazyRouteComponent(
-    () => import("@/routes/reset-password"),
-    "ResetPasswordRoute",
-  ),
+  component: lazyRouteComponent(() => import("@/routes/reset-password"), "ResetPasswordRoute"),
 });
 
 const meRoute = createRoute({

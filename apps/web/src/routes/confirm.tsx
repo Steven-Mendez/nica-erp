@@ -9,12 +9,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Controller, useForm } from "react-hook-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useConfirmSignupMutation, useResendCodeMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";

@@ -47,7 +47,7 @@ interface FetchResult<T> {
   response: Response;
 }
 
-const expectData = <T,>(label: string, result: FetchResult<T>): T => {
+const expectData = <T>(label: string, result: FetchResult<T>): T => {
   if (result.error !== undefined) {
     throw new ApiError(label, result.response.status, result.error);
   }

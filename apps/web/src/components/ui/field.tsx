@@ -33,8 +33,7 @@ const fieldVariants = cva("group/field", {
 });
 
 export interface FieldProps
-  extends HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof fieldVariants> {
+  extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof fieldVariants> {
   "data-invalid"?: boolean;
 }
 
@@ -85,20 +84,21 @@ FieldLabel.displayName = "FieldLabel";
 
 // ---------- FieldDescription ----------------------------------------------
 
-export const FieldDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
-    <p
-      ref={ref}
-      data-slot="field-description"
-      className={cn(
-        "text-xs leading-snug text-muted-foreground",
-        "group-data-[invalid=true]/field:text-destructive",
-        className,
-      )}
-      {...props}
-    />
-  ),
-);
+export const FieldDescription = forwardRef<
+  HTMLParagraphElement,
+  HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => (
+  <p
+    ref={ref}
+    data-slot="field-description"
+    className={cn(
+      "text-xs leading-snug text-muted-foreground",
+      "group-data-[invalid=true]/field:text-destructive",
+      className,
+    )}
+    {...props}
+  />
+));
 FieldDescription.displayName = "FieldDescription";
 
 // ---------- FieldError ----------------------------------------------------

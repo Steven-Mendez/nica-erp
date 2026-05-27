@@ -8,13 +8,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Controller, useForm } from "react-hook-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useResetPasswordMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
