@@ -10,6 +10,7 @@ name = Domain free of SQLAlchemy/FastAPI/boto3
 type = forbidden
 source_modules =
     shared_kernel.domain
+    contexts.identity.domain
 forbidden_modules =
     sqlalchemy
     fastapi

@@ -18,6 +18,8 @@ from uuid import UUID
 class CurrentUser:
     user_id: UUID
     email: str
+    external_sub: str
+    active_tenant: str | None = None
 
 
 _tenant_id: ContextVar[UUID | None] = ContextVar("tenant_id", default=None)

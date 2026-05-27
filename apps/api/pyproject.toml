@@ -4,23 +4,27 @@ version = "0.1.0"
 description = "Multi-tenant ERP SaaS for Nicaraguan SMBs"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "aiosmtplib>=3.0,<4.0",
+  "alembic>=1.13,<2.0",
+  "asyncpg>=0.30,<1.0",
+  "bcrypt>=4.2,<5.0",
+  "boto3>=1.35,<2.0",
   "fastapi>=0.115,<1.0",
-  "uvicorn[standard]>=0.30,<1.0",
+  "psycopg[binary]>=3.2,<4",
+  "pyjwt[crypto]>=2.9,<3.0",
   "pydantic>=2.7,<3.0",
   "pydantic-settings>=2.4,<3.0",
-  "structlog>=24,<25",
   "sqlalchemy[asyncio]>=2.0,<3.0",
-  "asyncpg>=0.30,<1.0",
-  "psycopg[binary]>=3.2,<4",
-  "alembic>=1.13,<2.0",
+  "structlog>=24,<25",
+  "uvicorn[standard]>=0.30,<1.0",
 ]
 
 [dependency-groups]
 dev = [
   "ruff>=0.6,<1.0",
   "mypy>=1.11,<2.0",
-  "pytest>=8,<9",
-  "pytest-asyncio>=0.23,<1.0",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.0,<2",
   "httpx>=0.27,<1.0",
   "respx>=0.21,<1.0",
   "import-linter>=2,<3",
@@ -46,9 +50,11 @@ select = ["E", "F", "W", "I", "B", "UP", "RUF", "N"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-# FastAPI `Depends()` is conventionally used as a default value.
+# FastAPI `Depends()` / `Header()` are conventionally used as default values.
 # Glob form so it matches whether ruff runs from `apps/api/` or the workspace root.
 "**/bootstrap/api.py" = ["B008"]
+"**/contexts/identity/adapters/inbound/http/dependencies.py" = ["B008"]
+"**/contexts/identity/adapters/inbound/http/router.py" = ["B008"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -71,6 +77,10 @@ disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
 module = ["testcontainers.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

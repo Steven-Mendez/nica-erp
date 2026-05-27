@@ -9,6 +9,7 @@ hand-off documented in `add-api-container-image`: the Dockerfile bakes
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from bootstrap import settings as settings_module
 from bootstrap.settings import Settings, get_settings
@@ -54,3 +55,34 @@ def test_settings_module_does_not_invoke_subprocess_at_import() -> None:
 
     source = inspect.getsource(settings_module)
     assert "subprocess" not in source
+
+
+def test_settings_rejects_unset_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`APP_ENV` has no default — instantiation MUST fail when it's unset.
+
+    Per the ``api-bootstrap`` spec, a misconfigured container must fail
+    fast rather than silently fall back to the local identity adapter in
+    production.
+    """
+
+    monkeypatch.delenv("APP_ENV", raising=False)
+    get_settings.cache_clear()
+
+    # `_env_file=None` bypasses the repo-root `.env.local` so the test
+    # exercises the "no APP_ENV anywhere" contract; otherwise the dev's
+    # local file would satisfy the field via the file source.
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_settings_rejects_local_without_jwt_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When ``APP_ENV=local``, ``LOCAL_JWT_SECRET`` must be set."""
+
+    monkeypatch.setenv("APP_ENV", "local")
+    monkeypatch.setenv("LOCAL_JWT_SECRET", "")
+    get_settings.cache_clear()
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
