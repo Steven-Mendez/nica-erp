@@ -45,7 +45,7 @@ LocalStack community **does not** support standalone EventBridge Scheduler. The 
 make doctor                              # verify uv, node, pnpm, docker on PATH
 make install                             # uv sync + pnpm install
 make hooks                               # install pre-commit git hooks
-cp .env.local.example apps/api/.env.local
+cp .env.local.example .env.local         # secrets at the repo root, loaded by `bootstrap.settings`
 
 # Daily flow
 make local-up                            # Postgres + LocalStack + Mailpit
@@ -113,14 +113,21 @@ SQS_AUDIT_QUEUE_URL=http://localhost:4566/000000000000/audit-queue
 
 SMTP_HOST=localhost
 SMTP_PORT=1025
-SMTP_FROM=noreply@local.nica-erp.dev
+# The Mailpit sender address is pinned in `EmailSenderSmtp` (`noreply@local.nica-erp.dev`);
+# AWS uses `SES_FROM_ADDRESS` instead.
 
 CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
 
-# Added in sprint 02 when the local IdP lands:
-LOCAL_JWT_SECRET=...   # openssl rand -hex 32
-LOCAL_JWT_ISSUER=nica-erp-local
-LOCAL_JWT_AUDIENCE=nica-erp-app
+# Identity (local IdP):
+LOCAL_JWT_SECRET=...   # openssl rand -hex 32 — required when APP_ENV=local
+# Issuer / audience are pinned in the adapter to nica-erp-local-idp / nica-erp-local.
+
+# Cognito (blank locally; populated by `make deploy` for AWS):
+COGNITO_USER_POOL_ID=
+COGNITO_APP_CLIENT_ID=
+COGNITO_USER_POOL_DOMAIN=
+COGNITO_REGION=us-east-1
+SES_FROM_ADDRESS=
 
 # Added in sprint 06 (FX/taxes):
 FX_RATE_USD_NIO=36.5

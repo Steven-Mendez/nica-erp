@@ -33,16 +33,33 @@ The module SHALL create one `aws_cognito_user_pool_client` named
 `allowed_oauth_flows=["code"]`,
 `allowed_oauth_scopes=["openid","email","profile"]`,
 `allowed_oauth_flows_user_pool_client=true`,
-`supported_identity_providers=["COGNITO"]`. Callback URLs SHALL
-include `https://<dist-id>.cloudfront.net/` resolved from the
-CloudFront distribution domain produced by
-`add-terraform-state-backend`.
+`supported_identity_providers=["COGNITO"]`. The client SHALL declare
+`callback_urls = ["https://${aws_cloudfront_distribution.main.domain_name}/auth/callback"]`
+and `logout_urls =
+["https://${aws_cloudfront_distribution.main.domain_name}/auth/callback"]`,
+sourcing the CloudFront distribution attribute directly so no prior
+`terraform apply` is required for the value to resolve. MVP does not
+consume these callbacks (no Hosted UI); they are pre-wired so a later
+sprint can opt into OAuth flows without an app client mutation.
 
 #### Scenario: Public client cannot issue secret-based requests
 
 - **WHEN** `aws cognito-idp describe-user-pool-client --user-pool-id <pool> --client-id <client>`
   is called
 - **THEN** the response SHALL NOT include a `ClientSecret` field
+
+#### Scenario: Callback URL is `/auth/callback`
+
+- **WHEN** `aws cognito-idp describe-user-pool-client --user-pool-id <pool> --client-id <client>`
+  is invoked after apply
+- **THEN** the `CallbackURLs` array SHALL contain exactly one entry
+  ending in `/auth/callback`
+
+#### Scenario: Logout URL matches the callback URL
+
+- **WHEN** the same describe call is inspected
+- **THEN** the `LogoutURLs` array SHALL contain the same single
+  CloudFront-domain entry ending in `/auth/callback`
 
 ### Requirement: Default-prefix user pool domain exposes JWKS
 

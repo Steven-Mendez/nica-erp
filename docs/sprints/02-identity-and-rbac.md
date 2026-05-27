@@ -16,7 +16,7 @@
 Canonical layout (see README §Shared patterns). Specific modules:
 
 - `domain/model/`: `user.py` (AggregateRoot), `email.py` (VO with validation), `password.py` (VO with policy: 12+ chars, uppercase, lowercase, digit, symbol), `events.py` (`UserRegistered`, `PasswordReset`).
-- `application/ports/inbound/`: `register_user`, `confirm_signup`, `resend_code`, `authenticate`, `refresh_token`, `change_password`, `forgot_password`, `reset_password`, `get_me`, `update_profile`.
+- `application/ports/inbound/`: `register_user`, `confirm_signup`, `resend_code`, `authenticate`, `refresh_token`, `change_password`, `forgot_password`, `reset_password`, `logout`, `get_me`, `update_profile`. `logout` invokes `IdentityProvider.global_signout(...)` per [`../06-security-model.md` §Refresh and revocation](../06-security-model.md#refresh-and-revocation).
 - `application/ports/outbound/`: `identity_provider.py` (Protocol — full definition in [`../06-security-model.md`](../06-security-model.md)), `user_repository.py`.
 - `adapters/inbound/http/`: routers `/v1/auth/*` and `/v1/me`.
 - `adapters/outbound/identity_provider/local.py` + `persistence/sqlalchemy/user_repository.py`.
@@ -74,7 +74,7 @@ Payload: `{user_id, email, registered_at}`. Since `tenant_id` (NOT NULL) is requ
 3. Extracts `sub`, `email`, `custom:active_tenant`; populates `CurrentUserContext`.
 4. 401 if no JWT or invalid.
 
-Whitelist without mandatory JWT: `POST /v1/auth/register`, `/v1/auth/confirm-signup`, `/v1/auth/resend-code`, `/v1/auth/login`, `/v1/auth/refresh`, `/v1/auth/password/forgot`, `/v1/auth/password/reset`; `POST /v1/invitations/{token}/accept`; `/healthz`, `/readyz`, `/docs`, `/openapi.json`. With JWT but no `custom:active_tenant`: `GET /v1/me`, `POST /v1/tenants` (first tenant). Canonical source: [`../06-security-model.md`](../06-security-model.md) and [`../08-api-conventions.md` §identity](../08-api-conventions.md#identity).
+Whitelist without mandatory JWT: `POST /v1/auth/register`, `/v1/auth/confirm-signup`, `/v1/auth/resend-code`, `/v1/auth/login`, `/v1/auth/refresh`, `/v1/auth/password/forgot`, `/v1/auth/password/reset`; `POST /v1/invitations/{token}/accept`; `/healthz`, `/readyz`, `/docs`, `/openapi.json`. With JWT but no `custom:active_tenant`: `GET /v1/me`, `POST /v1/auth/logout`, `POST /v1/tenants` (first tenant). `POST /v1/auth/change-password` and `POST /v1/auth/logout` are authenticated; logout calls `GlobalSignOut` server-side to invalidate refresh tokens. Canonical source: [`../06-security-model.md`](../06-security-model.md) and [`../08-api-conventions.md` §identity](../08-api-conventions.md#identity).
 
 ---
 

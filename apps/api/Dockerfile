@@ -60,6 +60,14 @@ COPY alembic     ./alembic
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
+# Run as an unprivileged user. ECS Fargate already isolates tasks, but
+# dropping root inside the container removes one ring of escalation if a
+# dependency CVE allows code execution in the API process.
+RUN groupadd --system --gid 1001 nica \
+ && useradd  --system --uid 1001 --gid nica --no-create-home --shell /usr/sbin/nologin nica \
+ && chown -R nica:nica /app
+USER nica
+
 EXPOSE 8000
 
 CMD ["uvicorn", "bootstrap.api:app", "--host", "0.0.0.0", "--port", "8000"]

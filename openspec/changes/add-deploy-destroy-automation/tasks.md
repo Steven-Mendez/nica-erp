@@ -156,7 +156,7 @@
 > The deploy/destroy cycle moves to GitHub Actions per sprint 01
 > §Operations and ADR-0030. The orchestration scripts (`deploy.sh`,
 > `destroy.sh`, `run-migrations.sh`, `deploy-web.sh`) keep their
-> existing behavior; what changes is the *caller* — the workflows
+> existing behavior; what changes is the _caller_ — the workflows
 > below invoke the scripts on `ubuntu-latest` instead of `make`
 > invoking them on the operator host. The IAM roles assumed by
 > these workflows are created by `add-terraform-state-backend`
