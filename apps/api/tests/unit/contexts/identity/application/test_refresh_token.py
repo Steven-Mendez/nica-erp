@@ -11,7 +11,7 @@ from contexts.identity.application.use_cases.refresh_token import RefreshToken
 async def test_refresh_token_passthrough() -> None:
     idp = AsyncMock()
     expected = Identity(
-        sub="sub-1",
+        sub="11111111-1111-1111-1111-111111111111",
         email="a@b.io",
         access_token="at2",
         refresh_token="rt2",

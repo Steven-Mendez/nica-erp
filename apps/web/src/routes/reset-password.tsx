@@ -16,7 +16,7 @@ import { resetSchema, type ResetValues } from "@/features/auth/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function ResetPasswordRoute() {
-  useDocumentTitle("Set new password");
+  useDocumentTitle("Establecer nueva contraseña");
   const navigate = useNavigate();
   const search = useSearch({ from: "/reset-password" });
   const mutation = useResetPasswordMutation();
@@ -39,9 +39,9 @@ export function ResetPasswordRoute() {
     <AuthLayout>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-bold">Choose a new password</h1>
+          <h1 className="text-2xl font-bold">Elige una nueva contraseña</h1>
           <p className="text-balance text-sm text-muted-foreground">
-            Enter the code from your email and pick a strong new password
+            Ingresa el código que recibiste por correo y elige una contraseña segura
           </p>
         </div>
         <FieldGroup>
@@ -50,7 +50,7 @@ export function ResetPasswordRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">Correo</FieldLabel>
                 <Input
                   {...field}
                   id="email"
@@ -68,7 +68,7 @@ export function ResetPasswordRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="code">Reset code</FieldLabel>
+                <FieldLabel htmlFor="code">Código de recuperación</FieldLabel>
                 <Input
                   {...field}
                   id="code"
@@ -88,7 +88,7 @@ export function ResetPasswordRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="new_password">New password</FieldLabel>
+                <FieldLabel htmlFor="new_password">Nueva contraseña</FieldLabel>
                 <Input
                   {...field}
                   id="new_password"
@@ -101,7 +101,7 @@ export function ResetPasswordRoute() {
                   <FieldError errors={[fieldState.error]} />
                 ) : (
                   <FieldDescription>
-                    12+ chars with upper, lower, digit, and symbol.
+                    8+ caracteres con mayúscula, minúscula, dígito y símbolo.
                   </FieldDescription>
                 )}
               </Field>
@@ -110,17 +110,17 @@ export function ResetPasswordRoute() {
           {mutation.isError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                Password reset failed. Check the code and try again.
+                No se pudo restablecer la contraseña. Verifica el código e intenta de nuevo.
               </AlertDescription>
             </Alert>
           ) : null}
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? "Resetting..." : "Reset password"}
+            {mutation.isPending ? "Restableciendo..." : "Restablecer contraseña"}
           </Button>
         </FieldGroup>
         <div className="text-center text-sm">
           <Link to="/login" className="underline underline-offset-4">
-            Back to sign in
+            Volver a iniciar sesión
           </Link>
         </div>
       </form>

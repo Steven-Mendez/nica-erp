@@ -22,16 +22,13 @@ already-active session instead of starting a new one.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import cast
 
 from fastapi import Depends, Header
 
-from bootstrap.container import (
-    build_identity_provider_for_request,
-    build_request_uow,
-)
+from bootstrap.container import build_identity_provider_for_request
 from bootstrap.db import get_uow
+from bootstrap.dependencies import get_request_uow as _shared_request_uow
 from contexts.identity.adapters.outbound.persistence.sqlalchemy.user_repository import (
     UserRepositorySqlAlchemy,
 )
@@ -55,20 +52,11 @@ from shared_kernel.adapters.outbox_sqlalchemy import OutboxWriterSqlAlchemy
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 from shared_kernel.application.unit_of_work import UnitOfWork
 
-
-async def get_request_uow() -> AsyncIterator[SqlAlchemyUnitOfWork]:
-    """Yield the reentrant :class:`_RequestUnitOfWork` for the request.
-
-    Wrapping the entire HTTP request in a single ``async with uow.begin():``
-    means every adapter call sees ``uow.current_session`` populated.
-    Use cases that re-enter ``begin()`` (``ConfirmSignup``, ``GetMe``,
-    ``UpdateProfile``) get the same session back because
-    :class:`_RequestUnitOfWork.begin` is reentrant.
-    """
-
-    uow = build_request_uow()
-    async with uow.begin():
-        yield uow
+# The request UoW dependency lives in ``bootstrap.dependencies`` so that
+# every dependency in the request graph (including ``current_actor``)
+# resolves to the same instance via FastAPI's per-callable dedup. Re-
+# exporting it here preserves the import sites that already use it.
+get_request_uow = _shared_request_uow
 
 
 def get_sa_uow(uow: UnitOfWork = Depends(get_uow)) -> SqlAlchemyUnitOfWork:

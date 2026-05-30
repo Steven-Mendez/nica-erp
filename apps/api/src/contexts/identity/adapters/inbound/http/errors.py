@@ -159,14 +159,29 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _request_validation(_request: Request, exc: RequestValidationError) -> JSONResponse:
         # FastAPI's default 422 body uses a different shape; remap to
-        # RFC-7807 so all 4xx responses share one envelope.
-        first = exc.errors()[0] if exc.errors() else {"msg": "invalid request"}
-        detail = first.get("msg") if isinstance(first, dict) else "invalid request"
+        # RFC-7807 so all 4xx responses share one envelope. Include the
+        # failed field path (`loc`) in the detail so the SPA can show the
+        # user which field broke, instead of a bare diagnostic.
+        errors = exc.errors()
+        first = errors[0] if errors else None
+        if isinstance(first, dict):
+            msg = first.get("msg") or "invalid request"
+            raw_loc = first.get("loc")
+            loc_parts: list[str] = []
+            if isinstance(raw_loc, (list, tuple)):
+                # Drop the leading "body" / "query" prefix; the SPA already
+                # knows the request was a body submission.
+                for part in list(raw_loc)[1:]:
+                    loc_parts.append(str(part))
+            loc_str = ".".join(loc_parts)
+            detail_str = f"{loc_str}: {msg}" if loc_str else str(msg)
+        else:
+            detail_str = "invalid request"
         problem = _problem(
             422,
             "validation.request_invalid",
             "Request validation failed",
-            detail=str(detail) if detail is not None else None,
+            detail=detail_str,
         )
         return _problem_response(422, problem)
 

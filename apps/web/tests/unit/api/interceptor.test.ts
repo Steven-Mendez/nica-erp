@@ -161,6 +161,104 @@ describe("fetchWithAuth interceptor", () => {
     expect(headers.get("Authorization")).toBe("Bearer abc");
   });
 
+  it("preserves Request headers (e.g. Content-Type) when attaching Authorization", async () => {
+    // Regression: openapi-fetch passes a Request object as `input`. If
+    // attachAuth builds headers from `init.headers` alone, the Request's
+    // Content-Type is lost and the server receives the body as non-JSON,
+    // producing a 422 "Input should be a valid dictionary or object".
+    const { setTokens } = await import("@/api/tokenStore");
+    const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
+
+    setTokens({ access: "abc", refresh: "r", id: "i" });
+    setOnAuthLost(vi.fn());
+
+    const calls: FetchCall[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push({ url, init });
+      return okResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new Request("http://api.test/v1/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: "Ada" }),
+    });
+    await fetchWithAuth(request);
+
+    const headers = new Headers(calls[0]?.init?.headers ?? {});
+    expect(headers.get("Authorization")).toBe("Bearer abc");
+    expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("bootRefresh: returns false and does nothing when no refresh token is persisted", async () => {
+    const { clear, getAccessToken } = await import("@/api/tokenStore");
+    const { bootRefresh } = await import("@/api/interceptor");
+
+    clear();
+    const fetchMock = vi.fn(async () => okResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await bootRefresh();
+
+    expect(ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it("bootRefresh: with a persisted refresh token, exchanges it for a fresh access token", async () => {
+    // Simulate a reload: refresh token survived in sessionStorage, but the
+    // in-memory access token is gone.
+    window.sessionStorage.setItem("nica-erp:refresh-token", "r-survived");
+
+    const { getAccessToken, getRefreshToken } = await import("@/api/tokenStore");
+    const { bootRefresh } = await import("@/api/interceptor");
+
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBe("r-survived");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/v1/auth/refresh")) {
+        return jsonResponse(200, {
+          access_token: "boot-access",
+          refresh_token: "boot-refresh",
+          id_token: "boot-id",
+          token_type: "Bearer",
+        });
+      }
+      return okResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await bootRefresh();
+
+    expect(ok).toBe(true);
+    expect(getAccessToken()).toBe("boot-access");
+    expect(getRefreshToken()).toBe("boot-refresh");
+    expect(window.sessionStorage.getItem("nica-erp:refresh-token")).toBe("boot-refresh");
+  });
+
+  it("bootRefresh: on failure, clears the persisted refresh token", async () => {
+    window.sessionStorage.setItem("nica-erp:refresh-token", "r-stale");
+
+    const { getAccessToken, getRefreshToken } = await import("@/api/tokenStore");
+    const { bootRefresh } = await import("@/api/interceptor");
+
+    expect(getRefreshToken()).toBe("r-stale");
+
+    const fetchMock = vi.fn(async () => unauthorizedResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await bootRefresh();
+
+    expect(ok).toBe(false);
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(window.sessionStorage.getItem("nica-erp:refresh-token")).toBeNull();
+  });
+
   it("omits Authorization when no token is in the store", async () => {
     const { clear } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");

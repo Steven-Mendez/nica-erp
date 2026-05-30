@@ -23,7 +23,7 @@ async def test_add_and_get_by_id(isolated_uow: SqlAlchemyUnitOfWork) -> None:
     now = datetime.now(UTC)
     user = User(
         id_=uuid4(),
-        external_sub="sub-1",
+        external_sub="11111111-1111-1111-1111-111111111111",
         email=Email.parse("user@example.com"),
         display_name="Demo User",
         locale="es-NI",
@@ -43,7 +43,7 @@ async def test_add_and_get_by_id(isolated_uow: SqlAlchemyUnitOfWork) -> None:
 
     assert loaded is not None
     assert loaded.id == user.id
-    assert loaded.external_sub == "sub-1"
+    assert loaded.external_sub == "11111111-1111-1111-1111-111111111111"
     assert loaded.email.value == "user@example.com"
     assert loaded.display_name == "Demo User"
     assert loaded.locale == "es-NI"

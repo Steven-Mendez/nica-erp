@@ -20,7 +20,7 @@
       `__post_init__` validates with a conservative regex and lowercases
       the local-part comparison; raises `ValueError` on invalid input.
 - [x] 2.2 Implement `Password` value object: holds the raw value;
-      `validate_policy()` enforces ≥12 chars, ≥1 uppercase, ≥1 lowercase,
+      `validate_policy()` enforces ≥8 chars, ≥1 uppercase, ≥1 lowercase,
       ≥1 digit, ≥1 symbol; raises `PasswordPolicyError` (subclass of
       `ValueError`).
 - [x] 2.3 Implement `User` aggregate (`AggregateRoot[UUID]`) with fields

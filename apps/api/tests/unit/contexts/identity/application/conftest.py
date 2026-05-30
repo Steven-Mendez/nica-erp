@@ -51,6 +51,6 @@ def current_user() -> CurrentUser:
     return CurrentUser(
         user_id=uuid4(),
         email="a@b.io",
-        external_sub="sub-1",
+        external_sub="11111111-1111-1111-1111-111111111111",
         active_tenant=None,
     )

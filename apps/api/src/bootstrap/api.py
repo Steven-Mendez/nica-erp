@@ -24,31 +24,45 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from bootstrap.container import build_identity_provider_for_middleware
+from bootstrap.container import (
+    build_identity_provider_for_middleware,
+    build_request_uow,
+)
 from bootstrap.db import get_uow
 from bootstrap.settings import get_settings
+from contexts.identity.adapters.inbound.http.allowlist import is_unauthenticated
 from contexts.identity.adapters.inbound.http.errors import register_exception_handlers
 from contexts.identity.adapters.inbound.http.middleware import AuthMiddleware
 from contexts.identity.adapters.inbound.http.router import router as identity_router
+from contexts.tenants.adapters.inbound.http.errors import (
+    register_tenants_exception_handlers,
+)
+from contexts.tenants.adapters.inbound.http.middleware import TenantMiddleware
+from contexts.tenants.adapters.inbound.http.router import (
+    public_router as tenants_public_router,
+)
+from contexts.tenants.adapters.inbound.http.router import (
+    router as tenants_router,
+)
 from shared_kernel.application.unit_of_work import UnitOfWork
 
-# Rendered as Markdown in Swagger UI and ReDoc. Keep it short and link
-# out to the canonical docs in the repo — the OpenAPI page is a catalogue,
-# not a duplicate of `docs/`.
+# Rendered as Markdown in Swagger UI and ReDoc.
 API_DESCRIPTION = """
-HTTP API for **nica-erp**, a multi-tenant Nicaraguan ERP.
+**nica-erp** — multi-tenant ERP for Nicaraguan businesses.
 
-* Auth: `Authorization: Bearer <jwt>` on every request unless listed
-  as public — see `docs/08-api-conventions.md`.
-* Errors: RFC 7807 problem details (`application/problem+json`) with a
-  stable `code` field — see [ADR-0015](https://github.com/stevenwerr/nica-erp/blob/main/docs/adr/0015-rfc7807-errors.md).
-* Versioning: `/v1` prefix; breaking changes ship as `/v2` per
-  [ADR-0027](https://github.com/stevenwerr/nica-erp/blob/main/docs/adr/0027-api-versioning.md).
-* Idempotency: `Idempotency-Key: <uuid>` is required on dangerous-to-retry
-  mutating endpoints.
+Every endpoint requires `Authorization: Bearer <jwt>` unless explicitly
+marked public.
+
+Errors follow RFC 7807 (`application/problem+json`) with
+a stable `code` field. Routes are versioned under `/v1`; breaking
+changes ship under new prefixes.
+
+Mutations that are unsafe to retry
+require `Idempotency-Key: <uuid>`.
 """
 
 # Order here is the order the tags render in Swagger UI / ReDoc.
@@ -91,23 +105,20 @@ def create_app() -> FastAPI:
         summary="Multi-tenant Nicaraguan ERP — HTTP API",
         description=API_DESCRIPTION,
         version=settings.version,
-        contact={
-            "name": "nica-erp maintainers",
-            "url": "https://github.com/stevenwerr/nica-erp",
-        },
-        license_info={
-            "name": "MIT",
-            "url": "https://github.com/stevenwerr/nica-erp/blob/main/LICENSE",
-        },
         openapi_tags=TAGS_METADATA,
         docs_url="/docs",
         redoc_url="/redoc",
     )
 
-    # Order matters: register AuthMiddleware first so CORSMiddleware ends up
-    # OUTERMOST (Starlette runs middleware in reverse order of addition).
-    # That way the CORS layer decorates 401s emitted by the auth layer with
-    # the SPA's ``access-control-allow-origin`` header.
+    # Order matters: Starlette runs middleware in reverse order of
+    # addition (last-added = outermost). Adding TenantMiddleware FIRST
+    # places it INSIDE the AuthMiddleware layer, so Auth runs before
+    # Tenant and populates CurrentUserContext. CORS is added last so it
+    # ends up OUTERMOST and can decorate 401s with allow-origin headers.
+    app.add_middleware(
+        TenantMiddleware,
+        uow_factory=build_request_uow,
+    )
     app.add_middleware(
         AuthMiddleware,
         identity_provider=build_identity_provider_for_middleware(),
@@ -127,6 +138,7 @@ def create_app() -> FastAPI:
         )
 
     register_exception_handlers(app)
+    register_tenants_exception_handlers(app)
 
     router = APIRouter()
 
@@ -155,7 +167,62 @@ def create_app() -> FastAPI:
     prefix = "/api" if settings.app_env == "aws" else ""
     app.include_router(router, prefix=prefix)
     app.include_router(identity_router, prefix=prefix)
+    app.include_router(tenants_router, prefix=prefix)
+    app.include_router(tenants_public_router, prefix=prefix)
+
+    _install_bearer_security(app)
     return app
+
+
+def _install_bearer_security(app: FastAPI) -> None:
+    """Expose the `Authorize` button in Swagger UI with a JWT bearer scheme.
+
+    Applies `bearerAuth` globally so operations show the lock icon; clears
+    `security` on routes the auth middleware allowlists as public so they
+    are not gated by the picker.
+    """
+
+    def custom_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            summary=app.summary,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+        )
+
+        components = schema.setdefault("components", {})
+        components.setdefault("securitySchemes", {})["bearerAuth"] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Paste the access token issued by `/v1/auth/login`.",
+        }
+        schema["security"] = [{"bearerAuth": []}]
+
+        for path, methods in schema.get("paths", {}).items():
+            for method, operation in methods.items():
+                if method.upper() not in {
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                    "HEAD",
+                    "OPTIONS",
+                }:
+                    continue
+                if is_unauthenticated(method, path):
+                    operation["security"] = []
+
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign]
 
 
 app = create_app()

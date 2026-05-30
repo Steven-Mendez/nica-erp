@@ -12,7 +12,7 @@ from contexts.identity.domain.password import PasswordPolicyError
 
 async def test_happy_path_calls_register_once() -> None:
     idp = AsyncMock()
-    idp.register.return_value = "sub-1"
+    idp.register.return_value = "11111111-1111-1111-1111-111111111111"
     use_case = RegisterUser(identity_provider=idp)
 
     await use_case.execute(email="a@b.io", password="StrongPass123!")

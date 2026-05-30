@@ -11,8 +11,32 @@ type = forbidden
 source_modules =
     shared_kernel.domain
     contexts.identity.domain
+    contexts.tenants.domain
 forbidden_modules =
     sqlalchemy
     fastapi
     boto3
     shared_kernel.adapters
+
+[importlinter:contract:catalog-purity]
+name = shared_kernel.permissions.catalog free of SQLAlchemy/FastAPI/contexts
+type = forbidden
+source_modules =
+    shared_kernel.permissions.catalog
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    boto3
+    contexts
+
+[importlinter:contract:testing-helpers-not-in-prod]
+name = contexts.identity.testing must not be imported by productive code
+type = forbidden
+source_modules =
+    contexts.identity.adapters
+    contexts.identity.application
+    contexts.tenants.adapters
+    contexts.tenants.application
+    bootstrap
+forbidden_modules =
+    contexts.identity.testing

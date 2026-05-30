@@ -8,7 +8,7 @@
 // blind).
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -22,13 +22,14 @@ import { signupSchema, type SignupValues } from "@/features/auth/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function SignupRoute() {
-  useDocumentTitle("Create account");
+  useDocumentTitle("Crear cuenta");
   const navigate = useNavigate();
+  const search = useSearch({ from: "/signup" });
   const mutation = useRegisterMutation();
   const [showPassword, setShowPassword] = useState(false);
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", confirm_password: "" },
+    defaultValues: { email: search.email ?? "", password: "", confirm_password: "" },
     mode: "onSubmit",
     reValidateMode: "onChange",
   });
@@ -49,9 +50,9 @@ export function SignupRoute() {
     <AuthLayout>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-bold">Create your account</h1>
+          <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
           <p className="text-balance text-sm text-muted-foreground">
-            We&apos;ll email a verification code to confirm your address
+            Te enviaremos un código de verificación a tu correo
           </p>
         </div>
         <FieldGroup>
@@ -60,13 +61,13 @@ export function SignupRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">Correo</FieldLabel>
                 <Input
                   {...field}
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="m@example.com"
+                  placeholder="usuario@ejemplo.com"
                   required
                   aria-invalid={fieldState.invalid}
                 />
@@ -79,7 +80,7 @@ export function SignupRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <FieldLabel htmlFor="password">Contraseña</FieldLabel>
                 <div className="relative">
                   <Input
                     {...field}
@@ -93,7 +94,7 @@ export function SignupRoute() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     aria-pressed={showPassword}
                     className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -104,7 +105,7 @@ export function SignupRoute() {
                   <FieldError errors={[fieldState.error]} />
                 ) : (
                   <FieldDescription>
-                    12+ chars with upper, lower, digit, and symbol.
+                    12+ caracteres con mayúscula, minúscula, dígito y símbolo.
                   </FieldDescription>
                 )}
               </Field>
@@ -115,7 +116,7 @@ export function SignupRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="confirm_password">Confirm password</FieldLabel>
+                <FieldLabel htmlFor="confirm_password">Confirmar contraseña</FieldLabel>
                 <Input
                   {...field}
                   id="confirm_password"
@@ -131,18 +132,18 @@ export function SignupRoute() {
           {mutation.isError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                Sign-up failed. Try a different email or password.
+                No se pudo crear la cuenta. Prueba con otro correo o contraseña.
               </AlertDescription>
             </Alert>
           ) : null}
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? "Creating account..." : "Create account"}
+            {mutation.isPending ? "Creando cuenta..." : "Crear cuenta"}
           </Button>
         </FieldGroup>
         <div className="text-center text-sm">
-          Already have an account?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link to="/login" className="underline underline-offset-4">
-            Sign in
+            Inicia sesión
           </Link>
         </div>
       </form>

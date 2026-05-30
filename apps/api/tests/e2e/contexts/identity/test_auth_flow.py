@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from bootstrap import api as api_module
 from bootstrap import container as container_module
 from bootstrap import db as db_module
+from bootstrap import dependencies as bootstrap_deps_module
 from bootstrap.db import get_uow
 from contexts.identity.adapters.inbound.http import dependencies as deps_module
 from contexts.identity.adapters.outbound.identity_provider.local import (
@@ -110,7 +111,7 @@ async def _wire_app(
         return container_module._RequestUnitOfWork(session_factory)
 
     monkeypatch.setattr(container_module, "build_request_uow", _request_uow_factory)
-    monkeypatch.setattr(deps_module, "build_request_uow", _request_uow_factory)
+    monkeypatch.setattr(bootstrap_deps_module, "build_request_uow", _request_uow_factory)
 
     async def _override_uow() -> AsyncIterator[SqlAlchemyUnitOfWork]:
         yield SqlAlchemyUnitOfWork(session_factory)

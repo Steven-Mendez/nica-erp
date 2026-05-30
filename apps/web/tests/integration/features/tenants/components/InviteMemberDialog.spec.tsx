@@ -1,0 +1,123 @@
+// Unit tests for InviteMemberDialog. Exercises the shadcn-driven form:
+// trigger opens the Dialog, Zod validation surfaces the Spanish email
+// error, valid submit hits useInviteMemberMutation with the form values,
+// and a mutation error renders inside the destructive Alert.
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MutateArgs = {
+  values: { email: string; proposed_role: string };
+  handlers: { onSuccess?: () => void; onError?: (err: Error) => void };
+};
+
+let mutateCalls: MutateArgs[] = [];
+let mutateImpl: (args: MutateArgs) => void = ({ handlers }) => {
+  handlers.onSuccess?.();
+};
+let isPending = false;
+
+vi.mock("@/features/tenants/api/hooks", () => ({
+  useInviteMemberMutation: () => ({
+    mutate: (values: MutateArgs["values"], handlers: MutateArgs["handlers"] = {}) => {
+      const args = { values, handlers };
+      mutateCalls.push(args);
+      mutateImpl(args);
+    },
+    isPending,
+  }),
+}));
+
+import { InviteMemberDialog } from "@/features/tenants/components/InviteMemberDialog";
+
+const tenantId = "00000000-0000-0000-0000-0000000000aa";
+
+function renderDialog() {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <InviteMemberDialog tenantId={tenantId} />
+    </QueryClientProvider>,
+  );
+}
+
+function openDialog() {
+  const trigger = screen.getByRole("button", { name: /\+ Invitar/i });
+  fireEvent.click(trigger);
+}
+
+afterEach(() => {
+  cleanup();
+  mutateCalls = [];
+  mutateImpl = ({ handlers }) => handlers.onSuccess?.();
+  isPending = false;
+});
+
+describe("InviteMemberDialog", () => {
+  beforeEach(() => {
+    mutateCalls = [];
+    isPending = false;
+  });
+
+  it("opens the dialog when the trigger is clicked", () => {
+    renderDialog();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    openDialog();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Invitar miembro/i })).toBeInTheDocument();
+  });
+
+  it("surfaces the Zod email error in Spanish and blocks submission", async () => {
+    renderDialog();
+    openDialog();
+
+    const email = screen.getByLabelText(/Correo/i);
+    fireEvent.change(email, { target: { value: "not-an-email" } });
+
+    const submit = screen.getByRole("button", { name: /Enviar invitación/i });
+    await act(async () => {
+      fireEvent.click(submit);
+    });
+
+    expect(await screen.findByText(/Ingresa un correo válido/i)).toBeInTheDocument();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+    expect(mutateCalls).toHaveLength(0);
+  });
+
+  it("submits the form values via the mutation and closes the dialog on success", async () => {
+    renderDialog();
+    openDialog();
+
+    const email = screen.getByLabelText(/Correo/i);
+    fireEvent.change(email, { target: { value: "ada@nica.test" } });
+
+    const submit = screen.getByRole("button", { name: /Enviar invitación/i });
+    await act(async () => {
+      fireEvent.click(submit);
+    });
+
+    await waitFor(() => expect(mutateCalls).toHaveLength(1));
+    expect(mutateCalls[0]?.values).toEqual({
+      email: "ada@nica.test",
+      proposed_role: "accountant",
+    });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("renders the mutation error message inside the destructive Alert", async () => {
+    mutateImpl = ({ handlers }) => handlers.onError?.(new Error("Boom"));
+    renderDialog();
+    openDialog();
+
+    const email = screen.getByLabelText(/Correo/i);
+    fireEvent.change(email, { target: { value: "ada@nica.test" } });
+
+    const submit = screen.getByRole("button", { name: /Enviar invitación/i });
+    await act(async () => {
+      fireEvent.click(submit);
+    });
+
+    expect(await screen.findByText("Boom")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});

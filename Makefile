@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: help doctor doctor-deploy install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit lint format bootstrap destroy-bootstrap build-image deploy deploy-local destroy destroy-local plan logs urls verify wipe
+.PHONY: help doctor doctor-deploy install hooks local-up local-down api web migrate migrate-down makemigration makemigration-auto test test-api test-web test-unit test-be-unit test-be-integration test-be-e2e test-be-coverage test-fe-unit test-fe-integration test-fe-e2e test-fe-matrix test-fe-coverage test-fe-all test-all lint format bootstrap destroy-bootstrap build-image deploy deploy-local destroy destroy-local plan logs urls verify wipe
 
 help: ## list targets
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 doctor: ## verify dev tools (uv, node, pnpm, docker) needed for local dev + tests
 	@printf "uv     : "; command -v uv     >/dev/null && uv     --version       || { echo "MISSING — install: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
@@ -65,6 +65,42 @@ test-web: ## vitest run (no watch)
 test-unit: ## backend unit only + frontend unit only
 	cd apps/api && uv run pytest tests/unit
 	cd apps/web && pnpm test:run tests/unit
+
+test-be-unit: ## backend pytest tests/unit only (no testcontainer, < 5s)
+	cd apps/api && uv run pytest tests/unit
+
+test-be-integration: ## backend pytest tests/integration only (one testcontainer for the session)
+	cd apps/api && uv run pytest tests/integration
+
+test-be-e2e: ## backend pytest tests/e2e only (full wired-app + testcontainer)
+	cd apps/api && uv run pytest tests/e2e
+
+test-be-coverage: ## backend pytest + coverage gate (currently 89.50%, target 90%)
+	cd apps/api && uv run pytest \
+		--cov=src/contexts/tenants \
+		--cov=src/contexts/identity \
+		--cov=src/shared_kernel \
+		--cov-report=term-missing \
+		--cov-fail-under=89
+
+test-fe-unit: ## frontend vitest unit lane only (pure logic, no MSW)
+	cd apps/web && pnpm test:unit
+
+test-fe-integration: ## frontend vitest integration lane (MSW + react-query + router)
+	cd apps/web && pnpm test:integration
+
+test-fe-e2e: ## frontend Playwright @smoke (Chromium)
+	cd apps/web && pnpm test:e2e:smoke
+
+test-fe-matrix: ## verification matrix: every inventory entry has a covering test
+	cd apps/web && pnpm test:layout && pnpm test:matrix
+
+test-fe-coverage: ## frontend vitest run + v8 coverage gate
+	cd apps/web && pnpm exec vitest run --coverage
+
+test-fe-all: test-fe-unit test-fe-integration test-fe-matrix test-fe-coverage ## full FE triad + matrix + coverage
+
+test-all: test-be-coverage test-fe-all ## full triad: backend + FE lanes + gates
 
 lint: ## ruff + mypy + import-linter + pnpm lint
 	cd apps/api && uv run ruff check . && uv run mypy && uv run lint-imports

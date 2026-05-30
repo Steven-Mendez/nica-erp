@@ -36,6 +36,7 @@ import {
   type UpdateMeInput,
 } from "./endpoints";
 import { clear, getAccessToken, setTokens } from "@/api/tokenStore";
+import { clearPickerConfirmed } from "@/lib/route-guard";
 
 export const meQueryKey = ["auth", "me"] as const;
 
@@ -116,6 +117,7 @@ export const useLogoutMutation = () => {
     mutationFn: logout,
     onSettled: () => {
       clear();
+      clearPickerConfirmed();
       qc.removeQueries({ queryKey: meQueryKey });
     },
   });

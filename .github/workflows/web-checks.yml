@@ -8,8 +8,13 @@ on:
       - "apps/web/**"
       - ".github/workflows/web-checks.yml"
 
+# The four lanes per openspec frontend-testing-triad spec:
+#   unit            — Zod schemas, helpers, isolated reducers (no MSW, no router)
+#   integration     — route/feature render with MSW typed against schema.d.ts
+#   e2e-smoke       — Playwright @smoke specs on Chromium
+#   coverage-delta  — diff coverage-summary.json vs main; no regressions allowed
 jobs:
-  checks:
+  unit:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,13 +29,113 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - name: typecheck
         run: pnpm typecheck
       - name: lint
         run: pnpm lint
       - name: format check
         run: pnpm format:check
-      - name: test
-        run: pnpm test:run
+      - name: test layout gate
+        run: pnpm test:layout
+      - name: vitest unit lane
+        run: pnpm test:unit
+
+  integration:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: vitest integration lane (with coverage)
+        run: pnpm exec vitest run --project=integration --coverage
+      - name: verification matrix
+        run: pnpm test:matrix
+      - name: upload verification matrix + lcov
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-matrix
+          path: |
+            apps/web/coverage/verification-matrix.json
+            apps/web/coverage/lcov-report
+          retention-days: 14
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Playwright @smoke (Chromium)
+        run: pnpm test:e2e:smoke
+      - name: upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  coverage-delta:
+    runs-on: ubuntu-latest
+    needs: [unit, integration]
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: cache base coverage
+        id: cache-base
+        uses: actions/cache@v4
+        with:
+          path: apps/web/coverage-base/coverage-summary.json
+          key: web-coverage-base-${{ github.event.pull_request.base.sha }}
+      - name: compute base coverage if not cached
+        if: steps.cache-base.outputs.cache-hit != 'true'
+        run: |
+          git checkout ${{ github.event.pull_request.base.sha }} -- .
+          pnpm install --frozen-lockfile
+          pnpm exec vitest run --coverage
+          mkdir -p coverage-base
+          cp coverage/coverage-summary.json coverage-base/coverage-summary.json
+          git checkout ${{ github.sha }} -- .
+          pnpm install --frozen-lockfile
+      - name: compute head coverage
+        run: pnpm exec vitest run --coverage
+      - name: diff coverage
+        run: node scripts/coverage-delta.mjs coverage-base/coverage-summary.json coverage/coverage-summary.json

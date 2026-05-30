@@ -1,0 +1,38 @@
+name: web-e2e-nightly
+
+# Runs @critical Playwright specs on Chromium + WebKit nightly. Failures
+# open or refresh a GitHub issue so silent regressions cannot accumulate.
+
+on:
+  schedule:
+    - cron: "13 4 * * *" # 04:13 UTC
+  workflow_dispatch:
+
+jobs:
+  critical:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: install Playwright browsers (Chromium + WebKit)
+        run: pnpm exec playwright install --with-deps chromium webkit
+      - name: Playwright @critical (Chromium + WebKit)
+        run: pnpm test:e2e:nightly
+      - name: upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-nightly
+          path: apps/web/playwright-report
+          retention-days: 14

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-_MIN_LENGTH = 12
+_MIN_LENGTH = 8
 _SYMBOLS = "!@#$%^&*()_+-=[]{}|;:,.<>?/"
 
 

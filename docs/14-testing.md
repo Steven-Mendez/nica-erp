@@ -226,10 +226,40 @@ Run only against a deployed environment (`pytest -m contract`). Not part of `mak
 
 ## Frontend tests
 
-`apps/web/`:
-- **Component tests** with Vitest + Testing Library. Critical flows only — login, list views, the forms that drive fiscal-relevant operations.
-- **No e2e in MVP**. Playwright is the candidate when introduced; see [18 — Roadmap](18-roadmap.md).
-- **Typecheck is the first gate** — `pnpm typecheck` exit 0. Most regressions catchable in CI.
+`apps/web/` runs the same triad as the backend, organised into three
+explicit lanes under `apps/web/tests/{unit,integration,e2e}/`:
+
+| Lane | Where | Owns | Forbidden |
+|---|---|---|---|
+| **Unit** | `tests/unit/` | Pure logic: Zod schemas, `lib/*` helpers, isolated reducers (e.g. `sidebar-context`), pure helpers in `api/{queryKeys,tokenStore,useHasPermission}`. | `QueryClient`, router, MSW. |
+| **Integration** | `tests/integration/` | A route or feature flow rendered with the real TanStack Router + a fresh `QueryClient` + an MSW server typed via `openapi-msw` against `src/api/schema.d.ts`. Asserts request shape, error UI, redirects, accessibility (axe-core). | Mocking `openapi-fetch` directly. |
+| **E2E** | `tests/e2e/` (Playwright) | Real-browser journeys against a real backend (Postgres + API + SPA). Tagged `@smoke` (every PR, Chromium) or `@critical` (nightly, Chromium + WebKit). | API shortcuts in fixtures. |
+
+Vitest exposes two named projects (`unit`, `integration`) per
+[`vitest projects`](https://vitest.dev/guide/projects); `pnpm test:unit`
+and `pnpm test:integration` run them in isolation. `pnpm test:matrix`
+emits `apps/web/coverage/verification-matrix.json` mapping every route,
+hook, schema, and shared component to the test files that exercise it,
+and exits non-zero if any inventory entry is uncovered.
+
+The MSW handlers under `tests/integration/msw/handlers.ts` use
+`createOpenApiHttp<paths>()` from `openapi-msw`, so a renamed response
+field in the committed OpenAPI schema becomes a TypeScript error in
+`pnpm typecheck` — contract drift surfaces at compile time, not at the
+point a user clicks the broken form in production.
+
+Coverage thresholds are configured per-glob in `apps/web/vite.config.ts`
+so the gate targets `features/`, `components/`, `lib/`, and `api/`
+rather than the whole tree. A `coverage-delta` CI job diffs
+`coverage-summary.json` against `main` so PRs cannot regress
+aggregate coverage even when the floor is still satisfied.
+
+- **Typecheck is the first gate** — `pnpm typecheck` exit 0. Most
+  regressions are catchable in CI.
+- **`make test-fe-all`** runs the three lanes plus the matrix and
+  coverage gates locally; CI runs them as four separate jobs (`unit`,
+  `integration`, `e2e-smoke`, `coverage-delta`) so failures point at
+  the layer that owns them.
 
 ---
 
@@ -240,7 +270,8 @@ Per [ADR-0023](adr/0023-no-ci-cd-mvp.md):
 | Workflow | Triggers | Runs |
 |---|---|---|
 | `api-checks.yml` | push, PR | `ruff`, `mypy --strict` on `domain`/`application`, `import-linter`, `pytest -m unit` |
-| `web-checks.yml` | push, PR | `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test --run` |
+| `web-checks.yml` | push, PR | Four parallel jobs: `unit`, `integration`, `e2e-smoke` (Playwright @smoke on Chromium), `coverage-delta` (diffs `coverage-summary.json` vs `main`) |
+| `web-e2e-nightly.yml` | cron 04:13 UTC | Playwright `@critical` specs on Chromium + WebKit |
 
 Integration tests run locally and pre-deploy (manual). Contract tests run against a deployed environment (manual, sprint 09 consolidates).
 

@@ -13,7 +13,7 @@ def test_compliant_password_passes() -> None:
 
 def test_short_password_rejected() -> None:
     with pytest.raises(PasswordPolicyError):
-        Password("Ab1!short").validate_policy()
+        Password("Ab1!sho").validate_policy()
 
 
 def test_missing_uppercase_rejected() -> None:

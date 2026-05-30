@@ -14,7 +14,7 @@ from contexts.identity.application.use_cases.authenticate import Authenticate
 async def test_authenticate_happy_returns_identity() -> None:
     idp = AsyncMock()
     expected = Identity(
-        sub="sub-1",
+        sub="11111111-1111-1111-1111-111111111111",
         email="a@b.io",
         access_token="at",
         refresh_token="rt",

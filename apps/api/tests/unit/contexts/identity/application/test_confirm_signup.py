@@ -26,7 +26,7 @@ async def test_confirm_signup_persists_user_and_emits_outbox_event(
     fake_uow: FakeUow,
 ) -> None:
     idp = AsyncMock()
-    idp.confirm_signup.return_value = "sub-1"
+    idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
     repo = AsyncMock()
     outbox = AsyncMock()
 
@@ -45,7 +45,7 @@ async def test_confirm_signup_persists_user_and_emits_outbox_event(
     repo.add.assert_awaited_once()
     added_user = repo.add.await_args.kwargs.get("user") or repo.add.await_args.args[0]
     assert isinstance(added_user, User)
-    assert added_user.external_sub == "sub-1"
+    assert added_user.external_sub == "11111111-1111-1111-1111-111111111111"
     assert added_user.email.value == "a@b.io"
 
     outbox.append.assert_awaited_once()
@@ -68,7 +68,7 @@ async def test_confirm_signup_persists_user_and_emits_outbox_event(
 
 async def test_confirm_signup_outbox_failure_rolls_back(fake_uow: FakeUow) -> None:
     idp = AsyncMock()
-    idp.confirm_signup.return_value = "sub-1"
+    idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
     repo = AsyncMock()
     outbox = AsyncMock()
     outbox.append.side_effect = RuntimeError("kaboom")

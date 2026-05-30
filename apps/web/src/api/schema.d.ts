@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Healthz */
+        /**
+         * Liveness + DB probe
+         * @description Run a trivial `SELECT 1` and return the current Alembic head.
+         */
         get: operations["healthz_healthz_get"];
         put?: never;
         post?: never;
@@ -30,7 +33,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register */
+        /**
+         * Start signup for a new email
+         * @description Begin an email-based signup.
+         *
+         *     The response body is deliberately empty to avoid leaking whether the
+         *     address was already registered (enumeration resistance). A verification
+         *     code is dispatched out-of-band; clients call ``/auth/confirm-signup``
+         *     next.
+         */
         post: operations["register_v1_auth_register_post"];
         delete?: never;
         options?: never;
@@ -47,7 +58,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm Signup */
+        /**
+         * Confirm signup with the emailed code
+         * @description Verify the one-time code emailed during ``/auth/register``.
+         */
         post: operations["confirm_signup_v1_auth_confirm_signup_post"];
         delete?: never;
         options?: never;
@@ -64,7 +78,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resend Code */
+        /**
+         * Resend the signup verification code
+         * @description Re-send the signup verification code, throttled per email.
+         */
         post: operations["resend_code_v1_auth_resend_code_post"];
         delete?: never;
         options?: never;
@@ -81,7 +98,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Exchange email + password for tokens
+         * @description Authenticate the caller and return a token bundle.
+         */
         post: operations["login_v1_auth_login_post"];
         delete?: never;
         options?: never;
@@ -98,7 +118,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Refresh */
+        /**
+         * Rotate the access token using a refresh token
+         * @description Issue a new token bundle from a still-valid refresh token.
+         */
         post: operations["refresh_v1_auth_refresh_post"];
         delete?: never;
         options?: never;
@@ -115,7 +138,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Forgot Password */
+        /**
+         * Start the password-reset flow
+         * @description Send a password-reset code; response is opaque on purpose.
+         */
         post: operations["forgot_password_v1_auth_password_forgot_post"];
         delete?: never;
         options?: never;
@@ -132,7 +158,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset Password */
+        /**
+         * Complete a password reset with the emailed code
+         * @description Set a new password using the code from ``/auth/password/forgot``.
+         */
         post: operations["reset_password_v1_auth_password_reset_post"];
         delete?: never;
         options?: never;
@@ -149,7 +178,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change Password */
+        /**
+         * Rotate the caller's password
+         * @description Change the caller's password while authenticated.
+         */
         post: operations["change_password_v1_auth_change_password_post"];
         delete?: never;
         options?: never;
@@ -166,7 +198,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Invalidate the caller's refresh token
+         * @description Revoke the caller's refresh token; access tokens expire naturally.
+         */
         post: operations["logout_v1_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -181,43 +216,340 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Me */
+        /**
+         * Read the caller's profile
+         * @description Return the caller's profile, hydrated from the persistence layer.
+         */
         get: operations["get_me_v1_me_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch Me */
+        /**
+         * Update the caller's editable profile fields
+         * @description Partially update the caller's profile; unknown fields return 422.
+         */
         patch: operations["patch_me_v1_me_patch"];
+        trace?: never;
+    };
+    "/v1/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a tenant */
+        post: operations["create_tenant_v1_tenants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the caller's memberships */
+        get: operations["get_my_tenants_v1_tenants_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a tenant's fiscal metadata */
+        get: operations["get_tenant_v1_tenants__tenant_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a tenant's fiscal metadata */
+        patch: operations["update_tenant_v1_tenants__tenant_id__patch"];
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch the caller's active tenant */
+        post: operations["switch_active_tenant_v1_tenants__tenant_id__switch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List members of a tenant */
+        get: operations["list_members_v1_tenants__tenant_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a member from the tenant */
+        delete: operations["remove_member_v1_tenants__tenant_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change a member's role */
+        patch: operations["update_member_role_v1_tenants__tenant_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List invitations of a tenant */
+        get: operations["list_invitations_v1_tenants__tenant_id__invitations_get"];
+        put?: never;
+        /** Invite a new member to the tenant */
+        post: operations["invite_member_v1_tenants__tenant_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a pending invitation */
+        delete: operations["cancel_invitation_v1_tenants__tenant_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an invitation token (body-form) */
+        post: operations["accept_invitation_by_body_v1_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invitations/{token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview an invitation (email + organization + role)
+         * @description Return safe metadata for the pre-signup screen.
+         *
+         *     The response exposes only fields the recipient already has from
+         *     the invitation email — never tenant fiscal data or membership
+         *     rosters. The token must validate; expired / unknown tokens
+         *     return 404 so we don't reveal which tokens exist.
+         */
+        get: operations["preview_invitation_v1_invitations__token__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptInvitationByBodyRequest
+         * @description Body shape for the hash-fragment-safe accept endpoint.
+         *
+         *     See ``docs/adr/0031-invitation-token-transport.md``: the SPA reads
+         *     the token from ``location.hash``, strips it via
+         *     ``history.replaceState``, then POSTs the token here so it never
+         *     appears in server logs / Referer headers.
+         */
+        AcceptInvitationByBodyRequest: {
+            /** Token */
+            token: string;
+        };
+        /** AcceptInvitationResponse */
+        AcceptInvitationResponse: {
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "accountant" | "salesperson" | "viewer";
+        };
+        /** AuthorizationDgiPayload */
+        AuthorizationDgiPayload: {
+            /**
+             * Number
+             * @example A-001
+             */
+            number: string;
+            /**
+             * Valid From
+             * Format: date
+             * @example 2026-01-01
+             */
+            valid_from: string;
+            /**
+             * Valid To
+             * Format: date
+             * @example 2027-01-01
+             */
+            valid_to: string;
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
-            /** Old Password */
+            /**
+             * Old Password
+             * @example S3cret-Passw0rd!
+             */
             old_password: string;
-            /** New Password */
+            /**
+             * New Password
+             * @example Even-Str0nger-Passw0rd!
+             */
             new_password: string;
         };
         /** ConfirmSignupRequest */
         ConfirmSignupRequest: {
-            /** Email */
+            /**
+             * Email
+             * @example ada@example.com
+             */
             email: string;
-            /** Code */
+            /**
+             * Code
+             * @example 123456
+             */
             code: string;
+        };
+        /** CreateInvitationRequest */
+        CreateInvitationRequest: {
+            /**
+             * Email
+             * @example x@test.dev
+             */
+            email: string;
+            /**
+             * Proposed Role
+             * @example accountant
+             * @enum {string}
+             */
+            proposed_role: "admin" | "accountant" | "salesperson" | "viewer";
+        };
+        /** CreateTenantRequest */
+        CreateTenantRequest: {
+            /**
+             * Name
+             * @example Mi Empresa
+             */
+            name: string;
+            /**
+             * Ruc
+             * @example 0010101800010X
+             */
+            ruc?: string | null;
+            /**
+             * Regime
+             * @example general
+             */
+            regime?: ("general" | "simplified") | null;
+            /**
+             * Municipality
+             * @example Managua
+             */
+            municipality?: string | null;
+            authorization_dgi?: components["schemas"]["AuthorizationDgiPayload"] | null;
+            /**
+             * Fiscal Address
+             * @example Rotonda Centroamérica, Managua
+             */
+            fiscal_address?: string | null;
+            /**
+             * Is Withholder
+             * @default false
+             */
+            is_withholder: boolean;
         };
         /** ForgotPasswordRequest */
         ForgotPasswordRequest: {
-            /** Email */
+            /**
+             * Email
+             * @example ada@example.com
+             */
             email: string;
         };
         /**
          * ForgotResponse
          * @description Deliberately empty: forgot-password is enumeration-resistant.
+         * @example {}
          */
         ForgotResponse: Record<string, never>;
         /** HTTPValidationError */
@@ -225,73 +557,408 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** LoginRequest */
-        LoginRequest: {
+        /**
+         * HealthzResponse
+         * @description Liveness probe payload. `db` is `"ok"` only after a `SELECT 1` succeeds.
+         */
+        HealthzResponse: {
+            /**
+             * Status
+             * @example ok
+             */
+            status: string;
+            /**
+             * Version
+             * @example 0.1.0
+             */
+            version: string;
+            /**
+             * Git Sha
+             * @example a1b2c3d
+             */
+            git_sha: string;
+            /**
+             * Db
+             * @example ok
+             */
+            db: string;
+            /**
+             * Alembic Revision
+             * @example 0002_identity
+             */
+            alembic_revision?: string | null;
+        };
+        /**
+         * InvitationPreviewResponse
+         * @description Public metadata for the pre-signup screen.
+         */
+        InvitationPreviewResponse: {
             /** Email */
             email: string;
-            /** Password */
-            password: string;
+            /** Organization Name */
+            organization_name: string;
+            /** Role */
+            role: string;
         };
-        /** MeResponse */
-        MeResponse: {
+        /** InvitationResponse */
+        InvitationResponse: {
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
             /** Email */
             email: string;
-            /** Display Name */
-            display_name: string;
-            /** Locale */
-            locale: string;
-            /** Timezone */
-            timezone: string;
-            /** Preferences */
+            /**
+             * Proposed Role
+             * @enum {string}
+             */
+            proposed_role: "admin" | "accountant" | "salesperson" | "viewer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "accepted" | "cancelled" | "expired";
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+        };
+        /** LoginRequest */
+        LoginRequest: {
+            /**
+             * Email
+             * @example ada@example.com
+             */
+            email: string;
+            /**
+             * Password
+             * @example S3cret-Passw0rd!
+             */
+            password: string;
+        };
+        /**
+         * MeResponse
+         * @example {
+         *       "active_tenant": "acme",
+         *       "display_name": "Ada Lovelace",
+         *       "email": "ada@example.com",
+         *       "id": "01HFZX9C9PRRRZ3W0Q9F0J9K2H",
+         *       "locale": "es-NI",
+         *       "permissions": [
+         *         "tenant:read",
+         *         "tenant:write"
+         *       ],
+         *       "preferences": {
+         *         "theme": "system"
+         *       },
+         *       "role": "admin",
+         *       "timezone": "America/Managua"
+         *     }
+         */
+        MeResponse: {
+            /**
+             * Id
+             * Format: uuid
+             * @example 01HFZX9C9PRRRZ3W0Q9F0J9K2H
+             */
+            id: string;
+            /**
+             * Email
+             * @example ada@example.com
+             */
+            email: string;
+            /**
+             * Display Name
+             * @example Ada Lovelace
+             */
+            display_name?: string | null;
+            /**
+             * Locale
+             * @example es-NI
+             */
+            locale?: string | null;
+            /**
+             * Timezone
+             * @example America/Managua
+             */
+            timezone?: string | null;
+            /**
+             * Preferences
+             * @example {
+             *       "theme": "system"
+             *     }
+             */
             preferences: {
                 [key: string]: unknown;
             };
-            /** Active Tenant */
-            active_tenant: string | null;
+            /**
+             * Active Tenant
+             * @example acme
+             */
+            active_tenant?: string | null;
+            /**
+             * Role
+             * @example admin
+             */
+            role?: string | null;
+            /**
+             * Permissions
+             * @example [
+             *       "tenant:read"
+             *     ]
+             */
+            permissions?: string[];
+        };
+        /** MemberResponse */
+        MemberResponse: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "accountant" | "salesperson" | "viewer";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "removed";
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Removed At */
+            removed_at?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email?: string | null;
+        };
+        /** MyTenantItem */
+        MyTenantItem: {
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "accountant" | "salesperson" | "viewer";
+            /** Status */
+            status: string;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+        };
+        /** MyTenantsResponse */
+        MyTenantsResponse: {
+            /** Items */
+            items: components["schemas"]["MyTenantItem"][];
+        };
+        /**
+         * ProblemDetail
+         * @description RFC-7807 problem detail with the project-stable ``code`` extension.
+         * @example {
+         *       "code": "auth.invalid_credentials",
+         *       "detail": "Email or password is incorrect.",
+         *       "status": 401,
+         *       "title": "Invalid credentials",
+         *       "type": "about:blank"
+         *     }
+         */
+        ProblemDetail: {
+            /**
+             * Type
+             * @default about:blank
+             */
+            type: string;
+            /**
+             * Title
+             * @example Invalid credentials
+             */
+            title: string;
+            /**
+             * Status
+             * @example 401
+             */
+            status: number;
+            /**
+             * Detail
+             * @example Email or password is incorrect.
+             */
+            detail?: string | null;
+            /**
+             * Code
+             * @example auth.invalid_credentials
+             */
+            code: string;
+            /**
+             * Retry After Seconds
+             * @example 60
+             */
+            retry_after_seconds?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** RefreshRequest */
         RefreshRequest: {
-            /** Refresh Token */
+            /**
+             * Refresh Token
+             * @example v1.MRSt...redacted
+             */
             refresh_token: string;
         };
         /** RegisterRequest */
         RegisterRequest: {
-            /** Email */
+            /**
+             * Email
+             * @example ada@example.com
+             */
             email: string;
-            /** Password */
+            /**
+             * Password
+             * @example S3cret-Passw0rd!
+             */
             password: string;
         };
         /**
          * RegisterResponse
          * @description Deliberately empty: register's body must not reveal pre-existence.
+         * @example {}
          */
         RegisterResponse: Record<string, never>;
         /** ResendCodeRequest */
         ResendCodeRequest: {
-            /** Email */
+            /**
+             * Email
+             * @example ada@example.com
+             */
             email: string;
         };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
-            /** Email */
+            /**
+             * Email
+             * @example ada@example.com
+             */
             email: string;
-            /** Code */
+            /**
+             * Code
+             * @example 123456
+             */
             code: string;
-            /** New Password */
+            /**
+             * New Password
+             * @example Even-Str0nger-Passw0rd!
+             */
             new_password: string;
         };
-        /** TokenResponse */
-        TokenResponse: {
+        /** SwitchTenantRequest */
+        SwitchTenantRequest: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /** SwitchTokenResponse */
+        SwitchTokenResponse: {
             /** Access Token */
             access_token: string;
             /** Refresh Token */
             refresh_token: string;
             /** Id Token */
+            id_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
+        /** TenantResponse */
+        TenantResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Ruc */
+            ruc?: string | null;
+            /** Regime */
+            regime?: ("general" | "simplified") | null;
+            /** Municipality */
+            municipality?: string | null;
+            authorization_dgi?: components["schemas"]["AuthorizationDgiPayload"] | null;
+            /** Fiscal Address */
+            fiscal_address?: string | null;
+            /** Is Withholder */
+            is_withholder: boolean;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * TokenResponse
+         * @example {
+         *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+         *       "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+         *       "refresh_token": "v1.MRSt...redacted",
+         *       "token_type": "Bearer"
+         *     }
+         */
+        TokenResponse: {
+            /**
+             * Access Token
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @example v1.MRSt...redacted
+             */
+            refresh_token: string;
+            /**
+             * Id Token
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
             id_token: string;
             /**
              * Token Type
@@ -307,18 +974,62 @@ export interface components {
          *     ``extra="forbid"`` ensures attempts to mutate ``email`` / ``id`` /
          *     ``external_sub`` etc. surface a 422 (per the spec's "patching email
          *     is rejected" scenario) instead of being silently ignored.
+         * @example {
+         *       "display_name": "Ada Lovelace",
+         *       "locale": "es-NI",
+         *       "preferences": {
+         *         "theme": "system"
+         *       },
+         *       "timezone": "America/Managua"
+         *     }
          */
         UpdateMeRequest: {
-            /** Display Name */
+            /**
+             * Display Name
+             * @example Ada Lovelace
+             */
             display_name?: string | null;
-            /** Locale */
+            /**
+             * Locale
+             * @example es-NI
+             */
             locale?: string | null;
-            /** Timezone */
+            /**
+             * Timezone
+             * @example America/Managua
+             */
             timezone?: string | null;
-            /** Preferences */
+            /**
+             * Preferences
+             * @example {
+             *       "theme": "system"
+             *     }
+             */
             preferences?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** UpdateMemberRoleRequest */
+        UpdateMemberRoleRequest: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "accountant" | "salesperson" | "viewer";
+        };
+        /** UpdateTenantRequest */
+        UpdateTenantRequest: {
+            /** Name */
+            name?: string | null;
+            /** Regime */
+            regime?: ("general" | "simplified") | null;
+            /** Municipality */
+            municipality?: string | null;
+            authorization_dgi?: components["schemas"]["AuthorizationDgiPayload"] | null;
+            /** Fiscal Address */
+            fiscal_address?: string | null;
+            /** Is Withholder */
+            is_withholder?: boolean | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -351,15 +1062,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Service is up and the database is reachable */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["HealthzResponse"];
                 };
             };
         };
@@ -377,7 +1086,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Signup initiated; verification code sent if the email is new */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -386,13 +1095,14 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -410,20 +1120,31 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Email confirmed; the user may now log in */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Invalid credentials, expired token, or lockout */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -441,20 +1162,21 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description A fresh verification code was dispatched */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -472,7 +1194,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Access, refresh, and id tokens */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -481,13 +1203,24 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid credentials, expired token, or lockout */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -505,7 +1238,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description A fresh access/refresh/id-token bundle */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -514,13 +1247,24 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid credentials, expired token, or lockout */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -538,7 +1282,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reset email dispatched if the address exists */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -547,13 +1291,14 @@ export interface operations {
                     "application/json": components["schemas"]["ForgotResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -571,20 +1316,31 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Password rotated; the user can now log in */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Invalid credentials, expired token, or lockout */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };
@@ -604,6 +1360,394 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Password rotated; existing sessions remain valid */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, expired, or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Tenant scope missing or membership denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    logout_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refresh token revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, expired, or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Tenant scope missing or membership denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    get_me_v1_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Caller profile + active tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Missing, expired, or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Tenant scope missing or membership denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    patch_me_v1_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated profile + active tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Missing, expired, or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Tenant scope missing or membership denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Request validation or password-policy failure */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    create_tenant_v1_tenants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTenantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_tenants_v1_tenants_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTenantsResponse"];
+                };
+            };
+        };
+    };
+    get_tenant_v1_tenants__tenant_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tenant_v1_tenants__tenant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTenantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_active_tenant_v1_tenants__tenant_id__switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchTenantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_v1_tenants__tenant_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_v1_tenants__tenant_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Successful Response */
             204: {
                 headers: {
@@ -622,11 +1766,114 @@ export interface operations {
             };
         };
     };
-    logout_v1_auth_logout_post: {
+    update_member_role_v1_tenants__tenant_id__members__user_id__patch: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                tenant_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_v1_tenants__tenant_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_member_v1_tenants__tenant_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_invitation_v1_tenants__tenant_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                invitation_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -638,13 +1885,57 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    get_me_v1_me_get: {
+    accept_invitation_by_body_v1_invitations_accept_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationByBodyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_invitation_v1_invitations__token__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -655,31 +1946,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MeResponse"];
-                };
-            };
-        };
-    };
-    patch_me_v1_me_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateMeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeResponse"];
+                    "application/json": components["schemas"]["InvitationPreviewResponse"];
                 };
             };
             /** @description Validation Error */

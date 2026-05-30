@@ -5,37 +5,37 @@
 // the server contract, not user input.
 //
 // Password rule mirrors the backend Identity-domain policy:
-//   - minimum 12 characters
+//   - minimum 8 characters
 //   - at least one upper-case, one lower-case, one digit, one symbol
 
 import { z } from "zod";
 
-const emailSchema = z.string().trim().email({ message: "Enter a valid email address." });
+const emailSchema = z.string().trim().email({ message: "Ingresa un correo válido." });
 
 const passwordSchema = z
   .string()
-  .min(12, { message: "Password must be at least 12 characters." })
-  .regex(/[A-Z]/, { message: "Password must include an upper-case letter." })
-  .regex(/[a-z]/, { message: "Password must include a lower-case letter." })
-  .regex(/\d/, { message: "Password must include a digit." })
+  .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })
+  .regex(/[A-Z]/, { message: "La contraseña debe incluir una letra mayúscula." })
+  .regex(/[a-z]/, { message: "La contraseña debe incluir una letra minúscula." })
+  .regex(/\d/, { message: "La contraseña debe incluir un dígito." })
   .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=]/, {
-    message: "Password must include a symbol.",
+    message: "La contraseña debe incluir un símbolo.",
   });
 
 const confirmationCodeSchema = z
   .string()
   .trim()
-  .min(4, { message: "Enter the confirmation code from your email." })
-  .max(10, { message: "Confirmation code looks too long." });
+  .min(4, { message: "Ingresa el código de confirmación que recibiste por correo." })
+  .max(10, { message: "El código de confirmación es demasiado largo." });
 
 export const signupSchema = z
   .object({
     email: emailSchema,
     password: passwordSchema,
-    confirm_password: z.string().min(1, { message: "Please confirm your password." }),
+    confirm_password: z.string().min(1, { message: "Confirma tu contraseña." }),
   })
   .refine((data) => data.password === data.confirm_password, {
-    message: "Passwords do not match.",
+    message: "Las contraseñas no coinciden.",
     path: ["confirm_password"],
   });
 export type SignupValues = z.infer<typeof signupSchema>;
@@ -48,7 +48,7 @@ export type ConfirmValues = z.infer<typeof confirmSchema>;
 
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, { message: "Password is required." }),
+  password: z.string().min(1, { message: "La contraseña es obligatoria." }),
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
@@ -65,7 +65,7 @@ export const resetSchema = z.object({
 export type ResetValues = z.infer<typeof resetSchema>;
 
 export const changePasswordSchema = z.object({
-  old_password: z.string().min(1, { message: "Current password is required." }),
+  old_password: z.string().min(1, { message: "La contraseña actual es obligatoria." }),
   new_password: passwordSchema,
 });
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;

@@ -48,6 +48,8 @@ apps/web/
 │   ├── app.tsx
 │   ├── routes/                       # TanStack Router file-based
 │   ├── components/ui/                # shadcn/ui copied
+│   ├── components/app-shell/         # AppShell + SiteHeader (auth layout)
+│   ├── components/app-sidebar/       # Sidebar primitives + AppSidebar
 │   ├── features/                     # one per backend bounded context
 │   │   ├── auth/  catalog/  inventory/  parties/  sales/  taxes/  reports/
 │   ├── api/                          # OpenAPI client + TanStack Query wrappers
@@ -126,6 +128,61 @@ export type InvoiceDraft = z.infer<typeof invoiceDraftSchema>;
 - Same schema feeds TanStack Form validators and any optimistic local computation.
 - **Not derived from the OpenAPI schema** — server schemas describe wire format; form schemas describe user input (different fields, different optionality, often different types). Overlap is intentional, not enforced.
 - Backend `422` errors are attached by JSON pointer (rule 3), not duplicated as client validation.
+
+---
+
+## App shell
+
+Authenticated routes render inside an **app shell** modeled on the shadcn [`dashboard-01`](https://ui.shadcn.com/blocks) block: a fixed left sidebar + a site-header on top of the main column. The shell is introduced in [sprint 03](sprints/03-tenants-and-rls.md#dashboard-shell--account-screen) and reused unchanged by every sprint from 04 onwards.
+
+```
+┌─────────────┬──────────────────────────────────────────┐
+│             │  SiteHeader  · breadcrumb · theme toggle │
+│  Sidebar    ├──────────────────────────────────────────┤
+│  · header   │                                          │
+│    Tenant‑  │  <Outlet/>  ← route content              │
+│    Switcher │                                          │
+│  · nav      │                                          │
+│    Overview │                                          │
+│    Sales    │                                          │
+│    …        │                                          │
+│  · footer   │                                          │
+│    Account  │                                          │
+│    Sign out │                                          │
+└─────────────┴──────────────────────────────────────────┘
+```
+
+Layout:
+
+- **Sidebar** lives in `src/components/app-sidebar/`. Header hosts the `TenantSwitcher`; content hosts the nav groups; footer hosts the `Account` link + `Sign out` button. The sidebar collapses to icon-only on desktop (`< xl`) and slides off-canvas on mobile via a header trigger.
+- **SiteHeader** lives in `src/components/app-shell/SiteHeader.tsx`. It carries the sidebar trigger (mobile), the breadcrumb derived from the active route, and a theme toggle. Page actions (e.g. "New tenant" on `/tenants`) are NOT rendered here — they live inside the page so each route owns its own primary actions.
+- **AppShell** (`src/components/app-shell/AppShell.tsx`) composes the two and renders `{children}` in the main column. A route opts in by wrapping its return in `<AppShell>{...}</AppShell>`. Auth screens (`/login`, `/signup`, `/confirm`, `/forgot-password`, `/reset-password`) and the public `/invitations/$token/accept` route bypass the shell.
+
+The sidebar tokens (`--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring`) already live in `src/styles/globals.css`, so light/dark inherit automatically from the theme provider. No new npm dependencies — the shell is built on Tailwind utilities + a small handful of internal primitives.
+
+### Placeholder routes
+
+`/dashboard`, `/sales`, `/inventory`, `/reports`, `/settings` ship as placeholders in sprint 03 because the backend bounded contexts arrive in sprints 04-08. Rules:
+
+- A placeholder MUST NOT call the backend (no `useQuery` against a non-existent endpoint).
+- A placeholder MUST render a single `<Card>` with the nav label as title and a one-line "Coming soon" description. **No sprint numbers in product UI** — the placeholder advertises that the section is coming, not when.
+- No fake numbers in cards, no random-data charts — the placeholder advertises what is missing, not pretends it exists.
+
+`/dashboard` is the only placeholder with a richer skeleton: four KPI-shaped `<Card>` slots + one chart-shaped panel + one table-shaped panel, each labelled "placeholder". The shape exists so sprints 04-08 can drop real components into known anchors without re-laying-out the page.
+
+### `/account`
+
+`/account` is the non-placeholder companion to the dashboard shell — sprint 03 wires real data because the sprint already owns `/v1/me` (extended with `role` and `permissions` per [§RBAC summary](06-security-model.md#authorization-rbac)). The page renders three cards:
+
+1. **Profile** — `id`, `email`, `display_name`, `locale`, `timezone`, `preferences` (read-only display).
+2. **Active tenant** — name + RUC of the active tenant + role badge. Pulled from `/v1/tenants/me` filtered by `me.active_tenant`.
+3. **Permissions** — bulleted list of `me.permissions`.
+
+`/me` (sprint 02's profile page) is replaced by a redirect to `/account` so existing bookmarks and tests keep working.
+
+### Permission gating on the nav
+
+The sidebar nav items render unconditionally in sprint 03 — there is no observable difference between a hidden item and one with no destination. From sprint 04 onwards, each nav item wraps in `<Can permission="...">` ([§2 Permission gating](#2-permission-gating)) as the real screen for that section lands.
 
 ---
 

@@ -17,7 +17,7 @@ import { loginSchema, type LoginValues } from "@/features/auth/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function LoginRoute() {
-  useDocumentTitle("Sign in");
+  useDocumentTitle("Iniciar sesión");
   const navigate = useNavigate();
   const mutation = useLoginMutation();
   const form = useForm<LoginValues>({
@@ -30,7 +30,10 @@ export function LoginRoute() {
   const onSubmit = (values: LoginValues): void => {
     mutation.mutate(values, {
       onSuccess: () => {
-        void navigate({ to: "/me" });
+        // Route through the index — the guard there decides whether
+        // to send the user to /welcome (no profile), /onboarding (no
+        // memberships), /tenants (no active tenant) or /dashboard.
+        void navigate({ to: "/" });
       },
     });
   };
@@ -39,9 +42,9 @@ export function LoginRoute() {
     <AuthLayout>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-bold">Login to your account</h1>
+          <h1 className="text-2xl font-bold">Inicia sesión en tu cuenta</h1>
           <p className="text-balance text-sm text-muted-foreground">
-            Enter your email below to login to your account
+            Ingresa tu correo para acceder a tu cuenta
           </p>
         </div>
         <FieldGroup>
@@ -50,13 +53,13 @@ export function LoginRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">Correo</FieldLabel>
                 <Input
                   {...field}
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="m@example.com"
+                  placeholder="usuario@ejemplo.com"
                   required
                   aria-invalid={fieldState.invalid}
                 />
@@ -70,12 +73,12 @@ export function LoginRoute() {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
                 <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
+                  <FieldLabel htmlFor="password">Contraseña</FieldLabel>
                   <Link
                     to="/forgot-password"
                     className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                   >
-                    Forgot your password?
+                    ¿Olvidaste tu contraseña?
                   </Link>
                 </div>
                 <Input
@@ -92,17 +95,19 @@ export function LoginRoute() {
           />
           {mutation.isError ? (
             <Alert variant="destructive">
-              <AlertDescription>Sign-in failed. Check your credentials.</AlertDescription>
+              <AlertDescription>
+                No se pudo iniciar sesión. Revisa tus credenciales.
+              </AlertDescription>
             </Alert>
           ) : null}
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? "Signing in..." : "Login"}
+            {mutation.isPending ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>
         </FieldGroup>
         <div className="text-center text-sm">
-          Don&apos;t have an account?{" "}
+          ¿No tienes cuenta?{" "}
           <Link to="/signup" className="underline underline-offset-4">
-            Sign up
+            Regístrate
           </Link>
         </div>
       </form>

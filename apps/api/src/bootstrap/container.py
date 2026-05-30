@@ -39,12 +39,26 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bootstrap.db import get_session_factory
 from bootstrap.settings import get_settings
 from contexts.identity.application.ports.outbound import EmailSender, IdentityProvider
+from contexts.tenants.application.ports.outbound import (
+    InvitationRepository,
+    InvitationTokenGenerator,
+    MembershipRepository,
+    TenantRepository,
+)
+from shared_kernel.adapters.context import CurrentUserContext, TenantContext
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
+
+# Sentinel UUID used when no tenant / user is active. The canonical RLS
+# policies use ``current_setting('app.tenant_id', true)::uuid`` — comparing
+# against this zero UUID returns ``false`` for every real row, so the
+# sentinel acts as "no tenant active" without requiring policy changes.
+_ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 class _RequestUnitOfWork(SqlAlchemyUnitOfWork):
@@ -63,10 +77,30 @@ class _RequestUnitOfWork(SqlAlchemyUnitOfWork):
     async def begin(self) -> AsyncIterator[AsyncSession]:
         if self._session is not None:
             # Reentrant: yield the already-active session without starting
-            # a nested transaction.
+            # a nested transaction. The outer ``begin`` already issued the
+            # SET LOCAL statements; they remain in effect for the inner
+            # block because PostgreSQL scopes them to the transaction.
             yield self._session
             return
         async with super().begin() as session:
+            tenant = TenantContext.get()
+            current_user = CurrentUserContext.get()
+            tenant_id_param = str(tenant) if tenant is not None else _ZERO_UUID
+            user_id_param = str(current_user.user_id) if current_user is not None else _ZERO_UUID
+            # ``set_config(name, value, is_local=true)`` is the function
+            # form of ``SET LOCAL`` — it is transaction-scoped (clears on
+            # COMMIT/ROLLBACK, zero leak between pooled connections) and
+            # accepts bound parameters, which the ``SET LOCAL`` SQL form
+            # does not. The RLS policies read the GUC via
+            # ``current_setting('app.tenant_id', true)::uuid``.
+            await session.execute(
+                text("SELECT set_config('app.tenant_id', :t, true)"),
+                {"t": tenant_id_param},
+            )
+            await session.execute(
+                text("SELECT set_config('app.current_user_id', :u, true)"),
+                {"u": user_id_param},
+            )
             yield session
 
 
@@ -180,10 +214,53 @@ def build_request_uow() -> _RequestUnitOfWork:
     return _RequestUnitOfWork(get_session_factory())
 
 
+# --------------------------------------------------------------------- tenants
+
+
+def build_tenant_repository(uow: SqlAlchemyUnitOfWork) -> TenantRepository:
+    from contexts.tenants.adapters.outbound.persistence.sqlalchemy import (
+        TenantRepositorySqlAlchemy,
+    )
+
+    return TenantRepositorySqlAlchemy(uow)
+
+
+def build_membership_repository(uow: SqlAlchemyUnitOfWork) -> MembershipRepository:
+    from contexts.tenants.adapters.outbound.persistence.sqlalchemy import (
+        MembershipRepositorySqlAlchemy,
+    )
+
+    return MembershipRepositorySqlAlchemy(uow)
+
+
+def build_invitation_repository(uow: SqlAlchemyUnitOfWork) -> InvitationRepository:
+    from contexts.tenants.adapters.outbound.persistence.sqlalchemy import (
+        InvitationRepositorySqlAlchemy,
+    )
+
+    return InvitationRepositorySqlAlchemy(uow)
+
+
+def build_invitation_token_generator() -> InvitationTokenGenerator:
+    from contexts.tenants.adapters.outbound.tokens import (
+        InvitationTokenGeneratorJwt,
+    )
+
+    settings = get_settings()
+    return InvitationTokenGeneratorJwt(
+        secret=settings.local_jwt_secret,
+        ttl_seconds=settings.invitation_token_ttl_seconds,
+    )
+
+
 __all__ = [
     "build_email_sender",
     "build_identity_provider",
     "build_identity_provider_for_middleware",
     "build_identity_provider_for_request",
+    "build_invitation_repository",
+    "build_invitation_token_generator",
+    "build_membership_repository",
     "build_request_uow",
+    "build_tenant_repository",
 ]

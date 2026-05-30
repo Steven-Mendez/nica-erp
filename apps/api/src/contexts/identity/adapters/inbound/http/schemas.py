@@ -143,6 +143,8 @@ class MeResponse(BaseModel):
                     "timezone": "America/Managua",
                     "preferences": {"theme": "system"},
                     "active_tenant": "acme",
+                    "role": "admin",
+                    "permissions": ["tenant:read", "tenant:write"],
                 }
             ]
         }
@@ -150,11 +152,16 @@ class MeResponse(BaseModel):
 
     id: UUID = Field(examples=[_EXAMPLE_USER_ID])
     email: str = Field(examples=[_EXAMPLE_EMAIL])
-    display_name: str = Field(examples=["Ada Lovelace"])
-    locale: str = Field(examples=["es-NI"])
-    timezone: str = Field(examples=["America/Managua"])
+    # ``display_name`` is the first-login probe — the SPA redirects to
+    # ``/welcome`` while it is ``None``. ``locale`` is deferred to the
+    # future i18n sprint; the SPA does not render it today.
+    display_name: str | None = Field(default=None, examples=["Ada Lovelace"])
+    locale: str | None = Field(default=None, examples=["es-NI"])
+    timezone: str | None = Field(default=None, examples=["America/Managua"])
     preferences: dict[str, Any] = Field(examples=[{"theme": "system"}])
     active_tenant: str | None = Field(default=None, examples=["acme"])
+    role: str | None = Field(default=None, examples=["admin"])
+    permissions: list[str] = Field(default_factory=list, examples=[["tenant:read"]])
 
 
 class ProblemDetail(BaseModel):

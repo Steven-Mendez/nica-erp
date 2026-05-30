@@ -17,7 +17,7 @@ import { forgotSchema, type ForgotValues } from "@/features/auth/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function ForgotPasswordRoute() {
-  useDocumentTitle("Reset password");
+  useDocumentTitle("Restablecer contraseña");
   const navigate = useNavigate();
   const mutation = useForgotPasswordMutation();
   const form = useForm<ForgotValues>({
@@ -39,9 +39,9 @@ export function ForgotPasswordRoute() {
     <AuthLayout>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-bold">Reset your password</h1>
+          <h1 className="text-2xl font-bold">Recupera tu contraseña</h1>
           <p className="text-balance text-sm text-muted-foreground">
-            We&apos;ll email you a reset code if the address is on file
+            Si el correo está registrado, te enviaremos un código de recuperación
           </p>
         </div>
         <FieldGroup>
@@ -50,13 +50,13 @@ export function ForgotPasswordRoute() {
             control={form.control}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">Correo</FieldLabel>
                 <Input
                   {...field}
                   id="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="m@example.com"
+                  placeholder="usuario@ejemplo.com"
                   required
                   aria-invalid={fieldState.invalid}
                 />
@@ -67,17 +67,17 @@ export function ForgotPasswordRoute() {
           {mutation.isSuccess ? (
             <Alert variant="success">
               <AlertDescription>
-                If that address is on file, a reset code is on its way.
+                Si el correo está registrado, te enviamos un código de recuperación.
               </AlertDescription>
             </Alert>
           ) : null}
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
-            {mutation.isPending ? "Sending..." : "Send reset code"}
+            {mutation.isPending ? "Enviando..." : "Enviar código"}
           </Button>
         </FieldGroup>
         <div className="text-center text-sm">
           <Link to="/login" className="underline underline-offset-4">
-            Back to sign in
+            Volver a iniciar sesión
           </Link>
         </div>
       </form>

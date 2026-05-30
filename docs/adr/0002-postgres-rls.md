@@ -7,7 +7,11 @@
 A single instance serves multiple SMBs; an application bug must not expose cross-tenant fiscal data.
 
 ## Decision
-Pool + RLS as defense in depth. Every per-tenant table carries `tenant_id UUID NOT NULL` with `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` and a policy `USING (tenant_id = current_setting('app.tenant_id', true)::uuid)`. FastAPI middleware emits `SET LOCAL app.tenant_id = '<uuid>'` at the start of every transaction, reading `custom:active_tenant` from the JWT. Global tables without RLS: `users`, `tenants`, `tenant_members`, `units_of_measure`. Outbox has no RLS but carries `tenant_id` — the publisher is a system process (see [ADR-0006](0006-transactional-outbox.md)).
+Pool + RLS as defense in depth. Every per-tenant table carries `tenant_id UUID NOT NULL` with `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` and a policy whose **`USING` and `WITH CHECK` clauses share the same expression** `tenant_id = current_setting('app.tenant_id', true)::uuid` (the `true` flag makes the GUC return `NULL` when unset, so bootstrap/migrations don't break). FastAPI middleware emits `SET LOCAL app.tenant_id = '<uuid>'` and `SET LOCAL app.current_user_id = '<uuid>'` at the start of every transaction, reading `custom:active_tenant` and the resolved `sub` from the JWT.
+
+**Global tables without RLS** (system catalogs cross tenants by design): `users`, `tenants`, `units_of_measure`, `permissions`, `role_permissions`, `outbox`, `processed_events`, `idempotency_keys`. The outbox/processed-events/idempotency-keys triplet is read by system processes (publisher, dispatcher) that operate across tenants ([ADR-0006](0006-transactional-outbox.md)); their `tenant_id` column is a filter, not an isolation boundary, and access is restricted by **DB role**, not policy.
+
+**Tenant-scoped tables with a special policy**: `tenant_members` carries RLS with `USING (user_id = current_setting('app.current_user_id', true)::uuid OR tenant_id = current_setting('app.tenant_id', true)::uuid)` so a user can read their own memberships before any tenant is active (needed for the post-login tenant picker). `WITH CHECK` keeps the canonical `tenant_id = current_tenant` expression — a user cannot insert/update a membership row for a tenant other than the active one.
 
 ## Consequences
 - (+) One DB, one migration; cheapest option.

@@ -17,7 +17,7 @@ type FieldState =
 
 function StatusCell({ state }: { state: FieldState }) {
   if (state.kind === "loading") return <Skeleton className="inline-block h-4 w-16" />;
-  if (state.kind === "unreachable") return <Badge variant="danger">unreachable</Badge>;
+  if (state.kind === "unreachable") return <Badge variant="danger">no alcanzable</Badge>;
   const value = state.value ?? "—";
   const variant: BadgeProps["variant"] = value === "ok" ? "ok" : "warn";
   return <Badge variant={variant}>{value}</Badge>;
@@ -25,12 +25,12 @@ function StatusCell({ state }: { state: FieldState }) {
 
 function MonoCell({ state }: { state: FieldState }) {
   if (state.kind === "loading") return <Skeleton className="inline-block h-4 w-32" />;
-  if (state.kind === "unreachable") return <Badge variant="outline">unknown</Badge>;
+  if (state.kind === "unreachable") return <Badge variant="outline">desconocido</Badge>;
   return <span className="font-mono text-foreground">{state.value ?? "—"}</span>;
 }
 
 export function HealthRoute() {
-  useDocumentTitle("System health");
+  useDocumentTitle("Estado del sistema");
   const { data, isLoading, isError } = useHealthz();
   const offline = isError || (!isLoading && !data);
 
@@ -45,7 +45,7 @@ export function HealthRoute() {
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Nica ERP</CardTitle>
-          <CardDescription>Backend health, read from /healthz.</CardDescription>
+          <CardDescription>Estado del backend, desde /healthz.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-6 gap-y-3 text-sm">

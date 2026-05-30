@@ -119,10 +119,6 @@ def _build_app(idp: _FakeIdentityProvider) -> FastAPI:
     async def _widgets() -> JSONResponse:
         return JSONResponse({"ok": True})
 
-    @app.post("/v1/invitations/{token}/accept")
-    async def _accept(token: str) -> JSONResponse:
-        return JSONResponse({"ok": True, "token": token})
-
     return app
 
 
@@ -132,7 +128,6 @@ def _build_app(idp: _FakeIdentityProvider) -> FastAPI:
     [
         ("GET", "/healthz"),
         ("POST", "/v1/auth/login"),
-        ("POST", "/v1/invitations/abc-123/accept"),
     ],
 )
 async def test_unauthenticated_allowlist_skips_middleware(method: str, path: str) -> None:

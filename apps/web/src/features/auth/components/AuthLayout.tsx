@@ -8,6 +8,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { Logo } from "@/components/logo";
+
 interface AuthLayoutProps {
   children: ReactNode;
 }
@@ -18,19 +20,15 @@ export const AuthLayout = ({ children }: AuthLayoutProps) => {
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <Link to="/" className="flex items-center gap-2 font-medium">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <span className="text-sm font-bold">N</span>
-            </div>
-            Nica ERP
+            <Logo size={24} withWordmark />
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs">{children}</div>
         </div>
       </div>
-      <div className="relative hidden lg:block bg-background">
-        <div className="absolute inset-0 bg-gradient-to-tr from-primary via-primary/85 to-primary/60 dark:from-primary/25 dark:via-primary/60 dark:to-primary" />
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
+      <div className="relative hidden bg-muted lg:block">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 via-primary to-primary/70 dark:from-primary/40 dark:via-primary/70 dark:to-primary" />
         <div className="absolute inset-0 flex flex-col justify-end p-10 text-primary-foreground">
           <blockquote className="space-y-2">
             <p className="text-lg italic">

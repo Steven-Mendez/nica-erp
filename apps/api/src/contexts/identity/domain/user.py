@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from contexts.identity.domain.email import Email
 from contexts.identity.domain.events import UserRegistered
@@ -38,9 +38,9 @@ class User(AggregateRoot[UUID]):
         id_: UUID,
         external_sub: str,
         email: Email,
-        display_name: str = "",
-        locale: str = "es-NI",
-        timezone: str = "America/Managua",
+        display_name: str | None = None,
+        locale: str | None = None,
+        timezone: str | None = None,
         preferences: dict[str, Any] | None = None,
         created_at: datetime,
         updated_at: datetime,
@@ -63,10 +63,15 @@ class User(AggregateRoot[UUID]):
         email: Email,
         now: datetime,
     ) -> User:
+        # ``display_name``, ``locale`` and ``timezone`` start NULL; the
+        # SPA's ``/welcome`` screen captures the first two on first login.
         user = cls(
-            id_=uuid4(),
+            id_=UUID(external_sub),
             external_sub=external_sub,
             email=email,
+            display_name=None,
+            locale=None,
+            timezone=None,
             created_at=now,
             updated_at=now,
         )
@@ -108,15 +113,15 @@ class User(AggregateRoot[UUID]):
         return self._email
 
     @property
-    def display_name(self) -> str:
+    def display_name(self) -> str | None:
         return self._display_name
 
     @property
-    def locale(self) -> str:
+    def locale(self) -> str | None:
         return self._locale
 
     @property
-    def timezone(self) -> str:
+    def timezone(self) -> str | None:
         return self._timezone
 
     @property

@@ -7,13 +7,19 @@
 // request still 401). The callback is registered exactly once at module
 // load — not inside a component effect — to keep the interceptor module
 // independently testable.
+//
+// On mount, the shell waits for `bootRefresh` to resolve before mounting
+// the router. If a refresh token survived in sessionStorage, this exchanges
+// it for a fresh access token so a page reload keeps the user signed in.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { useState } from "react";
-import { setOnAuthLost } from "@/api/interceptor";
+import { useEffect, useState } from "react";
+import { bootRefresh, setOnAuthLost } from "@/api/interceptor";
+import { getRefreshToken } from "@/api/tokenStore";
 import { router } from "@/router";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 setOnAuthLost(() => {
   void router.navigate({ to: "/login" });
@@ -38,10 +44,23 @@ export function App() {
         },
       }),
   );
+  const [bootReady, setBootReady] = useState(() => getRefreshToken() === null);
+
+  useEffect(() => {
+    if (bootReady) return;
+    let cancelled = false;
+    void bootRefresh().finally(() => {
+      if (!cancelled) setBootReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bootReady]);
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="nica-erp-theme">
       <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
+        <TooltipProvider>{bootReady ? <RouterProvider router={router} /> : null}</TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

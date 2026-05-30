@@ -49,7 +49,7 @@ the constructor would reject after trimming.
 `contexts.identity.domain.password.Password` SHALL hold the raw secret
 in `value: str` and expose `validate_policy()` raising
 `PasswordPolicyError` (a `ValueError` subclass) when **any** of the
-following fails: length ≥ 12, ≥1 uppercase ASCII letter, ≥1 lowercase
+following fails: length ≥ 8, ≥1 uppercase ASCII letter, ≥1 lowercase
 ASCII letter, ≥1 digit, ≥1 symbol from `!@#$%^&*()_+\-=[]{}|;:,.<>?/`.
 `Password` MUST NOT log or expose its `value` in `__repr__`.
 

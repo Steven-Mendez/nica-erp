@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     verification_attempts_max: int = Field(default=5)
     verification_attempts_window_seconds: int = Field(default=3600)
 
+    # Tenant + RBAC knobs. Invitation tokens default to a 7-day window; the
+    # permission cache holds the role-to-permissions mapping for 60 s per
+    # process.
+    invitation_token_ttl_seconds: int = Field(default=604_800)
+    permission_cache_ttl_seconds: int = Field(default=60)
+
     @model_validator(mode="after")
     def _validate_app_env(self) -> Settings:
         if self.app_env == "":

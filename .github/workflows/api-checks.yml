@@ -29,3 +29,10 @@ jobs:
         run: uv run lint-imports
       - name: pytest -m unit
         run: uv run pytest -m unit
+      - name: pytest coverage (unit only — integration + e2e need Postgres testcontainer)
+        run: |
+          uv run pytest -m unit \
+            --cov=src/contexts/tenants \
+            --cov=src/contexts/identity \
+            --cov=src/shared_kernel \
+            --cov-report=term-missing

@@ -30,13 +30,17 @@ UNAUTHENTICATED_EXACT: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-# (method, prefix) tuples for routes whose path is parametric. The middleware
-# matches when ``path.startswith(prefix)`` AND the path's suffix exactly
-# equals "/accept" — this scopes the allowance to ``POST
-# /v1/invitations/{token}/accept`` without opening up the rest of the
-# ``/v1/invitations`` namespace.
-UNAUTHENTICATED_INVITATION_ACCEPT_PREFIX: str = "/v1/invitations/"
-UNAUTHENTICATED_INVITATION_ACCEPT_SUFFIX: str = "/accept"
+# Invitation preview endpoint: GET /v1/invitations/{token}/preview is
+# public per ADR-0031 so the pre-signup screen can render the invited
+# email + organization name before the recipient has an account.
+NO_AUTH_INVITATION_PREVIEW_PREFIX: str = "/v1/invitations/"
+NO_AUTH_INVITATION_PREVIEW_SUFFIX: str = "/preview"
+
+# Switching the active tenant happens by definition before the JWT
+# carries one — the response IS the new JWT. The route must therefore
+# be reachable with a tenantless bearer token.
+NO_TENANT_SWITCH_PREFIX: str = "/v1/tenants/"
+NO_TENANT_SWITCH_SUFFIX: str = "/switch"
 
 # Authenticated routes a JWT with an empty / missing ``custom:active_tenant``
 # is still allowed to call. Everything else returns 403 ``tenant.required``
@@ -45,9 +49,13 @@ NO_TENANT_REQUIRED: frozenset[tuple[str, str]] = frozenset(
     {
         ("GET", "/v1/me"),
         ("PATCH", "/v1/me"),
+        ("GET", "/v1/tenants/me"),
         ("POST", "/v1/auth/logout"),
         ("POST", "/v1/auth/change-password"),
         ("POST", "/v1/tenants"),
+        # Hash-fragment accept endpoint (ADR-0031): authenticated user
+        # without an active tenant may still accept an invitation.
+        ("POST", "/v1/invitations/accept"),
     }
 )
 
@@ -70,12 +78,11 @@ def is_unauthenticated(method: str, path: str) -> bool:
     if (upper, normalised) in UNAUTHENTICATED_EXACT:
         return True
     if (
-        upper == "POST"
-        and normalised.startswith(UNAUTHENTICATED_INVITATION_ACCEPT_PREFIX)
-        and normalised.endswith(UNAUTHENTICATED_INVITATION_ACCEPT_SUFFIX)
+        upper == "GET"
+        and normalised.startswith(NO_AUTH_INVITATION_PREVIEW_PREFIX)
+        and normalised.endswith(NO_AUTH_INVITATION_PREVIEW_SUFFIX)
         and len(normalised)
-        > len(UNAUTHENTICATED_INVITATION_ACCEPT_PREFIX)
-        + len(UNAUTHENTICATED_INVITATION_ACCEPT_SUFFIX)
+        > len(NO_AUTH_INVITATION_PREVIEW_PREFIX) + len(NO_AUTH_INVITATION_PREVIEW_SUFFIX)
     ):
         return True
     return False
@@ -84,14 +91,27 @@ def is_unauthenticated(method: str, path: str) -> bool:
 def is_no_tenant_required(method: str, path: str) -> bool:
     """Return True if the route is reachable without an ``active_tenant`` claim."""
 
-    return (method.upper(), _strip_api_prefix(path)) in NO_TENANT_REQUIRED
+    upper = method.upper()
+    normalised = _strip_api_prefix(path)
+    if (upper, normalised) in NO_TENANT_REQUIRED:
+        return True
+    if (
+        upper == "POST"
+        and normalised.startswith(NO_TENANT_SWITCH_PREFIX)
+        and normalised.endswith(NO_TENANT_SWITCH_SUFFIX)
+        and len(normalised) > len(NO_TENANT_SWITCH_PREFIX) + len(NO_TENANT_SWITCH_SUFFIX)
+    ):
+        return True
+    return False
 
 
 __all__ = [
+    "NO_AUTH_INVITATION_PREVIEW_PREFIX",
+    "NO_AUTH_INVITATION_PREVIEW_SUFFIX",
     "NO_TENANT_REQUIRED",
+    "NO_TENANT_SWITCH_PREFIX",
+    "NO_TENANT_SWITCH_SUFFIX",
     "UNAUTHENTICATED_EXACT",
-    "UNAUTHENTICATED_INVITATION_ACCEPT_PREFIX",
-    "UNAUTHENTICATED_INVITATION_ACCEPT_SUFFIX",
     "is_no_tenant_required",
     "is_unauthenticated",
 ]

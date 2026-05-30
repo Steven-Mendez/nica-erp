@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, status
 
+from bootstrap.dependencies import current_actor
 from contexts.identity.adapters.inbound.http.dependencies import (
     get_access_token,
     get_authenticate,
@@ -63,6 +64,7 @@ from contexts.identity.application.use_cases import (
     UpdateProfile,
 )
 from shared_kernel.adapters.context import CurrentUser
+from shared_kernel.permissions import Actor
 
 # Reusable ``responses=`` entries so each operation advertises the RFC-7807
 # error envelope without each route restating the schema. Keys are the
@@ -283,6 +285,7 @@ async def logout(
 async def get_me(
     current_user: CurrentUser = Depends(get_current_user),
     uc: GetMe = Depends(get_get_me),
+    actor: Actor = Depends(current_actor),
 ) -> MeResponse:
     """Return the caller's profile, hydrated from the persistence layer."""
 
@@ -295,6 +298,8 @@ async def get_me(
         timezone=user.timezone,
         preferences=user.preferences,
         active_tenant=current_user.active_tenant,
+        role=actor.role,
+        permissions=sorted(actor.permissions),
     )
 
 

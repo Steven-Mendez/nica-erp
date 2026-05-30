@@ -11,7 +11,9 @@ from contexts.identity.domain.user import User
 
 def test_register_records_single_user_registered_event() -> None:
     t = datetime(2026, 5, 26, 12, 0, 0, tzinfo=UTC)
-    user = User.register(external_sub="abc", email=Email("a@b.io"), now=t)
+    user = User.register(
+        external_sub="22222222-2222-2222-2222-222222222222", email=Email("a@b.io"), now=t
+    )
 
     events = user.pull_events()
     assert len(events) == 1
@@ -22,21 +24,32 @@ def test_register_records_single_user_registered_event() -> None:
     assert event.registered_at == t
 
 
-def test_register_sets_locale_and_timezone_defaults() -> None:
+def test_register_leaves_profile_fields_null_for_welcome_screen() -> None:
+    """A freshly registered user has NULL display_name/locale/timezone.
+
+    The SPA's ``/welcome`` route captures display_name + timezone on
+    first login (locale is deferred per ADR-0033). Sprint 3.6 removed
+    the Nicaragua-centric defaults the column previously held.
+    """
+
     t = datetime(2026, 5, 26, 12, 0, 0, tzinfo=UTC)
-    user = User.register(external_sub="abc", email=Email("a@b.io"), now=t)
-    assert user.locale == "es-NI"
-    assert user.timezone == "America/Managua"
-    assert user.display_name == ""
+    user = User.register(
+        external_sub="22222222-2222-2222-2222-222222222222", email=Email("a@b.io"), now=t
+    )
+    assert user.locale is None
+    assert user.timezone is None
+    assert user.display_name is None
     assert user.preferences == {}
-    assert user.external_sub == "abc"
+    assert user.external_sub == "22222222-2222-2222-2222-222222222222"
     assert user.created_at == t
     assert user.updated_at == t
 
 
 def test_update_profile_updates_field_and_updated_at() -> None:
     t = datetime(2026, 5, 26, 12, 0, 0, tzinfo=UTC)
-    user = User.register(external_sub="abc", email=Email("a@b.io"), now=t)
+    user = User.register(
+        external_sub="22222222-2222-2222-2222-222222222222", email=Email("a@b.io"), now=t
+    )
     user.pull_events()  # clear
 
     t2 = t + timedelta(hours=1)
@@ -50,7 +63,9 @@ def test_update_profile_updates_field_and_updated_at() -> None:
 
 def test_update_profile_only_applies_non_none_updates() -> None:
     t = datetime(2026, 5, 26, 12, 0, 0, tzinfo=UTC)
-    user = User.register(external_sub="abc", email=Email("a@b.io"), now=t)
+    user = User.register(
+        external_sub="22222222-2222-2222-2222-222222222222", email=Email("a@b.io"), now=t
+    )
     user.update_profile(display_name="Alice", now=t)
 
     t2 = t + timedelta(hours=1)

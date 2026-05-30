@@ -1,15 +1,25 @@
 // apps/web/src/api/tokenStore.ts
 //
-// In-memory-only token store.
+// Hybrid token store.
 //
 // Transport-layer concern: the tokens live here (not in any feature) because
 // they're consumed by the HTTP interceptor — every authenticated request, in
-// any feature, picks them up. Holding them in a module-scoped closure (NOT
-// localStorage / sessionStorage / cookies) is an explicit XSS-posture choice:
-// if an attacker pulls off a script injection, they cannot exfiltrate a
-// long-lived token from `window.localStorage`. The trade-off is that a page
-// reload drops the session and the user has to log in again, which the
-// frontend-shell spec requires.
+// any feature, picks them up.
+//
+// Storage strategy:
+//   - Access AND id tokens stay in JavaScript memory only (module-scoped
+//     closure). They are short-lived (≤ 1 hour) and never persisted.
+//   - The refresh token is persisted in `sessionStorage` so a page reload can
+//     recover the session via `POST /v1/auth/refresh` (see `bootRefresh` in
+//     `@/api/interceptor`). sessionStorage is tab-scoped — closing the tab
+//     still requires a fresh login.
+//
+// XSS posture: an attacker with script execution can still exfiltrate the
+// refresh token from sessionStorage. HttpOnly cookies + a BFF remain the
+// post-MVP hardening. The trade-off is deliberate: forcing a re-login on
+// every reload was a UX blocker for operators.
+
+const STORAGE_KEY = "nica-erp:refresh-token";
 
 export interface Tokens {
   readonly access: string;
@@ -17,18 +27,55 @@ export interface Tokens {
   readonly id: string;
 }
 
-let tokens: Tokens | null = null;
+const readPersistedRefresh = (): string | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
 
-export const getAccessToken = (): string | null => tokens?.access ?? null;
+const writePersistedRefresh = (value: string): void => {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, value);
+  } catch {
+    // sessionStorage can throw in private windows or when quota is exceeded.
+    // The interceptor still works for the lifetime of this JS context; we
+    // just lose reload-survival for this tab.
+  }
+};
 
-export const getRefreshToken = (): string | null => tokens?.refresh ?? null;
+const clearPersistedRefresh = (): void => {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Same as above.
+  }
+};
 
-export const getIdToken = (): string | null => tokens?.id ?? null;
+let accessToken: string | null = null;
+let idToken: string | null = null;
+let refreshToken: string | null = readPersistedRefresh();
+
+export const getAccessToken = (): string | null => accessToken;
+
+export const getRefreshToken = (): string | null => refreshToken;
+
+export const getIdToken = (): string | null => idToken;
 
 export const setTokens = (next: Tokens): void => {
-  tokens = { access: next.access, refresh: next.refresh, id: next.id };
+  accessToken = next.access;
+  refreshToken = next.refresh;
+  idToken = next.id;
+  writePersistedRefresh(next.refresh);
 };
 
 export const clear = (): void => {
-  tokens = null;
+  accessToken = null;
+  refreshToken = null;
+  idToken = null;
+  clearPersistedRefresh();
 };

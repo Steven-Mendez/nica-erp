@@ -69,9 +69,11 @@ Configurable via SSM in prod; defaults in `bootstrap/settings.py`.
 - **Tenant status check** on every authenticated request — the same dependency that loads the tenant context rejects `suspended` or `purged` tenants ([ADR-0026](adr/0026-tenant-lifecycle.md)). Best-effort session revocation.
 
 ### Frontend tokens
-- **In memory only.** Access AND refresh tokens live in JavaScript memory, not `localStorage`, `sessionStorage`, or any cookie. Lost on reload — the SPA redirects to login. (HttpOnly cookie + BFF is the post-MVP hardening; see the XSS posture below.)
-- **One retry on 401 within the same session.** While the SPA is loaded, the HTTP client interceptor catches a single 401, calls `POST /v1/auth/refresh` with the in-memory refresh token, retries the original request once, and gives up on a second failure (no infinite loops). After a reload the refresh token is gone — the interceptor cannot recover and routes to `/login`.
-- **XSS posture**: with tokens in memory, an XSS would have to extract them at the moment they're held in JS. A BFF (Backend-for-Frontend) holding tokens server-side via HttpOnly cookies is the post-MVP hardening; out of scope for MVP. See [09 — Frontend](09-frontend.md) for the SPA-side implementation.
+- **Access and id tokens in memory only.** They live in a module-scoped closure (`apps/web/src/api/tokenStore.ts`), never in `localStorage` or any cookie. Both are short-lived (≤ 1 hour for access).
+- **Refresh token in `sessionStorage`.** Persisted under the key `nica-erp:refresh-token` so a page reload can recover the session via `POST /v1/auth/refresh`. `sessionStorage` is tab-scoped — closing the tab still forces a fresh login. Cleared on logout and on any refresh failure.
+- **Boot-time silent refresh.** On app boot, if `sessionStorage` holds a refresh token, the shell calls `POST /v1/auth/refresh` once before mounting the router. On success the access/id tokens populate the in-memory store and the user lands on their original route; on failure the persisted token is cleared and the SPA redirects to `/login`.
+- **One retry on 401 within the same session.** While the SPA is loaded, the HTTP client interceptor catches a single 401, calls `POST /v1/auth/refresh` with the refresh token, retries the original request once, and gives up on a second failure (no infinite loops).
+- **XSS posture**: an attacker with script execution can exfiltrate the refresh token from `sessionStorage`. The trade-off is deliberate: forcing a re-login on every reload was a UX blocker for operators. HttpOnly cookies + a BFF (Backend-for-Frontend) holding tokens server-side remain the post-MVP hardening; out of scope for MVP. See [09 — Frontend](09-frontend.md) for the SPA-side implementation.
 
 ---
 
@@ -229,11 +231,11 @@ ECS task definition references SSM ARNs in `secrets[]`. Lambdas read via `boto3.
 | **Cross-tenant data leak** | RLS at the DB layer ([ADR-0002](adr/0002-postgres-rls.md)) + tenant_id assertion in application + isolation test per tenant-scoped table ([14 — Testing](14-testing.md)) |
 | **Privilege escalation in the same tenant** | Ownership filter in query layer + `require(...)` on every mutating endpoint + matrix test in sprint 03 |
 | **JWT replay after logout** | Best-effort: `GlobalSignOut` revokes refresh; access tokens expire ≤ 1h; tenant status check on every request |
-| **JWT leak via XSS** | Tokens in memory only, not `localStorage`. BFF + HttpOnly cookies is the post-MVP hardening |
+| **JWT leak via XSS** | Access/id tokens in memory only; refresh token in `sessionStorage` (tab-scoped). BFF + HttpOnly cookies is the post-MVP hardening |
 | **JWT leak via leaked signing key** | Manual rotation runbook; key in SSM SecureString; `.env.local` gitignored + pre-commit reject |
 | **Brute force on local IdP** | 5 attempts in 1h → 1h lockout; rate-limit on `/v1/auth/login` (CloudFront + ALB level) |
 | **Email enumeration** | Signup/forgot return generic responses regardless of email existence |
-| **CSRF** | No auth cookies (tokens live in JS memory); all state-changing endpoints require the `Authorization: Bearer` header, which a cross-origin page cannot forge |
+| **CSRF** | No auth cookies (refresh token in `sessionStorage`, access token in JS memory); all state-changing endpoints require the `Authorization: Bearer` header, which a cross-origin page cannot forge |
 | **SQL injection** | Parametrized queries everywhere (SQLAlchemy); raw SQL only in migrations |
 | **Privilege escalation via direct DB grant** | API user has no `DELETE` on fiscal tables (deferred until first productive tenant, per [ADR-0029](adr/0029-disaster-recovery-posture.md)) |
 | **Secret leak via env var visibility** | Secrets via `secrets[]` SSM refs in task definition, never plain env vars; CloudTrail logs `ssm:GetParameter` calls |

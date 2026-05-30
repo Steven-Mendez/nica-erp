@@ -40,10 +40,14 @@ export const rawFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<
   return fetch(input, init);
 };
 
-const attachAuth = (init: RetriableInit): RetriableInit => {
+const attachAuth = (input: RequestInfo | URL, init: RetriableInit): RetriableInit => {
   const token = getAccessToken();
   if (token === null) return init;
-  const headers = new Headers(init.headers ?? {});
+  // When `input` is a Request (the path openapi-fetch takes), its headers
+  // must be merged in — passing `init.headers` alone to `fetch(request, init)`
+  // would replace the Request's headers wholesale, dropping Content-Type.
+  const base = input instanceof Request ? input.headers : (init.headers ?? {});
+  const headers = new Headers(base);
   headers.set("Authorization", `Bearer ${token}`);
   return { ...init, headers };
 };
@@ -101,6 +105,20 @@ const handleAuthLost = (): void => {
 };
 
 /**
+ * Boot-time recovery: if a refresh token survived in sessionStorage (page
+ * reload, new tab restored from the session), exchange it for a fresh access
+ * token before the router mounts. Clears the persisted token on failure so a
+ * dead refresh token does not keep producing /v1/auth/refresh calls on every
+ * reload.
+ */
+export const bootRefresh = async (): Promise<boolean> => {
+  if (getRefreshToken() === null) return false;
+  const ok = await tryRefresh();
+  if (!ok) clear();
+  return ok;
+};
+
+/**
  * Auth-aware fetch.
  *
  * - Attaches Authorization: Bearer <accessToken> from the in-memory store.
@@ -112,7 +130,7 @@ export const fetchWithAuth = async (
   input: RequestInfo | URL,
   init: RetriableInit = {},
 ): Promise<Response> => {
-  const first = await fetch(input, attachAuth(init));
+  const first = await fetch(input, attachAuth(input, init));
   if (first.status !== 401) return first;
 
   // Already retried for this original request? Surface the 401 and route out.
@@ -127,7 +145,7 @@ export const fetchWithAuth = async (
     return first;
   }
 
-  const retried = await fetch(input, attachAuth({ ...init, __authRetried: true }));
+  const retried = await fetch(input, attachAuth(input, { ...init, __authRetried: true }));
   if (retried.status === 401) {
     handleAuthLost();
   }
