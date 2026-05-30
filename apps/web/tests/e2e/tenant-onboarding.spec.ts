@@ -11,6 +11,7 @@ import { expect, test } from "@playwright/test";
 test.describe("tenant onboarding @smoke", () => {
   test("the new-tenant form renders for unauthenticated visitors", async ({ page }) => {
     await page.goto("/tenants/new");
-    await expect(page.getByRole("heading", { name: /empresa|crear/i }).first()).toBeVisible();
+    await expect(page.getByLabel(/Nombre/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Continuar/i })).toBeVisible();
   });
 });
