@@ -239,7 +239,7 @@ async def test_confirm_signup_writes_user_registered_outbox_row(
     _wire_app: tuple[AsyncClient, RecordingEmailSender],
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Contract that sprint 07's outbox publisher will consume.
+    """Contract the future outbox publisher will consume.
 
     Locks the event_type, event_version, sentinel tenant_id, and the
     payload keys so any change to the wire shape forces an explicit

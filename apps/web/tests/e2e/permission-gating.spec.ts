@@ -20,11 +20,7 @@ test.describe("permission gating @smoke", () => {
   });
 });
 
-// Same caveat as member-management: the post-accept landing for the
-// invitee depends on the sprint-3.13 picker route guard interaction.
-// The scaffolding is in place to enable this when the routing
-// contract for "single empresa, just joined" is clarified.
-test.describe.skip("permission gating @critical", () => {
+test.describe("permission gating @critical", () => {
   test("owner sees Invitar; viewer does not", async ({ browser }) => {
     // Owner setup
     const ownerCtx = await browser.newContext();
@@ -43,15 +39,11 @@ test.describe.skip("permission gating @critical", () => {
     const viewerPage = await viewerCtx.newPage();
     await signupConfirmLogin(viewerPage, { email: viewerEmail });
     // The route auto-fires the accept mutation when the hash carries
-    // a token and the user is authenticated; no button click. After
-    // success, the sprint-3.13 route guard sends the viewer to
-    // /tenants to pick the empresa they just joined. Click into it.
+    // a token and the user is authenticated; no button click. The
+    // accept route sets the picker-confirmed flag itself, so we land
+    // on /dashboard directly.
     await viewerPage.goto(`/invitations/accept#t=${token}`);
-    await viewerPage.waitForURL(/\/(tenants|dashboard|empresa)/);
-    if (viewerPage.url().includes("/tenants")) {
-      await viewerPage.getByRole("button", { name: /Empresa/i }).first().click();
-      await viewerPage.waitForURL(/\/dashboard/);
-    }
+    await viewerPage.waitForURL(/\/dashboard/);
 
     // Viewer navigates to /empresa/users: the Invitar button is NOT
     // rendered (useHasPermission gates it on `members:invite`).

@@ -30,6 +30,7 @@ import { AuthLayout } from "@/features/auth/components/AuthLayout";
 import { useAcceptInvitationMutation } from "@/features/tenants/api/hooks";
 import { previewInvitation } from "@/features/tenants/api/endpoints";
 import { getAccessToken } from "@/api/tokenStore";
+import { setPickerConfirmed } from "@/lib/route-guard";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export const PENDING_INVITE_KEY = "nica-erp:pending-invite";
@@ -82,6 +83,11 @@ export function AcceptInvitationRoute() {
         setMode({ kind: "joining", token });
         acceptMut.mutate(token, {
           onSuccess: () => {
+            // Accepting a deep-link invitation is an explicit empresa
+            // pick — the operator confirmed they want THIS empresa by
+            // following the email. Set the picker-confirmed flag so
+            // the route guard does not bounce them to /tenants.
+            setPickerConfirmed();
             void navigate({ to: "/dashboard" });
           },
         });
@@ -127,6 +133,9 @@ export function AcceptInvitationRoute() {
     setPasteError(null);
     acceptMut.mutate(token, {
       onSuccess: () => {
+        // Pasting a token is an explicit empresa pick, same as the
+        // hash path above.
+        setPickerConfirmed();
         void navigate({ to: "/dashboard" });
       },
     });

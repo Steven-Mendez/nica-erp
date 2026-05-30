@@ -18,13 +18,7 @@ test.describe("member management @smoke", () => {
   });
 });
 
-// The two-context flow below is intentionally fixture-driven; the
-// post-accept landing assertion is loose because the sprint-3.13
-// picker route guard can interpose /tenants between accept and
-// /dashboard depending on the picker-confirmed session flag. The
-// meaningful assertion is that the owner observes the invitee
-// in /empresa/users after the accept round-trip completes.
-test.describe.skip("member management @critical", () => {
+test.describe("member management @critical", () => {
   test("owner invites a user; invitee accepts; both observe the member", async ({ browser }) => {
     const ownerContext = await browser.newContext();
     const ownerPage = await ownerContext.newPage();
@@ -47,14 +41,11 @@ test.describe.skip("member management @critical", () => {
     const inviteePage = await inviteeContext.newPage();
     await signupConfirmLogin(inviteePage, { email: inviteeEmail });
     // The route auto-fires the accept mutation when the hash carries a
-    // token and the user is authenticated; no button click. After
-    // success the sprint-3.13 route guard may interpose /tenants.
+    // token and the user is authenticated; no button click. The accept
+    // route sets the picker-confirmed flag itself, so we land on
+    // /dashboard directly.
     await inviteePage.goto(`/invitations/accept#t=${token}`);
-    await inviteePage.waitForURL(/\/(tenants|dashboard|empresa)/);
-    if (inviteePage.url().includes("/tenants")) {
-      await inviteePage.getByRole("button", { name: /Empresa/i }).first().click();
-      await inviteePage.waitForURL(/\/dashboard/);
-    }
+    await inviteePage.waitForURL(/\/dashboard/);
 
     // Owner reloads /empresa/users and observes the member on the
     // default Miembros tab (no longer pending).

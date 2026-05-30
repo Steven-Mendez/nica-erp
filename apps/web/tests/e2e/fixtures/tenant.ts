@@ -1,10 +1,10 @@
 // Tenant (empresa) fixtures for Playwright e2e specs.
 //
-// Drives the SPA through `/tenants/new` (sprint 3.12 wizard) using the
-// soft-creation path: only `name` is required. Tests that need a fully
-// fiscalized empresa can extend by stepping through the wizard's other
-// pages — the wizard primitives (Select, Checkbox, DatePicker) all
-// expose accessible labels we can hit by role.
+// Drives the SPA through `/tenants/new` using the soft-creation path:
+// only `name` is required. Tests that need a fully fiscalized empresa
+// can extend by stepping through the wizard's other pages — the
+// wizard primitives (Select, Checkbox, DatePicker) all expose
+// accessible labels we can hit by role.
 
 import type { Page } from "@playwright/test";
 
