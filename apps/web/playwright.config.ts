@@ -23,8 +23,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? "html" : "list",
+  ...(process.env.CI ? { workers: 2 } : {}),
   use: {
     baseURL,
     trace: "on-first-retry",
@@ -55,7 +55,7 @@ export default defineConfig({
           command: "pnpm dev",
           url: baseURL,
           reuseExistingServer: !process.env.CI,
-          timeout: 60_000,
+          timeout: 120_000,
         },
       }),
 });

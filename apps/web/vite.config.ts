@@ -11,6 +11,11 @@ export default defineConfig({
     },
   },
   server: {
+    // Pin to IPv4 loopback so Playwright's webServer block (which polls
+    // http://127.0.0.1:5173) matches the address Vite is actually
+    // listening on. Without this, Linux CI resolves the default
+    // `localhost` to ::1 and the smoke job times out.
+    host: "127.0.0.1",
     port: 5173,
   },
   build: {

@@ -58,7 +58,11 @@ jobs:
           cache-dependency-path: apps/web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - name: vitest integration lane (with coverage)
-        run: pnpm exec vitest run --project=integration --coverage
+        # Coverage thresholds in vite.config.ts are calibrated against the
+        # combined unit+integration run (see tests/integration/README.md
+        # "Coverage ratchet"); restricting to `--project=integration` here
+        # under-counts the floor and trips the gate.
+        run: pnpm exec vitest run --coverage
       - name: verification matrix
         run: pnpm test:matrix
       - name: upload verification matrix + lcov
