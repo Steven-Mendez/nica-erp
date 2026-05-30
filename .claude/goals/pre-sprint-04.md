@@ -73,9 +73,13 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
 - [x] 8. Create `apps/web/tests/e2e/fixtures/auth.ts` and `tenant.ts` per
   `openspec/changes/test-backfill-and-e2e-tooling/tasks.md` §8.3 (no API
   shortcuts — drive through the real signup/login UI).
-- [ ] 9. Ship the four missing Playwright specs (§9.2 onboarding, §9.3
+- [~] 9. Ship the four missing Playwright specs (§9.2 onboarding, §9.3
   member-management, §9.4 permission-gating, §9.5 rls-isolation). Each must
-  pass on Chromium in CI before being marked done.
+  pass on Chromium in CI before being marked done. **Partial**: all four
+  @smoke variants green; tenant-onboarding + rls-isolation @critical
+  green; member-management + permission-gating @critical scaffolded but
+  marked `test.describe.skip` pending a product decision on the
+  sprint-3.13 picker route-guard interaction during invitee accept.
 - [ ] 10. Execute manual verifiable-outcome for sprint 3.13 (`tasks.md`
   §7.1-§7.5 + §8.1). Capture any regression as a new task in this file.
 - [ ] 11. Execute manual verifiable-outcome for sprint 3.14 (`tasks.md`
@@ -132,3 +136,30 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   `E2E_PASSWORD` — drives the SPA through the real signup → confirm →
   login → welcome flow with no API shortcuts), `tenant.ts`
   (`createEmpresa`, `inviteMember`). Typecheck + lint clean.
+  Commit `e02a83e`.
+- 2026-05-30 — Task 9 PARTIAL. Rewrote the four specs
+  (`tenant-onboarding`, `member-management`, `permission-gating`,
+  `rls-isolation`) to use the fixtures. Final tally with the local
+  stack up:
+  - 4 @smoke variants — all green (entry-surface, no backend
+    needed).
+  - `tenant-onboarding @critical` — green (signup → welcome → create
+    empresa → /dashboard with empresa as active).
+  - `rls-isolation @critical` — green (two owners, two empresas,
+    user B's `/empresa/users` Invitaciones tab does not show user
+    A's pending invitee).
+  - `member-management @critical` and `permission-gating @critical`
+    — scaffolded via fixtures but marked `test.describe.skip`
+    pending a product call on what happens to the invitee after
+    `POST /v1/invitations/accept`: the route auto-fires the
+    mutation, navigate({to: "/dashboard"}) runs, then the
+    sprint-3.13 picker route guard interposes /tenants because
+    `sessionStorage["nica-erp:picker-confirmed"]` is unset on the
+    fresh invitee session. Need to decide: auto-set the flag when
+    the invitee accepts a deep-linked invitation, or have the test
+    walk through the picker. Recorded as carry-over below.
+  - Also fixed signup label collision (`getByLabel("Contraseña",
+    exact: true)`) + login field selection (`input#email` /
+    `input#password` to avoid the post-confirm DOM ghost), and
+    pivoted Playwright default `baseURL` from `127.0.0.1` to
+    `localhost` so the API's CORS allowlist accepts the preflight.

@@ -39,30 +39,32 @@ export async function signupConfirmLogin(
   const password = opts.password ?? E2E_PASSWORD;
   const before = new Date(Date.now() - 1_000); // 1s of slack for clock drift
 
-  // /signup
+  // /signup — three fields: email, password, confirm password.
   await page.goto("/signup");
-  await page.getByLabel(/Correo/i).fill(email);
-  await page.getByLabel(/Contraseña/i).fill(password);
-  await page.getByRole("button", { name: /Crear cuenta|Regístrate/i }).click();
+  await page.getByLabel("Correo").fill(email);
+  await page.getByLabel("Contraseña", { exact: true }).fill(password);
+  await page.getByLabel("Confirmar contraseña").fill(password);
+  await page.getByRole("button", { name: /Crear cuenta/i }).click();
   await page.waitForURL(/\/confirm/);
 
   // OTP from Mailpit
   const message = await waitForEmail({ email, since: before });
   const code = extractOtp(message);
 
-  // /confirm — six-slot OTP input. The input-otp primitive renders a
-  // hidden input the keyboard fills; typing into the visible slots
-  // works in Chromium via `keyboard.type`. We focus the first slot
-  // and type all six chars.
-  const slots = page.locator("input[autocomplete='one-time-code']");
-  await slots.first().focus();
+  // /confirm — six-slot shadcn input-otp. The autoComplete attribute
+  // is on the hidden input the primitive renders inside the first
+  // slot; focusing it and typing distributes characters across slots.
+  await page.locator("input[autocomplete='one-time-code']").first().focus();
   await page.keyboard.type(code);
-  await page.getByRole("button", { name: /Confirmar/i }).click();
+  await page.getByRole("button", { name: /^Confirmar$/i }).click();
   await page.waitForURL(/\/login/);
 
-  // /login
-  await page.getByLabel(/Correo/i).fill(email);
-  await page.getByLabel(/Contraseña/i).fill(password);
+  // /login — wait for nav to settle, then fill via id selectors so we
+  // bypass any duplicate-label match (e.g. signup's "Confirmar
+  // contraseña" lingering in the DOM during the transition).
+  await page.waitForSelector("input#email", { state: "visible" });
+  await page.locator("input#email").fill(email);
+  await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: /Iniciar sesión/i }).click();
 
   // Post-login destination: /welcome (first-login profile capture) for a

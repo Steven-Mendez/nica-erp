@@ -6,7 +6,7 @@
 // pages — the wizard primitives (Select, Checkbox, DatePicker) all
 // expose accessible labels we can hit by role.
 
-import { expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { waitForEmail, extractInviteToken } from "./mailpit";
 
@@ -17,16 +17,15 @@ export async function createEmpresa(
 ): Promise<{ name: string }> {
   const name = opts.name ?? `Empresa e2e ${Math.random().toString(36).slice(2, 8)}`;
 
-  // The picker (force-tenant-picker-and-back-link, sprint 3.13) forces
-  // /tenants on every fresh session. From there the "+ Nueva empresa"
-  // CTA opens /tenants/new.
+  // Navigate directly — /tenants/new is reachable from /onboarding
+  // (brand-new user, no memberships) and from /tenants (returning user
+  // via the "+ Nueva empresa" CTA). Skipping the in-between click keeps
+  // the fixture indifferent to which entry point the caller is on.
   if (!page.url().includes("/tenants/new")) {
-    await page.goto("/tenants");
-    await page.getByRole("link", { name: /Nueva empresa/i }).click();
-    await page.waitForURL(/\/tenants\/new/);
+    await page.goto("/tenants/new");
   }
 
-  await page.getByLabel(/Nombre/i).fill(name);
+  await page.getByLabel("Nombre", { exact: false }).fill(name);
   await page.getByRole("button", { name: /Saltar y crear|Crear empresa/i }).click();
 
   // Land on /dashboard once the wizard switches into the new empresa.
@@ -34,13 +33,21 @@ export async function createEmpresa(
   return { name };
 }
 
+/** Spanish labels for the role <Select> on /empresa/users (closed set). */
+const ROLE_OPTION_LABEL = {
+  viewer: /Visualizador/i,
+  salesperson: /Vendedor/i,
+  accountant: /Contador/i,
+  admin: /Administrador/i,
+} as const satisfies Record<string, RegExp>;
+
 /**
  * Invite a member from the active empresa context. Returns the
  * invitation token harvested from Mailpit.
  */
 export async function inviteMember(
   page: Page,
-  opts: { email: string; role?: "viewer" | "salesperson" | "accountant" | "admin" },
+  opts: { email: string; role?: keyof typeof ROLE_OPTION_LABEL },
 ): Promise<{ token: string }> {
   const before = new Date(Date.now() - 1_000);
 
@@ -49,11 +56,12 @@ export async function inviteMember(
   await page.getByLabel(/Correo/i).fill(opts.email);
   if (opts.role) {
     await page.getByLabel(/Rol/i).click();
-    await page.getByRole("option", { name: new RegExp(opts.role, "i") }).click();
+    await page.getByRole("option", { name: ROLE_OPTION_LABEL[opts.role] }).click();
   }
   await page.getByRole("button", { name: /Enviar invitación|Invitar/i }).click();
-  await expect(page.getByText(opts.email)).toBeVisible();
-
+  // Dialog closes once the POST returns; the invitee email lives under
+  // the Invitaciones tab, not the default Miembros one. The Mailpit
+  // round-trip below is the durable proof that the invite landed.
   const message = await waitForEmail({ email: opts.email, since: before });
   return { token: extractInviteToken(message) };
 }

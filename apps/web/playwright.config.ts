@@ -15,7 +15,10 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173";
+// localhost (not 127.0.0.1) so the CORS allowlist in the API
+// (default `http://localhost:5173`) accepts the preflight from
+// Playwright's browser during @critical specs.
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
 const skipWebServer = process.env.PLAYWRIGHT_NO_WEBSERVER === "1";
 
 export default defineConfig({
