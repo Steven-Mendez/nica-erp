@@ -70,7 +70,7 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   closure note. Path B — implement
   `PATCH /v1/tenants/{tenantId}/members/{userId}/permissions` + a minimal
   UI surface on `/empresa/users`.
-- [ ] 8. Create `apps/web/tests/e2e/fixtures/auth.ts` and `tenant.ts` per
+- [x] 8. Create `apps/web/tests/e2e/fixtures/auth.ts` and `tenant.ts` per
   `openspec/changes/test-backfill-and-e2e-tooling/tasks.md` §8.3 (no API
   shortcuts — drive through the real signup/login UI).
 - [ ] 9. Ship the four missing Playwright specs (§9.2 onboarding, §9.3
@@ -124,6 +124,11 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   section to `docs/adr/0022-rbac-model.md` documenting the decision.
   Also marked the `app.tenant_id` GUC requirement as landed in the
   same spec (the fix is in `accept_invitation.py:69-73`, covered by
-  e2e). Spec stays in the change folder as an inline reference; the
-  archived change preserves the original wording for future
-  re-promotion.
+  e2e). Commit `b744820`.
+- 2026-05-30 — Task 8 added three Playwright fixture files under
+  `apps/web/tests/e2e/fixtures/`: `mailpit.ts` (HTTP client over the
+  local Mailpit API, waits for emails, extracts OTP + invite tokens),
+  `auth.ts` (`signupConfirmLogin`, `logout`, `uniqueEmail`,
+  `E2E_PASSWORD` — drives the SPA through the real signup → confirm →
+  login → welcome flow with no API shortcuts), `tenant.ts`
+  (`createEmpresa`, `inviteMember`). Typecheck + lint clean.
