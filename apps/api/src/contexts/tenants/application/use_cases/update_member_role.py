@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from contexts.tenants.application.ports.outbound import MembershipRepository
 from contexts.tenants.domain import (
@@ -53,7 +53,11 @@ class UpdateMemberRole:
             membership.change_role(new_role=new_role)
             await self.membership_repository.update(membership)
             await self.outbox.append(
-                event_id=membership.id,
+                # Outbox primary key is the event_id. Two role changes on
+                # the same ``membership.id`` would otherwise collide;
+                # ``aggregate_id`` keeps the membership id so consumers
+                # can still correlate.
+                event_id=uuid4(),
                 event_type="tenants.MemberRoleChanged",
                 event_version=1,
                 aggregate_type="Membership",

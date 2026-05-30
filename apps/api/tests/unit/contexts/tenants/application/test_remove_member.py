@@ -75,3 +75,32 @@ async def test_remove_member_not_a_member_raises(
 
     with pytest.raises(NotAMemberError):
         await uc.execute(RemoveMemberCommand(tenant_id=seeded_tenant.id, target_user_id=uuid4()))
+
+
+async def test_remove_member_emits_unique_event_id_per_cycle(
+    fake_uow, membership_repo, outbox, seeded_tenant, fixed_now
+) -> None:
+    target = uuid4()
+    first = Membership.join(
+        user_id=target, tenant_id=seeded_tenant.id, role=Role.ACCOUNTANT, now=fixed_now
+    )
+    await membership_repo.add(first)
+    uc = RemoveMember(
+        uow=fake_uow,
+        membership_repository=membership_repo,
+        outbox=outbox,
+        now=lambda: fixed_now,
+    )
+    await uc.execute(RemoveMemberCommand(tenant_id=seeded_tenant.id, target_user_id=target))
+
+    second = Membership.join(
+        user_id=target, tenant_id=seeded_tenant.id, role=Role.ACCOUNTANT, now=fixed_now
+    )
+    # Replace the soft-deleted row with a fresh active membership reusing
+    # the same id, mirroring a re-invite → accept cycle.
+    membership_repo.rows[:] = [second]
+    await uc.execute(RemoveMemberCommand(tenant_id=seeded_tenant.id, target_user_id=target))
+
+    removed = [r for r in outbox.rows if r["event_type"] == "tenants.MemberRemoved"]
+    assert len(removed) == 2
+    assert removed[0]["event_id"] != removed[1]["event_id"]

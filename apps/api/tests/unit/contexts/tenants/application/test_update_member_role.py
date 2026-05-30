@@ -114,3 +114,32 @@ async def test_update_member_role_not_a_member_raises(
                 tenant_id=seeded_tenant.id, target_user_id=uuid4(), new_role="admin"
             )
         )
+
+
+async def test_update_member_role_emits_unique_event_id_per_change(
+    fake_uow, membership_repo, outbox, seeded_tenant, fixed_now
+) -> None:
+    target = uuid4()
+    member = Membership.join(
+        user_id=target, tenant_id=seeded_tenant.id, role=Role.VIEWER, now=fixed_now
+    )
+    await membership_repo.add(member)
+    uc = UpdateMemberRole(
+        uow=fake_uow,
+        membership_repository=membership_repo,
+        outbox=outbox,
+        now=lambda: fixed_now,
+    )
+
+    await uc.execute(
+        UpdateMemberRoleCommand(
+            tenant_id=seeded_tenant.id, target_user_id=target, new_role="accountant"
+        )
+    )
+    await uc.execute(
+        UpdateMemberRoleCommand(tenant_id=seeded_tenant.id, target_user_id=target, new_role="admin")
+    )
+
+    changes = [r for r in outbox.rows if r["event_type"] == "tenants.MemberRoleChanged"]
+    assert len(changes) == 2
+    assert changes[0]["event_id"] != changes[1]["event_id"]

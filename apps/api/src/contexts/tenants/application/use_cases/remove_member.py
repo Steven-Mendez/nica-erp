@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from contexts.tenants.application.ports.outbound import MembershipRepository
 from contexts.tenants.domain import (
@@ -47,7 +47,11 @@ class RemoveMember:
             membership.remove(now=now)
             await self.membership_repository.update(membership)
             await self.outbox.append(
-                event_id=membership.id,
+                # Outbox primary key is the event_id. A remove → re-invite
+                # → remove cycle on the same ``membership.id`` would
+                # otherwise collide; ``aggregate_id`` keeps the membership
+                # id so consumers can still correlate.
+                event_id=uuid4(),
                 event_type="tenants.MemberRemoved",
                 event_version=1,
                 aggregate_type="Membership",
