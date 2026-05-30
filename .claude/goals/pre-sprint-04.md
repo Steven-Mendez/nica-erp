@@ -64,7 +64,7 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   `openspec/changes/complete-web-tailwind-v4-migration/tasks.md` (28 tasks);
   the gate is `rm -rf node_modules pnpm-lock.yaml && pnpm install && pnpm
   -C apps/web build` succeeding from a clean state.
-- [ ] 7. Decision on per-user permission overrides: take one path.
+- [x] 7. Decision on per-user permission overrides: take one path.
   Path A — remove the section from `tenants-http/spec.md`, append a
   paragraph to ADR-0022 explaining the decision, and update sprint 3.14's
   closure note. Path B — implement
@@ -116,4 +116,14 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   because the only open task is AWS post-deploy verification or browser
   smoke). Appended one-paragraph "Carry-over (2026-05-30)" sections to
   the proposals of the 10 active changes below 95% so the blocker is
-  inline-readable.
+  inline-readable. Commit `9d99693`.
+- 2026-05-30 — Task 7 took Path A. Dropped the per-user permission
+  overrides requirement from
+  `openspec/changes/restructure-sidebar-empresa-and-account/specs/tenants-http/spec.md`;
+  appended an "Addendum (2026-05-30) — Per-user permission overrides"
+  section to `docs/adr/0022-rbac-model.md` documenting the decision.
+  Also marked the `app.tenant_id` GUC requirement as landed in the
+  same spec (the fix is in `accept_invitation.py:69-73`, covered by
+  e2e). Spec stays in the change folder as an inline reference; the
+  archived change preserves the original wording for future
+  re-promotion.

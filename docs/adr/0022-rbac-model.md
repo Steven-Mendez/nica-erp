@@ -108,3 +108,10 @@ Full permission catalog and per-role mapping in [06-security-model.md §Authoriz
 - The role-permission matrix grows past ~150 permissions — flat catalog becomes unmanageable.
 - 60-second cache propagation becomes unacceptable due to a permission revocation requirement.
 - An audit identifies an enumeration leak from the 403/404 split.
+
+## Addendum (2026-05-30) — Per-user permission overrides
+Sprint 3.14 spec'd `PATCH /v1/tenants/{id}/members/{user_id}/permissions` and a `tenant_member_permissions` table to grant or revoke individual permissions per member without changing their role, but never implemented the endpoint or the UI. The spec lived under `openspec/changes/restructure-sidebar-empresa-and-account/specs/tenants-http/spec.md`.
+
+**Decision**: drop the override surface from the MVP. The `Empresa → Usuarios` page exposes role changes only. SMBs in Nicaragua choose between five roles; the operator feedback that drove sprint 3.14 was about *where* to manage members, not about granular per-permission grants. The existing "Out of MVP" bullet "Per-instance permissions" already covers this case; this addendum makes the deferral explicit so the spec file can be deleted without losing the rationale.
+
+**If reopened**: the spec text remains in the archived change (`openspec/changes/restructure-sidebar-empresa-and-account/`) and matches the canonical RBAC shape (catalog code + RLS-protected table + 60s-cache invalidation via row `created_at`). Re-promote it when a production tenant requests granular grants.
