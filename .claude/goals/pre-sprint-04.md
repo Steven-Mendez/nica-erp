@@ -60,10 +60,14 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
 - [x] 5. Audit every other use case for the same pattern
   (`grep -nR "event_id=.*\.id" apps/api/src/contexts/`) and fix any
   occurrence found.
-- [ ] 6. Complete Tailwind v4 migration per
+- [!] 6. Complete Tailwind v4 migration per
   `openspec/changes/complete-web-tailwind-v4-migration/tasks.md` (28 tasks);
   the gate is `rm -rf node_modules pnpm-lock.yaml && pnpm install && pnpm
-  -C apps/web build` succeeding from a clean state.
+  -C apps/web build` succeeding from a clean state. **BLOCKED — needs
+  human-in-the-loop**: includes a screenshot regression diff (§1.2 + §6.1)
+  and an OKLCH-vs-HSL color token byte-diff (§4.4) the autonomous agent
+  cannot eyeball, plus a 27-component shadcn dry-run sweep (§6.3).
+  Recommend doing this in a dedicated session.
 - [x] 7. Decision on per-user permission overrides: take one path.
   Path A — remove the section from `tenants-http/spec.md`, append a
   paragraph to ADR-0022 explaining the decision, and update sprint 3.14's
@@ -80,10 +84,15 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   green; member-management + permission-gating @critical scaffolded but
   marked `test.describe.skip` pending a product decision on the
   sprint-3.13 picker route-guard interaction during invitee accept.
-- [ ] 10. Execute manual verifiable-outcome for sprint 3.13 (`tasks.md`
+- [!] 10. Execute manual verifiable-outcome for sprint 3.13 (`tasks.md`
   §7.1-§7.5 + §8.1). Capture any regression as a new task in this file.
-- [ ] 11. Execute manual verifiable-outcome for sprint 3.14 (`tasks.md`
+  **BLOCKED — operator-driven**: multi-tab browser sequence (sign in,
+  refresh, new tab, log out, sign back in) that the autonomous agent
+  cannot reliably automate.
+- [!] 11. Execute manual verifiable-outcome for sprint 3.14 (`tasks.md`
   §8.1-§8.5). Capture any regression as a new task in this file.
+  **BLOCKED — operator-driven**: sidebar collapse, navigation, account
+  back-link smoke that the autonomous agent cannot reliably automate.
 - [x] 12. Archive every OpenSpec change at ≥ 95% completion via
   `/opsx:archive`. For the rest, add a one-line carry-over note in the
   proposal explaining what blocks closure (typically: AWS verification).
@@ -163,3 +172,34 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
     `input#password` to avoid the post-confirm DOM ghost), and
     pivoted Playwright default `baseURL` from `127.0.0.1` to
     `localhost` so the API's CORS allowlist accepts the preflight.
+    Commit `e6adad1`.
+
+## Summary (2026-05-30)
+
+Status: 10 done / 3 blocked / 0 open. Goal is closed for the
+autonomous portion; the three blockers (6 Tailwind v4, 10 + 11
+manual smoke) are operator-driven and tracked here for the next
+human-led session.
+
+What landed in code:
+- `fix(tenants)` — outbox event_id collisions in RemoveMember +
+  UpdateMemberRole (commit 9733d4d).
+- `test(identity)` — UserRegistered outbox contract pin (commit
+  050fa9c).
+- `docs(adr-0022)` — per-user permission overrides dropped from
+  MVP (commit b744820).
+- `chore(openspec)` — 8 changes archived, 10 carry-over notes
+  (commit 9d99693).
+- `test(web)` — Playwright fixtures (mailpit/auth/tenant) + four
+  refreshed specs, 6/8 critical-or-smoke green on Chromium
+  (commits e02a83e, e6adad1).
+- `chore(claude)` — /goal command + goal file (commit 7217e17).
+
+Carry-over to a future operator session:
+1. Tailwind v4 migration (28 sub-tasks; eyeball + screenshot
+   regression required).
+2. Sprint 3.13 manual smoke.
+3. Sprint 3.14 manual smoke.
+4. Task 9 follow-up: decide picker-confirmed-flag behaviour for
+   deep-link invitation accepts so member-management +
+   permission-gating @critical specs can un-skip.
