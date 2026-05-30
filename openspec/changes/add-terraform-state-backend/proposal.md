@@ -152,3 +152,7 @@ shared state to coordinate against.
   `run-migrations.sh`, `check-credentials.sh`, `deploy-web.sh`,
   `confirm-destroy.sh` and the AWS-vs-local CORS toggle
   (`add-deploy-destroy-automation`).
+
+## Carry-over (2026-05-30)
+
+Blocked on AWS account verification. The implementation tasks are complete; the only remaining checklist items are the post-deploy curl/plan/destroy verifications that require a live AWS account. Resume when the account clears.

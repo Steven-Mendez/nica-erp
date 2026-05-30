@@ -149,3 +149,7 @@ operator can return to the picker without thinking about it.
   empresa logos / avatars beyond the two-letter initials, and any
   RBAC change. Those land under separate proposals if the
   operator requests them after this picker ships.
+
+## Carry-over (2026-05-30)
+
+Blocked on operator browser smoke (multi-tab, sign in / sign out, sidebar navigation). Code + unit tests landed; manual verification items are tracked as pre-sprint-04 tasks 10 and 11.

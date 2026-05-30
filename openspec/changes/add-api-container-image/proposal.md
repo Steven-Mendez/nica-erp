@@ -107,3 +107,7 @@ SHA instead of `unknown`.
   (`add-deploy-destroy-automation`); CI publishing of the image
   ([ADR-0023](../../../docs/adr/0023-no-ci-cd-mvp.md) — no CI/CD in
   the MVP).
+
+## Carry-over (2026-05-30)
+
+Blocked on AWS account verification. The implementation tasks are complete; the only remaining checklist items are the post-deploy curl/plan/destroy verifications that require a live AWS account. Resume when the account clears.

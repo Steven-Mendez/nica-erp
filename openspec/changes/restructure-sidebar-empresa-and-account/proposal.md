@@ -241,3 +241,7 @@ permission catalog) and what the SPA exposes to operators today.
   - Audit log of role changes / removals.
   - Re-invite flow when a member was removed and the operator
     wants to invite the same email again.
+
+## Carry-over (2026-05-30)
+
+Blocked on operator browser smoke (multi-tab, sign in / sign out, sidebar navigation). Code + unit tests landed; manual verification items are tracked as pre-sprint-04 tasks 10 and 11.

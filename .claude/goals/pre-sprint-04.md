@@ -80,7 +80,7 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   §7.1-§7.5 + §8.1). Capture any regression as a new task in this file.
 - [ ] 11. Execute manual verifiable-outcome for sprint 3.14 (`tasks.md`
   §8.1-§8.5). Capture any regression as a new task in this file.
-- [ ] 12. Archive every OpenSpec change at ≥ 95% completion via
+- [x] 12. Archive every OpenSpec change at ≥ 95% completion via
   `/opsx:archive`. For the rest, add a one-line carry-over note in the
   proposal explaining what blocks closure (typically: AWS verification).
 - [x] 13. Add an integration test asserting that `confirm-signup` writes
@@ -109,4 +109,11 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
 - 2026-05-30 — Task 13 added `test_confirm_signup_writes_user_registered_outbox_row`
   to `tests/e2e/contexts/identity/test_auth_flow.py`. Pins event_type,
   event_version, tenant_id sentinel, aggregate_type, payload keys so the
-  sprint-07 publisher contract can't drift silently.
+  sprint-07 publisher contract can't drift silently. Commit `050fa9c`.
+- 2026-05-30 — Task 12 archived 8 OpenSpec changes (5 at 100% +
+  add-multi-tenancy-and-rbac, add-identity-context,
+  add-frontend-dashboard-shell at ≥96% via --no-validate --skip-specs
+  because the only open task is AWS post-deploy verification or browser
+  smoke). Appended one-paragraph "Carry-over (2026-05-30)" sections to
+  the proposals of the 10 active changes below 95% so the blocker is
+  inline-readable.

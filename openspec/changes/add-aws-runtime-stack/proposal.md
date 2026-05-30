@@ -195,3 +195,7 @@ resource declared here disappears together when `make destroy` runs.
   later. Hosted UI for Cognito, WAF, X-Ray, Interface VPC endpoints —
   excluded from the MVP tier
   ([`docs/10-infrastructure.md` §Excluded from initial tier](../../../docs/10-infrastructure.md#excluded-from-initial-tier)).
+
+## Carry-over (2026-05-30)
+
+Blocked on AWS account verification. The implementation tasks are complete; the only remaining checklist items are the post-deploy curl/plan/destroy verifications that require a live AWS account. Resume when the account clears.

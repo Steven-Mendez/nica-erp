@@ -94,3 +94,7 @@ Reference: [`docs/sprints/03-tenants-and-rls.md` — Sprint follow-up — Test b
   - `Makefile`
 - Affected docs: the sprint 3.5 follow-up section appended to
   [`docs/sprints/03-tenants-and-rls.md`](../../../docs/sprints/03-tenants-and-rls.md).
+
+## Carry-over (2026-05-30)
+
+Superseded by goal `.claude/goals/pre-sprint-04.md` tasks 8 (Playwright fixtures) and 9 (the four remaining specs). Backend + frontend unit/integration coverage from this change is complete; the e2e and 5 route-render gaps remain.

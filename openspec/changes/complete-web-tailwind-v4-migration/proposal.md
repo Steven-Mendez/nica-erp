@@ -111,3 +111,7 @@ will be amended in a follow-up to record the v4 + radix-mira decision).
   current names and OKLCH values — only their declaration site moves.
 - **No new ADR for shadcn registry style.** A short amendment to ADR-0009 is
   enough; a full new ADR is scope creep.
+
+## Carry-over (2026-05-30)
+
+Tracked as goal `.claude/goals/pre-sprint-04.md` task 6. Bloqueante para sprint 04 — el build runtime depende de `@tailwindcss/postcss` resuelto transitivamente; un `pnpm install` limpio rompe el build hasta que la migración cierre.

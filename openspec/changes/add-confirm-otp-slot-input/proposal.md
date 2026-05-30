@@ -91,3 +91,7 @@ string. No backend, no API contract, no other routes.
   stack](../../../docs/adr/0009-frontend-stack.md) (shadcn/ui is
   the chosen primitive library); picking a specific shadcn
   component is not an architectural decision.
+
+## Carry-over (2026-05-30)
+
+Blocked on mobile-device smoke (iOS Safari + Android Chrome confirming the SMS autofill chip fills all six OTP slots) and the merge PR. Frontend implementation is complete and covered by vitest.

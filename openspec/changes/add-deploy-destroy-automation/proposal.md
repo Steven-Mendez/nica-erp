@@ -203,3 +203,7 @@ commands from a clean account:
   the MVP); CloudFront cache invalidation strategies beyond `/*`
   on every web deploy (could optimise later); rollback automation
   beyond redeploying a previous image tag manually.
+
+## Carry-over (2026-05-30)
+
+Blocked on AWS account verification. The implementation tasks are complete; the only remaining checklist items are the post-deploy curl/plan/destroy verifications that require a live AWS account. Resume when the account clears.

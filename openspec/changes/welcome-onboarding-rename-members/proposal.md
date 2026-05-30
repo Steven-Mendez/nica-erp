@@ -171,3 +171,7 @@ References:
 - No new bounded context. All backend changes live in the
   `identity` and `tenants` contexts already shipped.
 - No member-bulk-invite / CSV-import flow.
+
+## Carry-over (2026-05-30)
+
+Three frontend test files remain (organizations-list, invitation-accept Playwright, member-role-change Playwright). Tracked by goal `.claude/goals/pre-sprint-04.md` task 9.
