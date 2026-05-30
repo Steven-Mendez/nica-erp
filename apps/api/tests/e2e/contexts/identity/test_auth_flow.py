@@ -235,6 +235,52 @@ async def test_patch_me_rejects_unknown_field(
 
 
 @pytest.mark.e2e
+async def test_confirm_signup_writes_user_registered_outbox_row(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Contract that sprint 07's outbox publisher will consume.
+
+    Locks the event_type, event_version, sentinel tenant_id, and the
+    payload keys so any change to the wire shape forces an explicit
+    update to the publisher contract — not a silent one.
+    """
+
+    client, email = _wire_app
+    register = await client.post(
+        "/v1/auth/register",
+        json={"email": "outbox-contract@example.com", "password": _PASSWORD},
+    )
+    assert register.status_code == 201
+    code = _extract_code(email.sent[-1].text)
+    confirm = await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "outbox-contract@example.com", "code": code},
+    )
+    assert confirm.status_code == 204
+
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT event_type, event_version, tenant_id, aggregate_type, "
+                    "payload FROM outbox WHERE event_type = :t"
+                ),
+                {"t": "identity.UserRegistered"},
+            )
+        ).all()
+
+    assert len(rows) == 1, rows
+    (event_type, event_version, tenant_id, aggregate_type, payload) = rows[0]
+    assert event_type == "identity.UserRegistered"
+    assert event_version == 1
+    assert str(tenant_id) == "00000000-0000-0000-0000-000000000000"
+    assert aggregate_type == "User"
+    assert set(payload.keys()) == {"user_id", "email", "registered_at"}
+    assert payload["email"] == "outbox-contract@example.com"
+
+
+@pytest.mark.e2e
 async def test_login_with_wrong_password_returns_problem_detail(
     _wire_app: tuple[AsyncClient, RecordingEmailSender],
 ) -> None:

@@ -83,7 +83,7 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
 - [ ] 12. Archive every OpenSpec change at ≥ 95% completion via
   `/opsx:archive`. For the rest, add a one-line carry-over note in the
   proposal explaining what blocks closure (typically: AWS verification).
-- [ ] 13. Add an integration test asserting that `confirm-signup` writes
+- [x] 13. Add an integration test asserting that `confirm-signup` writes
   exactly one row to `outbox` with `event_type='identity.UserRegistered v1'`
   and a valid `tenant_id` (sentinel UUID for global events per sprint 02).
   This is the contract surface sprint 07's publisher will consume.
@@ -105,4 +105,8 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
   comment) and added regression unit tests
   (`test_remove_member_emits_unique_event_id_per_cycle`,
   `test_update_member_role_emits_unique_event_id_per_change`). 9/9 unit
-  tests pass.
+  tests pass. Commit `9733d4d`.
+- 2026-05-30 — Task 13 added `test_confirm_signup_writes_user_registered_outbox_row`
+  to `tests/e2e/contexts/identity/test_auth_flow.py`. Pins event_type,
+  event_version, tenant_id sentinel, aggregate_type, payload keys so the
+  sprint-07 publisher contract can't drift silently.
