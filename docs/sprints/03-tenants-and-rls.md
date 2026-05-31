@@ -1419,3 +1419,117 @@ the major remaining gaps. They are tracked in
 auth Playwright spec (§9.1) is green; the tenant + member
 lifecycle specs need the per-context-fixtures + auth helpers
 landed in §8.3 before they unblock.
+
+## Sprint follow-up — Invited-user onboarding lands session-ready (sprint 3.15, 2026-05-31)
+
+The invited-user happy path captured during a pilot run still
+asks the user to re-type the password they just typed seconds
+ago on `/signup`, and then bounces them through the empresa
+picker even though they only have one membership. The terminal
+log made both detours explicit:
+
+```
+POST /v1/auth/register      201
+POST /v1/auth/confirm-signup 204    # no tokens
+POST /v1/auth/login          200    # forced re-entry of credentials
+POST /v1/invitations/accept  200    # membership created
+GET  /v1/tenants/<id>/invitations 403   # JWT lacks active_tenant
+POST /v1/tenants/<id>/switch 200    # JWT finally has active_tenant
+```
+
+Both detours are redundant: at the moment each endpoint runs,
+the backend already has everything it needs to leave the caller
+in the next session state. Sprint 3.15 closes the gap on the
+two endpoints, gated by [ADR-0035](../adr/0035-onboarding-endpoints-return-session.md).
+
+Sprint 3.15 is a contract enrichment on two endpoints + the
+matching frontend wiring + the E2E coverage the original sprint
+left as `.fixme()`. No new bounded context, no DB migration, no
+infra change.
+
+### Scope
+
+- `POST /v1/auth/confirm-signup` accepts an optional `password`
+  in its body. When present, the use case confirms the code and
+  calls `IdentityProvider.authenticate` in the same transaction,
+  returning `200 OK` with `{ access_token, refresh_token, id_token }`.
+  When absent, the endpoint keeps its current `204 No Content`
+  shape so a bare `confirm` (e.g. after a `/confirm` page refresh
+  that lost the password from router state) still works.
+- `POST /v1/invitations/accept` accepts an optional `refresh_token`
+  in its body. After persisting the `Membership`, if the caller's
+  validated `CurrentUserContext` has no prior `custom:active_tenant`,
+  the use case calls `IdentityProvider.update_active_tenant`
+  followed by `IdentityProvider.refresh(refresh_token)` and
+  returns the new bundle inside an optional `tokens` field. When
+  the caller already had an `active_tenant`, the existing response
+  shape is preserved and no token rotation happens (a veteran
+  user joining a second empresa stays inside the empresa they
+  were working on — see [ADR-0035](../adr/0035-onboarding-endpoints-return-session.md)
+  Alternative C).
+- `apps/web/src/routes/signup.tsx` passes the typed password to
+  `/confirm` via TanStack Router state (in-memory, lost on hard
+  refresh — that is the documented fallback).
+- `apps/web/src/routes/confirm.tsx` reads `password` from router
+  state. When present, it posts to `confirm-signup` with the
+  password and calls `storeTokens()` + invalidates `meQueryKey`
+  on success; when absent it falls back to the current `/login`
+  navigation.
+- `apps/web/src/features/tenants/api/endpoints.ts` posts
+  `{ token, refresh_token }` to `/v1/invitations/accept` and, on
+  responses that include `tokens`, calls `storeTokens()` before
+  invalidating `meQueryKey` and `myTenantsKey`. The route guard
+  then lets the user through directly to `/dashboard` without
+  the empresa picker detour.
+
+### Out of scope
+
+- No change to `POST /v1/tenants` (first-empresa creation) — it
+  keeps its current shape; the same user flow there ends with an
+  explicit `POST /v1/tenants/{id}/switch` and the established
+  empresa-picker UX.
+- No change to `POST /v1/auth/password/reset` — landing back at
+  `/login` after a reset is the documented behaviour.
+- No persistence of the typed password beyond TanStack Router
+  in-memory state. `sessionStorage` and `localStorage` are off
+  the table per the JS-memory-only token policy in
+  [`docs/06-security-model.md` §Refresh and revocation](../06-security-model.md#refresh-and-revocation).
+
+### Gate tests
+
+- Backend integration: `confirm-signup` returns tokens when the
+  body includes a valid password and returns `204` when it does
+  not. Both branches assert no side effect on the user aggregate
+  beyond the existing confirmed-signup expectations.
+- Backend integration: `accept-invitation` returns `tokens` when
+  the caller had no prior `active_tenant` and the new JWT
+  contains `custom:active_tenant=<invited tenant>`. The same
+  endpoint omits `tokens` when the caller already had an
+  `active_tenant`, and `GET /v1/me` after the call shows the
+  pre-existing empresa unchanged.
+- Frontend E2E
+  (`apps/web/tests/e2e/invitation-accept.spec.ts`): the
+  invited-new-user happy path runs end to end — owner invites,
+  invitee opens the email link, previews, signs up, confirms,
+  lands on `/dashboard` of the invited empresa without re-typing
+  credentials and without passing through the empresa picker.
+  The current `.fixme()` marker is removed.
+- Frontend E2E (new): veteran user accepting an invitation to a
+  second empresa stays inside their original empresa after the
+  accept call returns. The picker is **not** displayed.
+- Frontend E2E (new): refreshing `/confirm` between `/signup`
+  and code entry loses the password from router state. The
+  fallback path navigates to `/login` and the user types their
+  credentials there. No console error, no broken intermediate
+  state.
+
+### References
+
+- [ADR-0035](../adr/0035-onboarding-endpoints-return-session.md) —
+  the policy for terminal onboarding endpoints.
+- [ADR-0031](../adr/0031-invitation-token-transport.md) — hash
+  fragment transport (unchanged; this sprint reuses the existing
+  `/v1/invitations/accept` POST body shape).
+- Sprint 02 §Endpoints — the `confirm-signup` endpoint owned by
+  the `identity` context; this sprint extends its request body
+  shape only.

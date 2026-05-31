@@ -33,6 +33,7 @@ from contexts.tenants.adapters.inbound.http.dependencies import (
 )
 from contexts.tenants.adapters.inbound.http.schemas import (
     AcceptInvitationResponse,
+    AcceptInvitationTokenBundle,
     AuthorizationDgiPayload,
     CreateInvitationRequest,
     CreateTenantRequest,
@@ -429,14 +430,20 @@ public_router = APIRouter()
 class AcceptInvitationByBodyRequest(BaseModel):
     """Body shape for the hash-fragment-safe accept endpoint.
 
-    See ``docs/adr/0031-invitation-token-transport.md``: the SPA reads
-    the token from ``location.hash``, strips it via
+    The SPA reads the token from ``location.hash``, strips it via
     ``history.replaceState``, then POSTs the token here so it never
     appears in server logs / Referer headers.
+
+    ``refresh_token`` is optional: when the caller has no prior
+    ``custom:active_tenant`` claim and supplies one here, the endpoint
+    rotates the caller's session so the new membership's tenant is
+    immediately active without a follow-up
+    ``POST /v1/tenants/{id}/switch`` round-trip.
     """
 
     model_config = ConfigDict(extra="forbid")
     token: str = Field(min_length=1)
+    refresh_token: str | None = Field(default=None, min_length=1)
 
 
 class InvitationPreviewResponse(BaseModel):
@@ -458,10 +465,26 @@ async def accept_invitation_by_body(
     current_user: CurrentUser = Depends(get_current_user),
     uc: AcceptInvitation = Depends(get_accept_invitation),
 ) -> AcceptInvitationResponse:
+    # The decision to rotate is taken from the validated
+    # `CurrentUser.active_tenant` (sourced from the bearer token), not
+    # from any field in the request body — see the use case for why.
     result = await uc.execute(
-        AcceptInvitationCommand(token=body.token, user_id=current_user.user_id)
+        AcceptInvitationCommand(
+            token=body.token,
+            user_id=current_user.user_id,
+            external_sub=current_user.external_sub,
+            prior_active_tenant=current_user.active_tenant,
+            refresh_token=body.refresh_token,
+        )
     )
-    return AcceptInvitationResponse(tenant_id=result.tenant_id, role=result.role)
+    tokens: AcceptInvitationTokenBundle | None = None
+    if result.tokens is not None:
+        tokens = AcceptInvitationTokenBundle(
+            access_token=result.tokens.access_token,
+            refresh_token=result.tokens.refresh_token,
+            id_token=result.tokens.id_token,
+        )
+    return AcceptInvitationResponse(tenant_id=result.tenant_id, role=result.role, tokens=tokens)
 
 
 @public_router.get(

@@ -35,7 +35,7 @@ import {
   previewInvitation,
   type AcceptInvitationResult,
 } from "@/features/tenants/api/endpoints";
-import { getAccessToken } from "@/api/tokenStore";
+import { getAccessToken, getRefreshToken, setTokens } from "@/api/tokenStore";
 import { setPickerConfirmed } from "@/lib/route-guard";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
@@ -79,7 +79,12 @@ function ensureAccept(token: string): InflightEntry {
     entry.status = next;
     for (const l of entry.listeners) l(next);
   };
-  void acceptInvitation(token).then(
+  // Snapshot the refresh token at request time so the backend can
+  // rotate the session if this is the user's first membership. The
+  // returned `tokens` field is non-null only in that case; veteran
+  // users get `tokens=null` and keep their current empresa.
+  const refresh = getRefreshToken();
+  void acceptInvitation(token, refresh).then(
     (result) => fire({ kind: "success", result }),
     (error: unknown) => fire({ kind: "error", error }),
   );
@@ -208,16 +213,25 @@ export function AcceptInvitationRoute() {
   // of how many times the component has been mounted in between.
   useEffect(() => {
     if (acceptStatus.kind !== "success") return;
+    // First-membership invitees receive rotated tokens with the new
+    // `active_tenant` claim baked in. Store them BEFORE invalidating
+    // /me so the refetch hits the API with the new bearer and reads
+    // back the freshly-set empresa, not the stale "no active tenant"
+    // shape.
+    const tokens = acceptStatus.result.tokens;
+    if (tokens != null) {
+      setTokens({
+        access: tokens.access_token,
+        refresh: tokens.refresh_token,
+        id: tokens.id_token,
+      });
+    }
     // Accepting (via deep link or paste) is an explicit empresa pick
     // — the operator confirmed they want THIS empresa. Set the
     // picker-confirmed flag so the route guard does not bounce them
     // to /tenants on the next render.
     setPickerConfirmed();
     void qc.invalidateQueries({ queryKey: myTenantsKey });
-    // Invalidate /v1/me too — the backend assigns `active_tenant` on
-    // accept when this is the user's first membership, and the route
-    // guard's "needs an active tenant" probe would otherwise bounce
-    // the user to /tenants on the very next navigation.
     void qc.invalidateQueries({ queryKey: meQueryKey });
     // Drop the in-flight entry once the result has been consumed so
     // a second invitation in the same browser session starts fresh.

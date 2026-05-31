@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from contexts.identity.application.constants import SYSTEM_GLOBAL_TENANT_ID
+from contexts.identity.application.ports.outbound import Identity
 from contexts.identity.application.use_cases.confirm_signup import ConfirmSignup
 from contexts.identity.domain.events import (
     IDENTITY_USER_REGISTERED_EVENT_TYPE,
@@ -87,3 +88,49 @@ async def test_confirm_signup_outbox_failure_rolls_back(fake_uow: FakeUow) -> No
     assert fake_uow.begin_count == 1
     assert fake_uow.rolled_back is True
     assert fake_uow.committed is False
+
+
+async def test_execute_without_password_returns_none(fake_uow: FakeUow) -> None:
+    idp = AsyncMock()
+    idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
+
+    use_case = ConfirmSignup(
+        identity_provider=idp,
+        user_repository=AsyncMock(),
+        outbox_writer=AsyncMock(),
+        uow=fake_uow,
+        now=_fixed_now,
+    )
+
+    result = await use_case.execute(email="a@b.io", code="123456")
+
+    assert result is None
+    idp.authenticate.assert_not_awaited()
+
+
+async def test_execute_with_password_returns_identity_bundle(fake_uow: FakeUow) -> None:
+    idp = AsyncMock()
+    idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
+    bundle = Identity(
+        sub="11111111-1111-1111-1111-111111111111",
+        email="a@b.io",
+        access_token="access",
+        refresh_token="refresh",
+        id_token="id",
+    )
+    idp.authenticate.return_value = bundle
+
+    use_case = ConfirmSignup(
+        identity_provider=idp,
+        user_repository=AsyncMock(),
+        outbox_writer=AsyncMock(),
+        uow=fake_uow,
+        now=_fixed_now,
+    )
+
+    result = await use_case.execute(email="a@b.io", code="123456", password="Demo1234!@")
+
+    assert result is bundle
+    idp.confirm_signup.assert_awaited_once_with(email="a@b.io", code="123456")
+    idp.authenticate.assert_awaited_once_with(email="a@b.io", password="Demo1234!@")
+    assert fake_uow.committed is True

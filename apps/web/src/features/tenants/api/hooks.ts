@@ -4,6 +4,7 @@
 // without colliding keys.
 
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -58,11 +59,18 @@ export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> 
     enabled: tenantId !== "",
   });
 
+// `placeholderData: keepPreviousData` keeps the table populated while a
+// refetch (e.g. after a mutation, or when future server-side filter/page
+// keys produce a new queryKey) is in flight, instead of flashing the empty
+// skeleton. It does *not* survive `queryClient.clear()` on tenant switch
+// — that's intentional, we don't want to show stale rows from the wrong
+// empresa.
 export const useMembersQuery = (tenantId: string): UseQueryResult<Member[], Error> =>
   useQuery({
     queryKey: membersKey(tenantId),
     queryFn: () => listMembers(tenantId),
     enabled: tenantId !== "",
+    placeholderData: keepPreviousData,
   });
 
 export const useInvitationsQuery = (tenantId: string): UseQueryResult<Invitation[], Error> =>
@@ -70,6 +78,7 @@ export const useInvitationsQuery = (tenantId: string): UseQueryResult<Invitation
     queryKey: invitationsKey(tenantId),
     queryFn: () => listInvitations(tenantId),
     enabled: tenantId !== "",
+    placeholderData: keepPreviousData,
   });
 
 export const useCreateTenantMutation = (): UseMutationResult<Tenant, Error, CreateTenantInput> => {
@@ -149,7 +158,7 @@ export const useAcceptInvitationMutation = (): UseMutationResult<
 > => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: acceptInvitation,
+    mutationFn: (token: string) => acceptInvitation(token),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: myTenantsKey });
     },

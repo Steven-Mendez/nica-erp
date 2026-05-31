@@ -70,9 +70,13 @@ export const register = async (body: RegisterInput): Promise<Schemas["RegisterRe
   return expectData("POST /v1/auth/register", result);
 };
 
-export const confirmSignup = async (body: ConfirmSignupInput): Promise<void> => {
+export const confirmSignup = async (body: ConfirmSignupInput): Promise<TokenBundle | null> => {
   const result = await api.POST("/v1/auth/confirm-signup", { body });
-  expectVoid("POST /v1/auth/confirm-signup", result);
+  if (result.error !== undefined) {
+    throw new ApiError("POST /v1/auth/confirm-signup", result.response.status, result.error);
+  }
+  // 200 with body → token bundle; 204 No Content → null.
+  return result.data ?? null;
 };
 
 export const resendCode = async (body: ResendCodeInput): Promise<void> => {

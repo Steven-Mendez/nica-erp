@@ -54,22 +54,14 @@ export async function signupConfirmLogin(
   // /confirm — six-slot shadcn input-otp. The autoComplete attribute
   // is on the hidden input the primitive renders inside the first
   // slot; focusing it and typing distributes characters across slots.
+  // When /signup hands the password off in-memory, the confirm POST
+  // carries it and the response is the authenticated session — so the
+  // SPA skips /login entirely and the route guard lands the user on
+  // /welcome (first-login profile capture). For a brand-new account
+  // without an invitation stashed, that is the next stop.
   await page.locator("input[autocomplete='one-time-code']").first().focus();
   await page.keyboard.type(code);
   await page.getByRole("button", { name: /^Confirmar$/i }).click();
-  await page.waitForURL(/\/login/);
-
-  // /login — wait for nav to settle, then fill via id selectors so we
-  // bypass any duplicate-label match (e.g. signup's "Confirmar
-  // contraseña" lingering in the DOM during the transition).
-  await page.waitForSelector("input#email", { state: "visible" });
-  await page.locator("input#email").fill(email);
-  await page.locator("input#password").fill(password);
-  await page.getByRole("button", { name: /Iniciar sesión/i }).click();
-
-  // Post-login destination: /welcome (first-login profile capture) for a
-  // brand-new account. Land there and complete it so the caller is on
-  // /organizations / /tenants depending on memberships.
   await page.waitForURL(/\/welcome/);
   await page.getByLabel(/Nombre/i).fill("E2E User");
   await page.getByRole("button", { name: /Continuar|Guardar/i }).click();

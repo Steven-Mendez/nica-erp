@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from bootstrap.dependencies import current_actor
 from contexts.identity.adapters.inbound.http.dependencies import (
@@ -119,19 +119,41 @@ async def register(
 
 @router.post(
     "/auth/confirm-signup",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=TokenResponse | None,
     tags=["auth"],
     summary="Confirm signup with the emailed code",
-    response_description="Email confirmed; the user may now log in",
-    responses=_UNAUTHENTICATED_RESPONSES,
+    response_description=(
+        "When the request body omits `password`: 204 No Content. When it "
+        "includes `password`: 200 OK with a token bundle so the SPA does not "
+        "need to re-prompt for credentials right after `/signup`."
+    ),
+    responses={
+        200: {"model": TokenResponse, "description": "Confirmed and authenticated"},
+        204: {"description": "Confirmed without a session bundle"},
+        **_UNAUTHENTICATED_RESPONSES,
+    },
 )
 async def confirm_signup(
     body: ConfirmSignupRequest,
+    response: Response,
     uc: ConfirmSignup = Depends(get_confirm_signup),
-) -> None:
-    """Verify the one-time code emailed during ``/auth/register``."""
+) -> TokenResponse | None:
+    """Verify the one-time code emailed during ``/auth/register``.
 
-    await uc.execute(email=body.email, code=body.code)
+    When the request body includes a ``password`` the use case also
+    authenticates and the response carries a token bundle; otherwise the
+    response is the bare ``204`` that has always been emitted here.
+    """
+
+    identity = await uc.execute(email=body.email, code=body.code, password=body.password)
+    if identity is None:
+        response.status_code = status.HTTP_204_NO_CONTENT
+        return None
+    return TokenResponse(
+        access_token=identity.access_token,
+        refresh_token=identity.refresh_token,
+        id_token=identity.id_token,
+    )
 
 
 @router.post(

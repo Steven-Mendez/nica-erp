@@ -22,11 +22,15 @@ const {
   navigateSpy,
   acceptInvitationMock,
   getAccessTokenMock,
+  getRefreshTokenMock,
+  setTokensMock,
   previewInvitationMock,
 } = vi.hoisted(() => ({
   navigateSpy: vi.fn(),
   acceptInvitationMock: vi.fn(),
   getAccessTokenMock: vi.fn(),
+  getRefreshTokenMock: vi.fn(),
+  setTokensMock: vi.fn(),
   previewInvitationMock: vi.fn(),
 }));
 
@@ -41,6 +45,8 @@ vi.mock("@tanstack/react-router", async () => {
 
 vi.mock("@/api/tokenStore", () => ({
   getAccessToken: getAccessTokenMock,
+  getRefreshToken: getRefreshTokenMock,
+  setTokens: setTokensMock,
 }));
 
 vi.mock("@/features/tenants/api/endpoints", () => ({
@@ -85,9 +91,12 @@ beforeEach(() => {
   navigateSpy.mockReset();
   acceptInvitationMock.mockReset();
   getAccessTokenMock.mockReset();
+  getRefreshTokenMock.mockReset();
+  setTokensMock.mockReset();
   previewInvitationMock.mockReset();
   // Default: authenticated paste user without a hash token.
   getAccessTokenMock.mockReturnValue("access.jwt");
+  getRefreshTokenMock.mockReturnValue("refresh.jwt");
   window.location.hash = "";
 });
 
@@ -115,7 +124,7 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
       screen.getByRole("button", { name: /Aceptar invitación/i }),
     );
     await waitFor(() => {
-      expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste");
+      expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste", "refresh.jwt");
     });
     // Navigation does not fire until the promise resolves.
     expect(navigateSpy).not.toHaveBeenCalled();

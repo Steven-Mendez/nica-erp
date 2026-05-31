@@ -112,9 +112,28 @@ class CreateInvitationRequest(BaseModel):
     )
 
 
+class AcceptInvitationTokenBundle(BaseModel):
+    """Token bundle returned when the caller's session is rotated.
+
+    Mirrors the identity context's ``TokenResponse`` shape so the SPA can
+    pass either object to its ``storeTokens()`` helper without branching.
+    """
+
+    access_token: str
+    refresh_token: str
+    id_token: str
+    token_type: Literal["Bearer"] = "Bearer"
+
+
 class AcceptInvitationResponse(BaseModel):
     tenant_id: UUID
     role: Literal["admin", "accountant", "salesperson", "viewer"]
+    # Non-null only when the caller had no prior `custom:active_tenant`
+    # and supplied a refresh token; rotating the session in that case
+    # spares the SPA from a separate `POST /v1/tenants/{id}/switch`
+    # round-trip. Veteran callers receive ``null`` and keep their
+    # current active empresa.
+    tokens: AcceptInvitationTokenBundle | None = None
 
 
 # --- my tenants -----------------------------------------------------------
@@ -134,6 +153,7 @@ class MyTenantsResponse(BaseModel):
 
 __all__ = [
     "AcceptInvitationResponse",
+    "AcceptInvitationTokenBundle",
     "AuthorizationDgiPayload",
     "CreateInvitationRequest",
     "CreateTenantRequest",

@@ -20,6 +20,7 @@ Template: [`template.md`](template.md).
 | [ADR-0005](0005-cognito-with-local-idp.md) | Cognito Lite + local IdP | Same port, two adapters; offline dev |
 | [ADR-0021](0021-ssm-parameter-store.md) | Secrets in SSM Parameter Store | SecureString for persistent secrets; absorbs old secrets ADR |
 | [ADR-0022](0022-rbac-model.md) | RBAC: 5 roles + granular permissions | Granular, ownership-hybrid; FastAPI dependency enforces |
+| [ADR-0035](0035-onboarding-endpoints-return-session.md) | Onboarding endpoints leave caller session-ready | `confirm-signup` may return tokens; `accept-invitation` may set `active_tenant` on first membership |
 
 ### Infrastructure & deploy
 | # | Title | Summary |

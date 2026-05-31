@@ -61,6 +61,10 @@ export interface paths {
         /**
          * Confirm signup with the emailed code
          * @description Verify the one-time code emailed during ``/auth/register``.
+         *
+         *     When the request body includes a ``password`` the use case also
+         *     authenticates and the response carries a token bundle; otherwise the
+         *     response is the bare ``204`` that has always been emitted here.
          */
         post: operations["confirm_signup_v1_auth_confirm_signup_post"];
         delete?: never;
@@ -422,14 +426,21 @@ export interface components {
          * AcceptInvitationByBodyRequest
          * @description Body shape for the hash-fragment-safe accept endpoint.
          *
-         *     See ``docs/adr/0031-invitation-token-transport.md``: the SPA reads
-         *     the token from ``location.hash``, strips it via
+         *     The SPA reads the token from ``location.hash``, strips it via
          *     ``history.replaceState``, then POSTs the token here so it never
          *     appears in server logs / Referer headers.
+         *
+         *     ``refresh_token`` is optional: when the caller has no prior
+         *     ``custom:active_tenant`` claim and supplies one here, the endpoint
+         *     rotates the caller's session so the new membership's tenant is
+         *     immediately active without a follow-up
+         *     ``POST /v1/tenants/{id}/switch`` round-trip.
          */
         AcceptInvitationByBodyRequest: {
             /** Token */
             token: string;
+            /** Refresh Token */
+            refresh_token?: string | null;
         };
         /** AcceptInvitationResponse */
         AcceptInvitationResponse: {
@@ -443,6 +454,28 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "accountant" | "salesperson" | "viewer";
+            tokens?: components["schemas"]["AcceptInvitationTokenBundle"] | null;
+        };
+        /**
+         * AcceptInvitationTokenBundle
+         * @description Token bundle returned when the caller's session is rotated.
+         *
+         *     Mirrors the identity context's ``TokenResponse`` shape so the SPA can
+         *     pass either object to its ``storeTokens()`` helper without branching.
+         */
+        AcceptInvitationTokenBundle: {
+            /** Access Token */
+            access_token: string;
+            /** Refresh Token */
+            refresh_token: string;
+            /** Id Token */
+            id_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
         };
         /** AuthorizationDgiPayload */
         AuthorizationDgiPayload: {
@@ -489,6 +522,11 @@ export interface components {
              * @example 123456
              */
             code: string;
+            /**
+             * Password
+             * @example S3cret-Passw0rd!
+             */
+            password?: string | null;
         };
         /** CreateInvitationRequest */
         CreateInvitationRequest: {
@@ -1120,7 +1158,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Email confirmed; the user may now log in */
+            /** @description Confirmed and authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Confirmed without a session bundle */
             204: {
                 headers: {
                     [name: string]: unknown;

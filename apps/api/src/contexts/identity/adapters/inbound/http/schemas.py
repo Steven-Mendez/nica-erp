@@ -38,6 +38,9 @@ class RegisterRequest(BaseModel):
 class ConfirmSignupRequest(BaseModel):
     email: str = Field(examples=[_EXAMPLE_EMAIL])
     code: str = Field(examples=[_EXAMPLE_CODE])
+    # Optional: when present the endpoint authenticates in the same
+    # call so the caller receives a token bundle in the response.
+    password: str | None = Field(default=None, examples=[_EXAMPLE_PASSWORD])
 
 
 class ResendCodeRequest(BaseModel):

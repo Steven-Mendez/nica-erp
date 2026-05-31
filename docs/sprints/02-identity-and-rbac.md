@@ -129,3 +129,15 @@ See README §Post-deploy verification, plus:
 - At `URL/`: `/signup` with verified email → Cognito code via SES → `/confirm` → `/login` (JWT RS256 with empty `custom:active_tenant`) → `/me` shows profile.
 
 Cost: ~3-5 USD.
+
+---
+
+## Post-sprint extensions
+
+The `confirm-signup` request body is extended (additively) by
+sprint 3.15 in [`docs/sprints/03-tenants-and-rls.md` §Sprint follow-up — Invited-user onboarding lands session-ready](03-tenants-and-rls.md#sprint-follow-up--invited-user-onboarding-lands-session-ready-sprint-315-2026-05-31)
+to accept an optional `password` and return tokens when present,
+removing the forced re-login round trip after email
+confirmation. The base `204` shape documented above is
+preserved when the body omits `password`. Decision recorded in
+[ADR-0035](../adr/0035-onboarding-endpoints-return-session.md).

@@ -82,8 +82,19 @@ export const useRegisterMutation = () => {
 };
 
 export const useConfirmSignupMutation = () => {
-  return useMutation<void, Error, ConfirmSignupInput>({
+  const qc = useQueryClient();
+  return useMutation<TokenBundle | null, Error, ConfirmSignupInput>({
     mutationFn: confirmSignup,
+    onSuccess: (bundle) => {
+      // When the request carried a password the backend returns tokens;
+      // store them and refresh /me so the route guard can route the
+      // user to the right step (welcome / onboarding / tenants /
+      // dashboard) without a forced /login round-trip.
+      if (bundle != null) {
+        storeTokens(bundle);
+        void qc.invalidateQueries({ queryKey: meQueryKey });
+      }
+    },
   });
 };
 

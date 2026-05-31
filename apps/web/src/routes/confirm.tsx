@@ -15,6 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useConfirmSignupMutation, useResendCodeMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
 import { confirmSchema, type ConfirmValues } from "@/features/auth/schemas";
+import { popSignupPassword } from "@/features/auth/signup-handoff";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function ConfirmRoute() {
@@ -31,8 +32,21 @@ export function ConfirmRoute() {
   });
 
   const onSubmit = (values: ConfirmValues): void => {
-    confirmMutation.mutate(values, {
-      onSuccess: () => {
+    // Read the password handed off by /signup. When present, post it
+    // alongside email + code so the backend can authenticate atomically
+    // and return tokens; the hook auto-stores them and the SPA's index
+    // route lands the user on the right next step. When absent (e.g.
+    // after a hard refresh of /confirm), fall back to the historical
+    // "navigate to /login" path so the user can finish manually.
+    const password = popSignupPassword();
+    const body =
+      password !== null ? { ...values, password } : values;
+    confirmMutation.mutate(body, {
+      onSuccess: (bundle) => {
+        if (bundle !== null) {
+          void navigate({ to: "/" });
+          return;
+        }
         void navigate({ to: "/login" });
       },
     });

@@ -136,6 +136,7 @@ def get_accept_invitation(
     membership_repo: MembershipRepository = Depends(get_membership_repository),
     token_gen: InvitationTokenGenerator = Depends(get_invitation_token_generator),
     outbox: OutboxWriterSqlAlchemy = Depends(get_outbox),
+    idp: IdentityProvider = Depends(get_identity_provider_for_tenants),
 ) -> AcceptInvitation:
     return AcceptInvitation(
         uow=uow,
@@ -143,6 +144,7 @@ def get_accept_invitation(
         membership_repository=membership_repo,
         token_generator=token_gen,
         outbox=outbox,
+        identity_provider=idp,
     )
 
 

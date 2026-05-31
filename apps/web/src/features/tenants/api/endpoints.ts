@@ -135,11 +135,17 @@ export const cancelInvitation = async (tenantId: string, invitationId: string): 
   expectVoid(`DELETE /v1/tenants/${tenantId}/invitations/${invitationId}`, result);
 };
 
-export const acceptInvitation = async (token: string): Promise<AcceptInvitationResult> => {
-  // Per ADR-0031 the token travels in the request body so it never
-  // appears in access logs / Referer headers / browser history.
+export const acceptInvitation = async (
+  token: string,
+  refresh_token?: string | null,
+): Promise<AcceptInvitationResult> => {
+  // The token travels in the request body so it never appears in
+  // access logs / Referer headers / browser history. The optional
+  // refresh_token lets the backend rotate the caller's session in
+  // the same call when this is their first membership — the response
+  // then carries `tokens`, otherwise `tokens` is null.
   const result = await api.POST("/v1/invitations/accept", {
-    body: { token },
+    body: refresh_token != null ? { token, refresh_token } : { token },
   });
   return expectData("POST /v1/invitations/accept", result);
 };

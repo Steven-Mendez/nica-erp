@@ -19,6 +19,7 @@ from httpx import ASGITransport, AsyncClient
 
 from bootstrap.dependencies import get_request_uow
 from contexts.identity.adapters.inbound.http.dependencies import get_current_user
+from contexts.identity.application.ports.outbound import Identity
 from contexts.tenants.adapters.inbound.http.dependencies import (
     get_accept_invitation,
     get_invitation_repository,
@@ -125,6 +126,7 @@ def _build_app(
     token_gen: _FakeTokenGenerator | None = None,
     invitations: dict[str, Invitation] | None = None,
     tenants_by_id: dict[UUID, Any] | None = None,
+    current_user_active_tenant: str | None = None,
 ) -> FastAPI:
     app = FastAPI()
     app.include_router(public_router)
@@ -134,7 +136,7 @@ def _build_app(
         user_id=_USER_ID,
         email="acceptor@nica.test",
         external_sub="cognito|sub",
-        active_tenant=None,
+        active_tenant=current_user_active_tenant,
     )
     app.dependency_overrides[get_request_uow] = lambda: _FakeUow()
     app.dependency_overrides[get_accept_invitation] = lambda: (
@@ -172,6 +174,72 @@ async def test_accept_endpoint_returns_tenant_and_role() -> None:
     assert len(accept.calls) == 1
     assert accept.calls[0].token == "abc"
     assert accept.calls[0].user_id == _USER_ID
+
+
+@pytest.mark.integration
+async def test_accept_endpoint_threads_caller_context_and_refresh_into_use_case() -> None:
+    accept = _FakeAcceptInvitation()
+    app = _build_app(accept_uc=accept, current_user_active_tenant="empresa-a-uuid")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/invitations/accept",
+            json={"token": "abc", "refresh_token": "current-refresh"},
+        )
+    assert response.status_code == 200
+    assert len(accept.calls) == 1
+    cmd = accept.calls[0]
+    assert cmd.token == "abc"
+    assert cmd.user_id == _USER_ID
+    assert cmd.external_sub == "cognito|sub"
+    # Critical: the prior_active_tenant value comes from the validated
+    # CurrentUser context, not from any request body field.
+    assert cmd.prior_active_tenant == "empresa-a-uuid"
+    assert cmd.refresh_token == "current-refresh"
+
+
+@pytest.mark.integration
+async def test_accept_endpoint_serialises_rotated_tokens() -> None:
+    accept = _FakeAcceptInvitation()
+    accept.result = AcceptInvitationResult(
+        tenant_id=_TENANT_ID,
+        role="accountant",
+        tokens=Identity(
+            sub="11111111-1111-1111-1111-111111111111",
+            email="acceptor@nica.test",
+            access_token="new-access",
+            refresh_token="new-refresh",
+            id_token="new-id",
+        ),
+    )
+    app = _build_app(accept_uc=accept)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/invitations/accept",
+            json={"token": "abc", "refresh_token": "current-refresh"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tokens"] == {
+        "access_token": "new-access",
+        "refresh_token": "new-refresh",
+        "id_token": "new-id",
+        "token_type": "Bearer",
+    }
+
+
+@pytest.mark.integration
+async def test_accept_endpoint_returns_null_tokens_when_use_case_omits_them() -> None:
+    accept = _FakeAcceptInvitation()
+    accept.result = AcceptInvitationResult(tenant_id=_TENANT_ID, role="accountant", tokens=None)
+    app = _build_app(accept_uc=accept)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/v1/invitations/accept", json={"token": "abc"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tokens"] is None
 
 
 @pytest.mark.integration

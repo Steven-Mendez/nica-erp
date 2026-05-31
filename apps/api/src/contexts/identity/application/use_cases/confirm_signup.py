@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 
 from contexts.identity.application.constants import SYSTEM_GLOBAL_TENANT_ID
 from contexts.identity.application.ports.outbound import (
+    Identity,
     IdentityProvider,
     UserRepository,
 )
@@ -40,7 +41,9 @@ class ConfirmSignup:
     uow: UnitOfWork
     now: Callable[[], datetime] = field(default=_utc_now)
 
-    async def execute(self, *, email: str, code: str) -> None:
+    async def execute(
+        self, *, email: str, code: str, password: str | None = None
+    ) -> Identity | None:
         external_sub = await self.identity_provider.confirm_signup(email=email, code=code)
         email_vo = Email.parse(email)
         now = self.now()
@@ -62,6 +65,12 @@ class ConfirmSignup:
                         "registered_at": event.registered_at.isoformat(),
                     },
                 )
+        if password is None:
+            return None
+        # The aggregate + outbox event are committed before authenticating,
+        # so a bad password leaves the user persisted and the caller can
+        # retry via POST /v1/auth/login without re-entering the email code.
+        return await self.identity_provider.authenticate(email=email, password=password)
 
 
 __all__ = ["ConfirmSignup"]

@@ -80,13 +80,30 @@ describe("auth endpoints — happy paths and URL/body wiring", () => {
     expect(out).toEqual({ user_id: "u-1" });
   });
 
-  it("confirmSignup POSTs /v1/auth/confirm-signup and resolves void", async () => {
-    postMock.mockResolvedValueOnce(ok({}, 204));
+  it("confirmSignup without password resolves null on 204", async () => {
+    postMock.mockResolvedValueOnce(ok(undefined, 204));
     await expect(
       confirmSignup({ email: "a@b.test", code: "123456" }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
     expect(postMock).toHaveBeenCalledWith("/v1/auth/confirm-signup", {
       body: { email: "a@b.test", code: "123456" },
+    });
+  });
+
+  it("confirmSignup with password resolves token bundle on 200", async () => {
+    postMock.mockResolvedValueOnce(
+      ok({ access_token: "a", refresh_token: "r", id_token: "i", token_type: "Bearer" }),
+    );
+    await expect(
+      confirmSignup({ email: "a@b.test", code: "123456", password: "Passw0rd!Passw0rd" }),
+    ).resolves.toEqual({
+      access_token: "a",
+      refresh_token: "r",
+      id_token: "i",
+      token_type: "Bearer",
+    });
+    expect(postMock).toHaveBeenCalledWith("/v1/auth/confirm-signup", {
+      body: { email: "a@b.test", code: "123456", password: "Passw0rd!Passw0rd" },
     });
   });
 

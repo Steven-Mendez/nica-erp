@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
+from contexts.identity.application.ports.outbound import Identity, IdentityProvider
 from contexts.tenants.application.ports.outbound import (
     InvitationRepository,
     InvitationTokenGenerator,
@@ -32,12 +33,16 @@ def _utc_now() -> datetime:
 class AcceptInvitationCommand:
     token: str
     user_id: UUID  # taken from CurrentUserContext at the HTTP layer
+    external_sub: str  # idem; required for IdP rotation calls
+    prior_active_tenant: str | None  # validated from JWT, not request body
+    refresh_token: str | None  # optional; rotation skipped when absent
 
 
 @dataclass(frozen=True, slots=True)
 class AcceptInvitationResult:
     tenant_id: UUID
     role: str
+    tokens: Identity | None = None
 
 
 @dataclass(slots=True)
@@ -47,6 +52,7 @@ class AcceptInvitation:
     membership_repository: MembershipRepository
     token_generator: InvitationTokenGenerator
     outbox: OutboxWriter
+    identity_provider: IdentityProvider
     now: Callable[[], datetime] = field(default=_utc_now)
 
     async def execute(self, command: AcceptInvitationCommand) -> AcceptInvitationResult:
@@ -97,7 +103,22 @@ class AcceptInvitation:
                     "joined_at": membership.joined_at.isoformat(),
                 },
             )
-        return AcceptInvitationResult(tenant_id=invitation.tenant_id, role=membership.role.value)
+        tokens: Identity | None = None
+        # Rotate the session only for first-membership invitees who
+        # supplied a refresh token. Veteran callers (those already
+        # bound to an empresa) keep their current active tenant so a
+        # second-empresa invitation does not silently switch them.
+        if command.prior_active_tenant is None and command.refresh_token is not None:
+            await self.identity_provider.update_active_tenant(
+                external_sub=command.external_sub,
+                tenant_id=str(invitation.tenant_id),
+            )
+            tokens = await self.identity_provider.refresh(refresh_token=command.refresh_token)
+        return AcceptInvitationResult(
+            tenant_id=invitation.tenant_id,
+            role=membership.role.value,
+            tokens=tokens,
+        )
 
 
 __all__ = ["AcceptInvitation", "AcceptInvitationCommand", "AcceptInvitationResult"]

@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { useRegisterMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
 import { signupSchema, type SignupValues } from "@/features/auth/schemas";
+import { stashSignupPassword } from "@/features/auth/signup-handoff";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function SignupRoute() {
@@ -40,6 +41,10 @@ export function SignupRoute() {
       { email: values.email, password: values.password },
       {
         onSuccess: () => {
+          // Hand the password to /confirm in-memory so it can finish
+          // signup and authenticate in a single round-trip. Lost on
+          // hard refresh; /confirm falls back to /login in that case.
+          stashSignupPassword(values.password);
           void navigate({ to: "/confirm", search: { email: values.email } });
         },
       },
