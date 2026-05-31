@@ -259,3 +259,46 @@ Carry-over from task 6 (the eyeball pass):
 - Run §6.1 against the post-migration build; assert each of the
   8 diffs is < 0.5%. Same for §6.2 axe.
 - Then `/opsx:archive complete-web-tailwind-v4-migration`.
+
+## Update (2026-05-31) — three sub-goals drained before sprint 04
+
+Resumed for final close-out before sprint 04 (`catalog` + `inventory`)
+opens. The remaining work surfaced not as items in this file but as
+three emergent sub-goals, each tracked in its own
+`.claude/goals/<slug>.md` and now archived under `done/`:
+
+1. **`fix-tenant-id-race-on-refresh`** — gated three tenants-feature
+   queries on `enabled: Boolean(tenantId)` so a refresh on
+   `/empresa/users` no longer fires `/v1/tenants//members` 404s
+   while `useMeQuery` resolves (commit `c6037ab`).
+2. **`fe-testing-gaps`** — 12 tasks closing the FE coverage shortfall
+   (api/errors, api/healthz, auth+tenants endpoint modules at 100%,
+   tenant-switcher integration spec, extended invitations-accept +
+   reset-password specs, two new @critical e2e specs, ratcheted
+   `vite.config.ts` thresholds lines/stmts 80→89, branches 78→82,
+   functions 65→80). 9 commits ending at `7c030ae`. Surfaced one SPA
+   bug (commit `90e902a` shipped as `.fixme`), folded into the next
+   sub-goal.
+3. **`fix-accept-stash-nav`** — fixed the SPA bug surfaced by sub-goal
+   2: the invitation-accept route remounts 3× mid-request in the
+   stash flow, destroying the component-bound `useMutation` observer
+   before the POST response arrives. Lifted the in-flight accept to a
+   module-scoped dedup keyed by token so listeners reattached on
+   remount still receive the result. E2E spec flipped from `.fixme()`
+   back to `test()`, passes in ~3.7s (commit `7d5bb7d`).
+4. **`preauth-guest-guard`** — added `guestGuard()` to `router.ts` so
+   authenticated users bounce off `/login`, `/signup`, `/confirm`,
+   `/forgot-password`, `/reset-password` (and `/`) to the right
+   post-onboarding screen, honouring any stashed invitation token
+   (commit `fa87566`).
+
+Verification before close: web `pnpm typecheck` ✓, `pnpm lint` ✓,
+`pnpm vitest run` 280/280 ✓; api `uv run pytest tests/unit
+tests/integration` 277/277 ✓.
+
+Carry-overs unchanged from session 2:
+- Tailwind v4 eyeball + axe diff (autonomous portion done).
+- Sprint 3.13 manual smoke (operator-driven).
+- Sprint 3.14 manual smoke (operator-driven).
+
+Goal closed. Sprint 04 can open against a clean tree.
