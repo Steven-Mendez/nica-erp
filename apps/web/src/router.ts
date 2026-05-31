@@ -57,6 +57,24 @@ async function authenticatedGuard(pathname: string): Promise<void> {
   }
 }
 
+/**
+ * Guard fired by every pre-auth route's ``beforeLoad`` (``/login``,
+ * ``/signup``, ``/confirm``, ``/forgot-password``, ``/reset-password``).
+ * No-ops when the user has no session; when a token is present it
+ * redeems a stashed invitation if any, otherwise hands off to
+ * ``nextRouteForCurrentState`` so the user lands at the correct
+ * onboarding step (defaulting to ``/dashboard``).
+ */
+async function guestGuard(): Promise<void> {
+  if (getAccessToken() === null) return;
+  const pending = popPendingInviteToken();
+  if (pending !== null) {
+    throw redirect({ to: "/invitations/accept", hash: `t=${pending}` });
+  }
+  const next = await nextRouteForCurrentState({ pathname: "/dashboard" });
+  throw redirect({ to: next ?? "/dashboard" });
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
@@ -64,18 +82,7 @@ const indexRoute = createRoute({
     if (getAccessToken() === null) {
       throw redirect({ to: "/login" });
     }
-    // If an invitation token was stashed pre-login (signup flow
-    // started from `/invitations/accept#t=…`), redeem it now by
-    // hopping back through the accept route — the hash drives the
-    // POST, and on success we land on /dashboard.
-    const pending = popPendingInviteToken();
-    if (pending !== null) {
-      throw redirect({ to: "/invitations/accept", hash: `t=${pending}` });
-    }
-    // Run the guard against ``/dashboard`` so the user lands there
-    // when nothing else is pending.
-    const next = await nextRouteForCurrentState({ pathname: "/dashboard" });
-    throw redirect({ to: next ?? "/dashboard" });
+    await guestGuard();
   },
 });
 
@@ -88,6 +95,7 @@ const healthRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  beforeLoad: guestGuard,
   component: lazyRouteComponent(() => import("@/routes/login"), "LoginRoute"),
 });
 
@@ -95,6 +103,7 @@ const signupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/signup",
   validateSearch: emailSearchSchema,
+  beforeLoad: guestGuard,
   component: lazyRouteComponent(() => import("@/routes/signup"), "SignupRoute"),
 });
 
@@ -102,12 +111,14 @@ const confirmRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/confirm",
   validateSearch: emailSearchSchema,
+  beforeLoad: guestGuard,
   component: lazyRouteComponent(() => import("@/routes/confirm"), "ConfirmRoute"),
 });
 
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/forgot-password",
+  beforeLoad: guestGuard,
   component: lazyRouteComponent(() => import("@/routes/forgot-password"), "ForgotPasswordRoute"),
 });
 
@@ -115,6 +126,7 @@ const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reset-password",
   validateSearch: emailSearchSchema,
+  beforeLoad: guestGuard,
   component: lazyRouteComponent(() => import("@/routes/reset-password"), "ResetPasswordRoute"),
 });
 
