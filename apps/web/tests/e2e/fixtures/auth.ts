@@ -86,3 +86,32 @@ export async function logout(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Cerrar sesión|Sign out/i }).click();
   await expect(page).toHaveURL(/\/login(\?|$)/);
 }
+
+/**
+ * Drive /forgot-password → harvest the recovery code from Mailpit →
+ * /reset-password with the new password. Leaves the page on /login
+ * because the route forwards there on success.
+ */
+export async function resetPassword(
+  page: Page,
+  opts: { email: string; newPassword: string },
+): Promise<void> {
+  const before = new Date(Date.now() - 1_000);
+
+  await page.goto("/forgot-password");
+  await page.getByLabel(/Correo/i).fill(opts.email);
+  await page.getByRole("button", { name: /Enviar código/i }).click();
+
+  // The forgot-password route forwards to /reset-password on success
+  // with the email pre-filled.
+  await page.waitForURL(/\/reset-password/);
+
+  const message = await waitForEmail({ email: opts.email, since: before });
+  const code = extractOtp(message);
+
+  await page.getByLabel(/Código de recuperación/i).fill(code);
+  await page.getByLabel(/Nueva contraseña/i).fill(opts.newPassword);
+  await page.getByRole("button", { name: /Restablecer contraseña/i }).click();
+
+  await page.waitForURL(/\/login(\?|$)/);
+}
