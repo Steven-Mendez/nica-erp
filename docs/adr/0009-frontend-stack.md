@@ -71,3 +71,16 @@ The frontend lives in `apps/web/`. Behavior: CloudFront serves `/*` → S3 (SPA)
 - React 19 + TanStack/shadcn alignment lands — opportunistic upgrade window.
 - shadcn manual-update cost crosses a budget (e.g., > 4 hours/quarter) — consider a maintained library.
 - First tenant with measured TTI > 3s on 3G — re-examine bundle, lazy boundaries, or CDN edge selection.
+
+## Revisit 2026-05 — Tailwind v4 + shadcn v4 alignment
+
+The stack table above stays accurate (still React 18, still TanStack, still Vite, still shadcn copied into `apps/web/src/components/ui/`), but four pieces of the Styling row moved underneath it:
+
+- **Tailwind CSS v3 → v4.** The build pipeline switched from `postcss + autoprefixer + @tailwindcss/postcss` to the native `@tailwindcss/vite` plugin. `postcss.config.js`, `autoprefixer`, and the standalone `postcss` devDep are gone; vendor prefixing is now handled by Lightning CSS inside the Tailwind plugin.
+- **CSS-first theme config.** The colour and `borderRadius` maps that used to live in `tailwind.config.ts` `theme.extend` now live in a `@theme inline {}` block in `src/styles/globals.css`. `tailwind.config.ts` is reduced to `darkMode + content` and kept only because globals.css references it via `@config`.
+- **shadcn `radix-mira` registry style.** `components.json` pins `style: "radix-mira"` and `baseColor: "olive"`. New primitives (accordion, sheet, pagination, table, chart, drawer, carousel, resizable, sonner) are added on demand and bring their unbundled `radix-ui` peer with them.
+- **`tailwindcss-animate` → `tw-animate-css`.** The original plugin was deprecated in March 2025; v4 uses a CSS-import (`@import "tw-animate-css"`) instead of `@plugin "tailwindcss-animate"`.
+
+OKLCH dark-mode tokens (`oklch(L C h)`) were already in place before this migration and are preserved unchanged; the byte-equivalence check at migration time confirmed all 27 colour tokens resolve identically in the generated CSS.
+
+Out of scope, kept for a future revisit: shadcn step 6 (`forwardRef` → `React.ComponentProps`) blocks on the React 18 → 19 upgrade trigger above.

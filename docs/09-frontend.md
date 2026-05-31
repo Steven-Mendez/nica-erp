@@ -64,6 +64,18 @@ Each `features/<x>/` maps to a backend bounded context ([03](03-bounded-contexts
 
 ---
 
+## Styling
+
+Tailwind v4 with CSS-first configuration. Three conventions to know:
+
+- **Single import.** `src/styles/globals.css` starts with `@import "tailwindcss"` — no `@tailwind base/components/utilities` directive trio. Animations come from `@import "tw-animate-css"` (replaces the deprecated `tailwindcss-animate` plugin).
+- **Tokens live in `@theme inline {}`.** Colour and `borderRadius` design tokens are declared in a `@theme inline {}` block inside `globals.css`, each mapped to a `:root` / `.dark` CSS variable. `tailwind.config.ts` is kept down to `darkMode + content` and is referenced from CSS via `@config "../../tailwind.config.ts"`.
+- **OKLCH for colours.** All palette tokens use `oklch(L C h)`. The `:root` block defines the light palette, `.dark` overrides for dark mode. Add new tokens by appending to both blocks plus the `@theme inline` map.
+
+Vendor prefixing and hashed font URLs are handled by `@tailwindcss/vite` (the only CSS pipeline plugin; there is no `postcss.config.js`). The `radix-mira` shadcn registry style is pinned in `components.json` with `baseColor: "olive"`.
+
+---
+
 ## Architecture
 
 Four rules constrain how features compose. Everything else (state shape, component decomposition, hook granularity) is decided per slice. The backend has hexagonal + import-linter ([02](02-architecture.md)); the frontend is lighter because the typed API client already pins most contracts — these rules cover what the type system can't.
