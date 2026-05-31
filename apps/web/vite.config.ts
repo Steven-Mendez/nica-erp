@@ -98,13 +98,13 @@ export default defineConfig({
         perFile: false,
         autoUpdate: false,
         // Ratcheted to the measured floor on the green run that landed
-        // this change (lines 82.79, branches 80.88, functions 67.41,
-        // statements 82.79); leave a 2-point buffer so transient
+        // this change (lines 91.71, branches 84.57, functions 83.70,
+        // statements 91.71); leave a ~2-3 point buffer so transient
         // measurement noise doesn't trip the gate.
-        lines: 80,
-        functions: 65,
-        statements: 80,
-        branches: 78,
+        lines: 89,
+        functions: 80,
+        statements: 89,
+        branches: 82,
       },
     },
   },
