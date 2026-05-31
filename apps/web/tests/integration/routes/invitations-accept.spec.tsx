@@ -1,11 +1,12 @@
 // Integration spec for /invitations/accept (hash-token entry point).
 //
 // The route has three entry modes (hash+auth, hash+no-auth, no-hash+auth)
-// plus paste + error branches. The original spec only drove the no-hash
-// happy paste path; this file extends coverage to the failing-preview
-// branch (token inválido/expirado) and the explicit accept-error branch
-// the user hits when the backend rejects a valid-looking token (e.g. they
-// are already authenticated against a different empresa).
+// plus paste + error branches. The accept POST is now driven by a
+// module-scoped in-flight dedup (so a mid-flight remount during the
+// stash flow does not lose the response) instead of useMutation; the
+// tests mock `acceptInvitation` directly and assert against the
+// rendered "joining" UI + the navigation that fires when the promise
+// resolves.
 
 import {
   cleanup,
@@ -19,14 +20,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   navigateSpy,
-  acceptSpy,
-  useAcceptInvitationMock,
+  acceptInvitationMock,
   getAccessTokenMock,
   previewInvitationMock,
 } = vi.hoisted(() => ({
   navigateSpy: vi.fn(),
-  acceptSpy: vi.fn(),
-  useAcceptInvitationMock: vi.fn(),
+  acceptInvitationMock: vi.fn(),
   getAccessTokenMock: vi.fn(),
   previewInvitationMock: vi.fn(),
 }));
@@ -44,11 +43,8 @@ vi.mock("@/api/tokenStore", () => ({
   getAccessToken: getAccessTokenMock,
 }));
 
-vi.mock("@/features/tenants/api/hooks", () => ({
-  useAcceptInvitationMutation: useAcceptInvitationMock,
-}));
-
 vi.mock("@/features/tenants/api/endpoints", () => ({
+  acceptInvitation: acceptInvitationMock,
   previewInvitation: previewInvitationMock,
 }));
 
@@ -68,46 +64,31 @@ function renderAccept() {
   );
 }
 
-interface MutationOverrides {
-  outcome?: "success" | "error";
-  errorMessage?: string;
-  isError?: boolean;
-  isPending?: boolean;
-}
-
-function installAcceptMutation(overrides: MutationOverrides = {}) {
-  const {
-    outcome = "success",
-    errorMessage = "boom",
-    isError = false,
-    isPending = false,
-  } = overrides;
-  const error = new Error(errorMessage);
-  useAcceptInvitationMock.mockReturnValue({
-    mutate: (
-      token: string,
-      opts?: { onSuccess?: () => void; onError?: (err: unknown) => void },
-    ) => {
-      acceptSpy(token);
-      if (outcome === "success") opts?.onSuccess?.();
-      else opts?.onError?.(error);
+/**
+ * Build a controllable Promise for `acceptInvitation` so tests can hold
+ * the in-flight state, resolve it, or reject it on demand.
+ */
+function deferredAccept() {
+  let resolve!: (value: { tenant_id: string; role: "accountant" }) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<{ tenant_id: string; role: "accountant" }>(
+    (res, rej) => {
+      resolve = res;
+      reject = rej;
     },
-    isPending,
-    isError,
-    error: isError ? error : null,
-  });
+  );
+  acceptInvitationMock.mockReturnValueOnce(promise);
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
   navigateSpy.mockReset();
-  acceptSpy.mockReset();
-  useAcceptInvitationMock.mockReset();
+  acceptInvitationMock.mockReset();
   getAccessTokenMock.mockReset();
   previewInvitationMock.mockReset();
   // Default: authenticated paste user without a hash token.
   getAccessTokenMock.mockReturnValue("access.jwt");
   window.location.hash = "";
-  installAcceptMutation();
 });
 
 afterEach(() => {
@@ -124,7 +105,8 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     expect(screen.getByLabelText(/Código de invitación/i)).toBeInTheDocument();
   });
 
-  it("submits the pasted token via useAcceptInvitationMutation", async () => {
+  it("calls acceptInvitation with the pasted token on submit", async () => {
+    deferredAccept();
     renderAccept();
     fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
       target: { value: "inv-token-paste" },
@@ -133,9 +115,26 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
       screen.getByRole("button", { name: /Aceptar invitación/i }),
     );
     await waitFor(() => {
-      expect(acceptSpy).toHaveBeenCalledWith("inv-token-paste");
+      expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste");
     });
-    expect(navigateSpy).toHaveBeenCalledWith({ to: "/dashboard" });
+    // Navigation does not fire until the promise resolves.
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it("navigates to /dashboard once the accept promise resolves", async () => {
+    const { resolve } = deferredAccept();
+    renderAccept();
+    fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
+      target: { value: "happy-token" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Aceptar invitación/i }),
+    );
+    resolve({ tenant_id: "t-1", role: "accountant" });
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith({ to: "/dashboard" });
+    });
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
   });
 
   it("shows an inline validation error when submit is fired with empty input", () => {
@@ -144,15 +143,11 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
       screen.getByRole("button", { name: /Aceptar invitación/i }),
     );
     expect(screen.getByText("Pega el código de invitación.")).toBeInTheDocument();
-    expect(acceptSpy).not.toHaveBeenCalled();
+    expect(acceptInvitationMock).not.toHaveBeenCalled();
   });
 
-  it("renders the accept-mutation error alert when the backend rejects the token", () => {
-    installAcceptMutation({
-      outcome: "error",
-      isError: true,
-      errorMessage: "Invitación inválida o expirada.",
-    });
+  it("renders the destructive alert when the accept promise rejects", async () => {
+    const { reject } = deferredAccept();
     renderAccept();
     fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
       target: { value: "expired-token" },
@@ -160,10 +155,12 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     fireEvent.click(
       screen.getByRole("button", { name: /Aceptar invitación/i }),
     );
-    expect(
-      screen.getByText("Invitación inválida o expirada."),
-    ).toBeInTheDocument();
-    // No navigation happens on error.
+    reject(new Error("Invitación inválida o expirada."));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Invitación inválida o expirada."),
+      ).toBeInTheDocument();
+    });
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 });
@@ -187,7 +184,7 @@ describe("AcceptInvitationRoute — hash branch (unauthenticated, invalid token)
     // The hash must be stripped on mount so a refresh does not re-trigger.
     expect(window.location.hash).toBe("");
     // No accept attempt fires when the user is unauthenticated.
-    expect(acceptSpy).not.toHaveBeenCalled();
+    expect(acceptInvitationMock).not.toHaveBeenCalled();
   });
 
   it("falls back to a generic message when preview rejects with a non-Error value", async () => {

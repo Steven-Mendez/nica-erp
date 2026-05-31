@@ -19,6 +19,7 @@
 // in-place.
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,13 +28,63 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
-import { useAcceptInvitationMutation } from "@/features/tenants/api/hooks";
-import { previewInvitation } from "@/features/tenants/api/endpoints";
+import { meQueryKey } from "@/api/queryKeys";
+import { myTenantsKey } from "@/features/tenants/api/hooks";
+import {
+  acceptInvitation,
+  previewInvitation,
+  type AcceptInvitationResult,
+} from "@/features/tenants/api/endpoints";
 import { getAccessToken } from "@/api/tokenStore";
 import { setPickerConfirmed } from "@/lib/route-guard";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export const PENDING_INVITE_KEY = "nica-erp:pending-invite";
+
+// In-flight accept dedup. The stash flow remounts this route several
+// times in quick succession (auth shell + router transitions), and a
+// component-bound `useMutation` loses its observer on every unmount,
+// leaving the user stuck on "Aceptando…" even though the POST succeeded
+// server-side. Holding the in-flight promise at module scope keyed by
+// token means a remount picks up the SAME promise instead of starting
+// a new request — the result lands wherever the route happens to be
+// mounted next.
+type AcceptStatus =
+  | { kind: "idle" }
+  | { kind: "pending" }
+  | { kind: "success"; result: AcceptInvitationResult }
+  | { kind: "error"; error: unknown };
+
+interface InflightEntry {
+  status: AcceptStatus;
+  listeners: Set<(s: AcceptStatus) => void>;
+}
+
+const inflight = new Map<string, InflightEntry>();
+
+function acceptErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "No se pudo aceptar la invitación.";
+}
+
+function ensureAccept(token: string): InflightEntry {
+  const existing = inflight.get(token);
+  if (existing !== undefined) return existing;
+  const entry: InflightEntry = {
+    status: { kind: "pending" },
+    listeners: new Set(),
+  };
+  inflight.set(token, entry);
+  const fire = (next: AcceptStatus): void => {
+    entry.status = next;
+    for (const l of entry.listeners) l(next);
+  };
+  void acceptInvitation(token).then(
+    (result) => fire({ kind: "success", result }),
+    (error: unknown) => fire({ kind: "error", error }),
+  );
+  return entry;
+}
 
 function readHashToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -57,15 +108,36 @@ type Mode =
 export function AcceptInvitationRoute() {
   useDocumentTitle("Aceptar invitación");
   const navigate = useNavigate();
-  const acceptMut = useAcceptInvitationMutation();
+  const qc = useQueryClient();
   const [mode, setMode] = useState<Mode>({ kind: "loading" });
   const [pasted, setPasted] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [acceptStatus, setAcceptStatus] = useState<AcceptStatus>({
+    kind: "idle",
+  });
   // Capture the hash token synchronously at first render so React
   // StrictMode's double-invoke of the effect does not see an empty
   // hash on its second pass (the first pass strips it).
   const [initialToken] = useState<string | null>(() => readHashToken());
   const processedRef = useRef(false);
+
+  // Subscribe to whatever in-flight accept exists for the active
+  // token, restoring the result if the route gets remounted mid-
+  // request (the stash flow remounts this component several times
+  // before the POST settles).
+  const activeToken =
+    mode.kind === "joining" ? mode.token : null;
+  useEffect(() => {
+    if (activeToken === null) return;
+    const entry = inflight.get(activeToken);
+    if (entry === undefined) return;
+    setAcceptStatus(entry.status);
+    const listener = (next: AcceptStatus): void => setAcceptStatus(next);
+    entry.listeners.add(listener);
+    return () => {
+      entry.listeners.delete(listener);
+    };
+  }, [activeToken]);
 
   // Mode resolution on mount: hash + auth → accept; hash + no auth →
   // preview + stash + /signup; no hash + auth → paste; no hash + no
@@ -81,16 +153,11 @@ export function AcceptInvitationRoute() {
       stripHash();
       if (authed) {
         setMode({ kind: "joining", token });
-        acceptMut.mutate(token, {
-          onSuccess: () => {
-            // Accepting a deep-link invitation is an explicit empresa
-            // pick — the operator confirmed they want THIS empresa by
-            // following the email. Set the picker-confirmed flag so
-            // the route guard does not bounce them to /tenants.
-            setPickerConfirmed();
-            void navigate({ to: "/dashboard" });
-          },
-        });
+        // Kick off (or attach to) the module-scoped in-flight accept
+        // for this token. The result lands on `acceptStatus` via the
+        // subscription effect above, so a mid-flight unmount does
+        // not lose it.
+        ensureAccept(token);
       } else {
         // Unauthenticated hash flow: preview to get the email, stash
         // the token, then route to /signup with the email pre-filled.
@@ -131,15 +198,32 @@ export function AcceptInvitationRoute() {
       return;
     }
     setPasteError(null);
-    acceptMut.mutate(token, {
-      onSuccess: () => {
-        // Pasting a token is an explicit empresa pick, same as the
-        // hash path above.
-        setPickerConfirmed();
-        void navigate({ to: "/dashboard" });
-      },
-    });
+    setMode({ kind: "joining", token });
+    ensureAccept(token);
   };
+
+  // Single source of truth for the "accept succeeded → land in the
+  // empresa" side effect. Hooks into the module-scoped status so the
+  // navigation fires exactly once when the result arrives, regardless
+  // of how many times the component has been mounted in between.
+  useEffect(() => {
+    if (acceptStatus.kind !== "success") return;
+    // Accepting (via deep link or paste) is an explicit empresa pick
+    // — the operator confirmed they want THIS empresa. Set the
+    // picker-confirmed flag so the route guard does not bounce them
+    // to /tenants on the next render.
+    setPickerConfirmed();
+    void qc.invalidateQueries({ queryKey: myTenantsKey });
+    // Invalidate /v1/me too — the backend assigns `active_tenant` on
+    // accept when this is the user's first membership, and the route
+    // guard's "needs an active tenant" probe would otherwise bounce
+    // the user to /tenants on the very next navigation.
+    void qc.invalidateQueries({ queryKey: meQueryKey });
+    // Drop the in-flight entry once the result has been consumed so
+    // a second invitation in the same browser session starts fresh.
+    if (activeToken !== null) inflight.delete(activeToken);
+    void navigate({ to: "/dashboard" });
+  }, [acceptStatus, activeToken, navigate, qc]);
 
   return (
     <AuthLayout>
@@ -159,13 +243,13 @@ export function AcceptInvitationRoute() {
         <CardContent className="space-y-4">
           {mode.kind === "loading" ? <Skeleton className="h-10 w-full" /> : null}
 
-          {mode.kind === "joining" && acceptMut.isError ? (
+          {mode.kind === "joining" && acceptStatus.kind === "error" ? (
             <Alert variant="destructive">
-              <AlertDescription>{acceptMut.error.message}</AlertDescription>
+              <AlertDescription>{acceptErrorMessage(acceptStatus.error)}</AlertDescription>
             </Alert>
           ) : null}
 
-          {mode.kind === "joining" && acceptMut.isPending ? (
+          {mode.kind === "joining" && acceptStatus.kind === "pending" ? (
             <p className="text-sm text-muted-foreground">Aceptando...</p>
           ) : null}
 
@@ -191,13 +275,13 @@ export function AcceptInvitationRoute() {
                   {pasteError !== null ? <FieldError>{pasteError}</FieldError> : null}
                 </Field>
               </FieldGroup>
-              {acceptMut.isError ? (
+              {acceptStatus.kind === "error" ? (
                 <Alert variant="destructive">
-                  <AlertDescription>{acceptMut.error.message}</AlertDescription>
+                  <AlertDescription>{acceptErrorMessage(acceptStatus.error)}</AlertDescription>
                 </Alert>
               ) : null}
-              <Button type="submit" disabled={acceptMut.isPending} className="w-full">
-                {acceptMut.isPending ? "Aceptando..." : "Aceptar invitación"}
+              <Button type="submit" disabled={acceptStatus.kind === "pending"} className="w-full">
+                {acceptStatus.kind === "pending" ? "Aceptando..." : "Aceptar invitación"}
               </Button>
             </form>
           ) : null}
