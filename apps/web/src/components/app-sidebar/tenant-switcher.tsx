@@ -80,7 +80,7 @@ export function TenantSwitcher() {
         </label>
         <select
           id="tenant-switcher"
-          className="-mx-1 truncate rounded-md bg-transparent px-1 py-0.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent focus:outline-none focus:ring-1 focus:ring-sidebar-ring"
+          className="-mx-1 truncate rounded-md bg-transparent px-1 py-0.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent focus:outline-hidden focus:ring-1 focus:ring-sidebar-ring"
           value={activeId ?? ""}
           onChange={handleChange}
           disabled={switchMut.isPending}

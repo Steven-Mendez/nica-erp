@@ -9,7 +9,7 @@ export function BrandHeader() {
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <Link
         to="/tenants"
-        className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+        className="inline-flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-md"
         aria-label="Ir a tus empresas"
       >
         <Logo size={28} withWordmark />

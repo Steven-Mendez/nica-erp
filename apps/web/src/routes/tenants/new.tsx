@@ -274,7 +274,7 @@ const VerticalSteps = ({ steps, current }: VerticalStepsProps) => (
               className={cn(
                 "z-10 flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
                 isDone && "border-primary bg-primary text-primary-foreground",
-                isCurrent && "border-primary bg-background text-primary shadow-sm",
+                isCurrent && "border-primary bg-background text-primary shadow-xs",
                 !isDone && !isCurrent && "border-border bg-background text-muted-foreground",
               )}
             >
@@ -439,10 +439,10 @@ export function TenantsNewRoute() {
               </div>
             </aside>
 
-            <Card className="shadow-sm">
+            <Card className="shadow-xs">
               <CardHeader className="gap-3">
                 <div className="flex items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background text-primary shadow-sm">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background text-primary shadow-xs">
                     <StepIcon className="size-5" aria-hidden="true" />
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">

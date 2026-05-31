@@ -78,7 +78,7 @@ function MembershipCard({
           onActivate(membership.tenant_id);
         }
       }}
-      className={`cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`cursor-pointer transition-shadow hover:shadow-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring ${
         disabled ? "pointer-events-none opacity-60" : ""
       }`}
     >

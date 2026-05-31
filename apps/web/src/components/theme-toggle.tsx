@@ -38,9 +38,9 @@ export function ThemeToggle() {
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-left",
+                  "flex items-center gap-2 rounded-xs px-2 py-1.5 text-sm text-left",
                   "hover:bg-accent hover:text-accent-foreground",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

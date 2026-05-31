@@ -69,7 +69,7 @@ export function AccountMenu() {
         aria-label="Menú de cuenta"
         className={cn(
           "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold uppercase tracking-wide text-white",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
         style={{ backgroundColor: bgColor }}
         title={displayName}
