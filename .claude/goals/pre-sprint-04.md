@@ -60,14 +60,18 @@ the manual verifiable-outcomes for 3.13 / 3.14 were never executed.
 - [x] 5. Audit every other use case for the same pattern
   (`grep -nR "event_id=.*\.id" apps/api/src/contexts/`) and fix any
   occurrence found.
-- [!] 6. Complete Tailwind v4 migration per
-  `openspec/changes/complete-web-tailwind-v4-migration/tasks.md` (28 tasks);
-  the gate is `rm -rf node_modules pnpm-lock.yaml && pnpm install && pnpm
-  -C apps/web build` succeeding from a clean state. **BLOCKED — needs
-  human-in-the-loop**: includes a screenshot regression diff (§1.2 + §6.1)
-  and an OKLCH-vs-HSL color token byte-diff (§4.4) the autonomous agent
-  cannot eyeball, plus a 27-component shadcn dry-run sweep (§6.3).
-  Recommend doing this in a dedicated session.
+- [~] 6. Complete Tailwind v4 migration per
+  `openspec/changes/complete-web-tailwind-v4-migration/tasks.md` (28 tasks).
+  **Autonomous portion done**: §2 manifest + lockfile, §3 Vite plugin
+  wiring, §4 CSS-first `@theme inline` config (with byte-equivalent
+  OKLCH token diff vs the pre-migration baseline), §5 v3→v4 utility
+  sweep across 22 files, §6.3 shadcn 27-primitive dry-run sweep, §6.4
+  typecheck + lint + 195/195 vitest + build all green, §7 ADR-0009 +
+  docs/09-frontend.md alignment. **Still operator-driven**: §1.2/1.3
+  baseline Playwright screenshots + axe scan, §6.1/6.2 their
+  post-migration re-runs (the visual-diff eyeball part), §8.2 archive.
+  Pre-migration CSS baseline saved at
+  `apps/web/.scratch/tailwind-v4-baseline/baseline.css` (gitignored).
 - [x] 7. Decision on per-user permission overrides: take one path.
   Path A — remove the section from `tenants-http/spec.md`, append a
   paragraph to ADR-0022 explaining the decision, and update sprint 3.14's
@@ -203,3 +207,55 @@ Carry-over to a future operator session:
 4. Task 9 follow-up: decide picker-confirmed-flag behaviour for
    deep-link invitation accepts so member-management +
    permission-gating @critical specs can un-skip.
+
+## Update (2026-05-30, session 2) — Tailwind v4 autonomous pass
+
+Resumed against task 6. Carry-over #4 was already resolved by
+commit 28dcef2 (member-management + permission-gating @critical
+specs un-skipped after the picker-confirmed flag fix), so this
+session focused entirely on draining the Tailwind v4 work.
+
+Status: task 6 [!] → [~] (autonomous portion done, eyeball pass
+still pending). Carry-overs 2, 3 unchanged. Carry-over 1 reduced
+to "manual screenshot + axe diff" only.
+
+What landed in code:
+- `feat(web)` — Vite plugin + CSS-first @theme inline; manifest
+  swap (autoprefixer/@tailwindcss/postcss/postcss out,
+  @tailwindcss/vite + 6 shadcn deps in); +@eslint/js as direct
+  devDep so pnpm 11 stops dropping it from the hoist tree
+  (commit bfbdc48).
+- `refactor(web)` — 22 files swept for v3→v4 utility renames:
+  shadow-sm→shadow-xs, rounded-sm→rounded-xs,
+  outline-none→outline-hidden (a11y-critical, expanded beyond
+  the 5-file spec scope), button/input focus ring tightened to
+  ring-3 (commit eb60c18).
+- `fix(web)` — recharts ^2.15.4 → ^3.8.0 so the shadcn v4 chart
+  primitive's declared dep matches our manifest (commit 48f9d08).
+- `docs(frontend)` — ADR-0009 'Revisit 2026-05' subsection +
+  new Styling subsection in docs/09-frontend.md (commit 5479105).
+
+Verification:
+- typecheck + eslint + vitest (195/195) + vite build all green
+- CSS byte-equivalence vs pre-migration baseline: 27/27 OKLCH
+  tokens preserved (baseline at
+  `apps/web/.scratch/tailwind-v4-baseline/baseline.css`).
+- shadcn dry-run sweep across all 27 v4 primitives: each reports
+  1 file create (some with 1 expected overwrite of existing
+  shadcn'd files); the 5 with peer-dep declarations
+  (chart→recharts, carousel→embla, drawer→vaul, resizable→panels,
+  sonner→sonner+next-themes) all match the manifest after the
+  recharts bump.
+- Manifest also drops `postcss` (devDep) since
+  `@tailwindcss/vite` is now the only CSS pipeline plugin and
+  vendor prefixing moved into Lightning CSS.
+
+Carry-over from task 6 (the eyeball pass):
+- Re-capture §1.2 baseline Playwright screenshots
+  (/tenants, /tenants/new, /account, /dashboard × light + dark
+  @ 1280×800) — the migration HAS run, so the baseline must be
+  captured from the pre-merge `main` SHA (28dcef2), not from
+  the post-migration tree.
+- Run §6.1 against the post-migration build; assert each of the
+  8 diffs is < 0.5%. Same for §6.2 axe.
+- Then `/opsx:archive complete-web-tailwind-v4-migration`.
