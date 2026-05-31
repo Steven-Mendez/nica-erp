@@ -130,8 +130,7 @@ export function AcceptInvitationRoute() {
   // token, restoring the result if the route gets remounted mid-
   // request (the stash flow remounts this component several times
   // before the POST settles).
-  const activeToken =
-    mode.kind === "joining" ? mode.token : null;
+  const activeToken = mode.kind === "joining" ? mode.token : null;
   useEffect(() => {
     if (activeToken === null) return;
     const entry = inflight.get(activeToken);

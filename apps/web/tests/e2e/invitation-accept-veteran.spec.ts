@@ -12,9 +12,7 @@ import { signupConfirmLogin, uniqueEmail } from "./fixtures/auth";
 import { createEmpresa, inviteMember } from "./fixtures/tenant";
 
 test.describe("invitation accept (veteran user) @critical", () => {
-  test("user with active empresa A accepts an invite to B; stays in A", async ({
-    browser,
-  }) => {
+  test("user with active empresa A accepts an invite to B; stays in A", async ({ browser }) => {
     // ── Owner of empresa B sets up the invitation. ──────────────────
     const ownerBContext = await browser.newContext();
     const ownerBPage = await ownerBContext.newPage();
@@ -29,9 +27,9 @@ test.describe("invitation accept (veteran user) @critical", () => {
     const { name: empresaAName } = await createEmpresa(veteranPage);
     // Confirm A is the active empresa on the sidebar before the
     // invitation lands.
-    await expect(
-      veteranPage.getByRole("combobox", { name: /Empresa activa/i }),
-    ).toContainText(empresaAName);
+    await expect(veteranPage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
+      empresaAName,
+    );
 
     // ── Owner B issues the invitation to the veteran's address. ─────
     const { token } = await inviteMember(ownerBPage, {
@@ -48,15 +46,13 @@ test.describe("invitation accept (veteran user) @critical", () => {
     await veteranPage.waitForURL(/\/dashboard/);
 
     // ── Active empresa is still A — no silent switch. ───────────────
-    await expect(
-      veteranPage.getByRole("combobox", { name: /Empresa activa/i }),
-    ).toContainText(empresaAName);
+    await expect(veteranPage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
+      empresaAName,
+    );
 
     // Empresa B is available as a switch target — the membership was
     // created server-side, only the active_tenant claim was preserved.
-    await veteranPage
-      .getByRole("combobox", { name: /Empresa activa/i })
-      .click();
+    await veteranPage.getByRole("combobox", { name: /Empresa activa/i }).click();
     await expect(veteranPage.getByText(empresaBName)).toBeVisible();
 
     await ownerBContext.close();

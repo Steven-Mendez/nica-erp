@@ -8,13 +8,7 @@
 // rendered "joining" UI + the navigation that fires when the promise
 // resolves.
 
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,12 +71,10 @@ function renderAccept() {
 function deferredAccept() {
   let resolve!: (value: { tenant_id: string; role: "accountant" }) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<{ tenant_id: string; role: "accountant" }>(
-    (res, rej) => {
-      resolve = res;
-      reject = rej;
-    },
-  );
+  const promise = new Promise<{ tenant_id: string; role: "accountant" }>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
   acceptInvitationMock.mockReturnValueOnce(promise);
   return { promise, resolve, reject };
 }
@@ -120,9 +112,7 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
       target: { value: "inv-token-paste" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Aceptar invitación/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Aceptar invitación/i }));
     await waitFor(() => {
       expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste", "refresh.jwt");
     });
@@ -136,9 +126,7 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
       target: { value: "happy-token" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Aceptar invitación/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Aceptar invitación/i }));
     resolve({ tenant_id: "t-1", role: "accountant" });
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith({ to: "/dashboard" });
@@ -148,9 +136,7 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
 
   it("shows an inline validation error when submit is fired with empty input", () => {
     renderAccept();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Aceptar invitación/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Aceptar invitación/i }));
     expect(screen.getByText("Pega el código de invitación.")).toBeInTheDocument();
     expect(acceptInvitationMock).not.toHaveBeenCalled();
   });
@@ -161,14 +147,10 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     fireEvent.change(screen.getByLabelText(/Código de invitación/i), {
       target: { value: "expired-token" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Aceptar invitación/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Aceptar invitación/i }));
     reject(new Error("Invitación inválida o expirada."));
     await waitFor(() => {
-      expect(
-        screen.getByText("Invitación inválida o expirada."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Invitación inválida o expirada.")).toBeInTheDocument();
     });
     expect(navigateSpy).not.toHaveBeenCalled();
   });
@@ -181,14 +163,10 @@ describe("AcceptInvitationRoute — hash branch (unauthenticated, invalid token)
   });
 
   it("shows the preview-error fallback when previewInvitation rejects", async () => {
-    previewInvitationMock.mockRejectedValueOnce(
-      new Error("Invitación inválida o expirada."),
-    );
+    previewInvitationMock.mockRejectedValueOnce(new Error("Invitación inválida o expirada."));
     renderAccept();
     await waitFor(() => {
-      expect(
-        screen.getByText("Invitación inválida o expirada."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Invitación inválida o expirada.")).toBeInTheDocument();
     });
     // The hash must be stripped on mount so a refresh does not re-trigger.
     expect(window.location.hash).toBe("");
@@ -200,9 +178,7 @@ describe("AcceptInvitationRoute — hash branch (unauthenticated, invalid token)
     previewInvitationMock.mockRejectedValueOnce("plain-string-err");
     renderAccept();
     await waitFor(() => {
-      expect(
-        screen.getByText("No se pudo cargar la invitación."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("No se pudo cargar la invitación.")).toBeInTheDocument();
     });
   });
 });

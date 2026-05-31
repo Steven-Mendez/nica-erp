@@ -43,46 +43,35 @@ describe("mapProblemDetails", () => {
 
   describe("auth.invalid_credentials", () => {
     it("returns the canonical toast message", () => {
-      expect(
-        mapProblemDetails(problem({ code: "auth.invalid_credentials" })),
-      ).toEqual({
+      expect(mapProblemDetails(problem({ code: "auth.invalid_credentials" }))).toEqual({
         kind: "toast",
         message: "Email or password is incorrect.",
       });
     });
 
     it("does not redirect even on 401", () => {
-      const out = mapProblemDetails(
-        problem({ code: "auth.invalid_credentials", status: 401 }),
-      );
+      const out = mapProblemDetails(problem({ code: "auth.invalid_credentials", status: 401 }));
       expect(out.kind).toBe("toast");
     });
   });
 
   describe("auth.token_expired", () => {
     it("redirects to /login when status is 401", () => {
-      expect(
-        mapProblemDetails(
-          problem({ code: "auth.token_expired", status: 401 }),
-        ),
-      ).toEqual({ kind: "redirect", to: "/login" });
+      expect(mapProblemDetails(problem({ code: "auth.token_expired", status: 401 }))).toEqual({
+        kind: "redirect",
+        to: "/login",
+      });
     });
 
     it("falls back to toast when status is not 401", () => {
-      expect(
-        mapProblemDetails(
-          problem({ code: "auth.token_expired", status: 403 }),
-        ),
-      ).toEqual({
+      expect(mapProblemDetails(problem({ code: "auth.token_expired", status: 403 }))).toEqual({
         kind: "toast",
         message: "Your session expired. Please sign in again.",
       });
     });
 
     it("falls back to toast when status is missing", () => {
-      expect(
-        mapProblemDetails(problem({ code: "auth.token_expired" })),
-      ).toEqual({
+      expect(mapProblemDetails(problem({ code: "auth.token_expired" }))).toEqual({
         kind: "toast",
         message: "Your session expired. Please sign in again.",
       });
@@ -92,10 +81,7 @@ describe("mapProblemDetails", () => {
   describe("known toast codes", () => {
     it.each([
       ["auth.lockout_active", "Too many attempts. Try again later."],
-      [
-        "auth.signup_email_not_confirmed",
-        "Confirm your email before signing in.",
-      ],
+      ["auth.signup_email_not_confirmed", "Confirm your email before signing in."],
       ["validation.password_policy", "Password does not meet the policy."],
       ["email.send_failed", "We couldn't send the email. Please try again."],
       ["user.not_found", "We couldn't find that account."],
@@ -164,9 +150,7 @@ describe("mapProblemDetails", () => {
     });
 
     it("falls back to toast when errors[] is missing", () => {
-      expect(
-        mapProblemDetails(problem({ code: "validation.request_invalid" })),
-      ).toEqual({
+      expect(mapProblemDetails(problem({ code: "validation.request_invalid" }))).toEqual({
         kind: "toast",
         message: "Some fields are invalid. Please review.",
       });
@@ -204,16 +188,15 @@ describe("mapProblemDetails", () => {
 
     it("falls back to title when detail is missing", () => {
       expect(
-        mapProblemDetails(
-          problem({ code: "something.weird", title: "Weird thing happened" }),
-        ),
+        mapProblemDetails(problem({ code: "something.weird", title: "Weird thing happened" })),
       ).toEqual({ kind: "toast", message: "Weird thing happened" });
     });
 
     it("falls back to the generic 'Unexpected error.' when neither is set", () => {
-      expect(
-        mapProblemDetails(problem({ code: "something.weird" })),
-      ).toEqual({ kind: "toast", message: "Unexpected error." });
+      expect(mapProblemDetails(problem({ code: "something.weird" }))).toEqual({
+        kind: "toast",
+        message: "Unexpected error.",
+      });
     });
   });
 
@@ -244,9 +227,10 @@ describe("mapProblemDetails", () => {
     it("uses detail when no code is present (wrapped)", () => {
       // Same unwrap quirk as above: pass the body through `.detail` so
       // extractDetail surfaces the inner ProblemDetail.
-      expect(
-        mapProblemDetails({ detail: { detail: "I am alone." } }),
-      ).toEqual({ kind: "toast", message: "I am alone." });
+      expect(mapProblemDetails({ detail: { detail: "I am alone." } })).toEqual({
+        kind: "toast",
+        message: "I am alone.",
+      });
     });
 
     it("uses title when neither code nor detail are present", () => {

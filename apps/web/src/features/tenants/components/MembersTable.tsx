@@ -438,8 +438,7 @@ export function MembersTable({
 
   const roleColumn = table.getColumn("role");
   const statusColumn = table.getColumn("status");
-  const isFiltered =
-    searchInput.length > 0 || globalFilter.length > 0 || columnFilters.length > 0;
+  const isFiltered = searchInput.length > 0 || globalFilter.length > 0 || columnFilters.length > 0;
 
   if (isLoading) {
     return <Skeleton className="h-32 w-full" />;
@@ -493,9 +492,7 @@ export function MembersTable({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <p className="text-xs text-muted-foreground">
-            {table.getRowCount()} resultado(s)
-          </p>
+          <p className="text-xs text-muted-foreground">{table.getRowCount()} resultado(s)</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="outline" size="sm" className="h-8">

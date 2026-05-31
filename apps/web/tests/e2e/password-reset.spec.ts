@@ -10,32 +10,19 @@
 
 import { expect, test } from "@playwright/test";
 
-import {
-  E2E_PASSWORD,
-  resetPassword,
-  signupConfirmLogin,
-} from "./fixtures/auth";
+import { E2E_PASSWORD, resetPassword, signupConfirmLogin } from "./fixtures/auth";
 
 test.describe("password reset @smoke", () => {
-  test("the forgot-password form renders for unauthenticated visitors", async ({
-    page,
-  }) => {
+  test("the forgot-password form renders for unauthenticated visitors", async ({ page }) => {
     await page.goto("/forgot-password");
-    await expect(
-      page.getByRole("heading", { name: /Recupera tu contraseña/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Recupera tu contraseña/i })).toBeVisible();
     await expect(page.getByLabel(/Correo/i)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /Enviar código/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Enviar código/i })).toBeVisible();
   });
 });
 
 test.describe("password reset @critical", () => {
-  test("user resets their password and logs in with the new one", async ({
-    page,
-    context,
-  }) => {
+  test("user resets their password and logs in with the new one", async ({ page, context }) => {
     // 1. Bootstrap a confirmed account. signupConfirmLogin leaves the
     //    SPA on /onboarding for a fresh user (no empresa = no sidebar /
     //    logout button), so we clear session state directly instead of
@@ -80,9 +67,7 @@ test.describe("password reset @critical", () => {
     // timeout) and the URL never leaves /login. Both assertions are
     // necessary: the alert alone could be a lingering banner, the URL
     // alone could be a slow nav.
-    await expect(
-      page.getByText(/No se pudo iniciar sesión/i),
-    ).toBeVisible();
+    await expect(page.getByText(/No se pudo iniciar sesión/i)).toBeVisible();
     await expect(page).toHaveURL(/\/login(\?|$)/);
   });
 });

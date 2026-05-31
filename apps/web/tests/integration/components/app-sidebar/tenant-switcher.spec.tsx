@@ -8,15 +8,7 @@
 // success.
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { TenantSwitcher } from "@/components/app-sidebar/tenant-switcher";
 import { SidebarProvider } from "@/components/app-sidebar/sidebar-context";
 
@@ -129,13 +121,9 @@ afterEach(() => {
 
 describe("TenantSwitcher", () => {
   it("renders a Skeleton while tenants are loading", () => {
-    useMyTenantsQueryMock.mockReturnValue(
-      tenantsResult([], { isLoading: true, data: undefined }),
-    );
+    useMyTenantsQueryMock.mockReturnValue(tenantsResult([], { isLoading: true, data: undefined }));
     useMeQueryMock.mockReturnValue(meResult(null));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(vi.fn()),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(vi.fn()));
 
     const { container } = renderSwitcher();
     // Skeleton is the only thing rendered; the select label is absent.
@@ -144,13 +132,9 @@ describe("TenantSwitcher", () => {
   });
 
   it("renders nothing when the tenants query errors", () => {
-    useMyTenantsQueryMock.mockReturnValue(
-      tenantsResult([], { isError: true, data: undefined }),
-    );
+    useMyTenantsQueryMock.mockReturnValue(tenantsResult([], { isError: true, data: undefined }));
     useMeQueryMock.mockReturnValue(meResult(null));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(vi.fn()),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(vi.fn()));
 
     const { container } = renderSwitcher();
     // First child of the SidebarProvider wrapper has no switcher inside.
@@ -161,9 +145,7 @@ describe("TenantSwitcher", () => {
   it("renders the empty-state link to /tenants/new when items is empty", () => {
     useMyTenantsQueryMock.mockReturnValue(tenantsResult([]));
     useMeQueryMock.mockReturnValue(meResult(null));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(vi.fn()),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(vi.fn()));
 
     renderSwitcher();
     const link = screen.getByTitle("Sin empresa activa");
@@ -179,17 +161,13 @@ describe("TenantSwitcher", () => {
       ]),
     );
     useMeQueryMock.mockReturnValue(meResult(TENANT_A));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(vi.fn()),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(vi.fn()));
 
     renderSwitcher();
     const select = screen.getByLabelText("Empresa activa") as HTMLSelectElement;
     expect(select.value).toBe(TENANT_A);
     expect(screen.getByRole("option", { name: "Acme · owner" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("option", { name: "Beta · accountant" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Beta · accountant" })).toBeInTheDocument();
     // Role line under the select reflects the active tenant.
     expect(screen.getByText("owner")).toBeInTheDocument();
   });
@@ -204,9 +182,7 @@ describe("TenantSwitcher", () => {
       ]),
     );
     useMeQueryMock.mockReturnValue(meResult(TENANT_A));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(mutate),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(mutate));
 
     renderSwitcher();
     fireEvent.change(screen.getByLabelText("Empresa activa"), {
@@ -239,9 +215,7 @@ describe("TenantSwitcher", () => {
       ]),
     );
     useMeQueryMock.mockReturnValue(meResult(TENANT_A));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(mutate),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(mutate));
 
     renderSwitcher();
     fireEvent.change(screen.getByLabelText("Empresa activa"), {
@@ -261,9 +235,7 @@ describe("TenantSwitcher", () => {
       ]),
     );
     useMeQueryMock.mockReturnValue(meResult(TENANT_A));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(mutate),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(mutate));
 
     renderSwitcher();
     fireEvent.change(screen.getByLabelText("Empresa activa"), {
@@ -281,9 +253,7 @@ describe("TenantSwitcher", () => {
       ]),
     );
     useMeQueryMock.mockReturnValue(meResult(TENANT_A));
-    useSwitchTenantMutationMock.mockReturnValue(
-      switchMutationResult(vi.fn(), true),
-    );
+    useSwitchTenantMutationMock.mockReturnValue(switchMutationResult(vi.fn(), true));
 
     renderSwitcher();
     expect(screen.getByLabelText("Empresa activa")).toBeDisabled();

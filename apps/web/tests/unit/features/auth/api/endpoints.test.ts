@@ -82,9 +82,7 @@ describe("auth endpoints — happy paths and URL/body wiring", () => {
 
   it("confirmSignup without password resolves null on 204", async () => {
     postMock.mockResolvedValueOnce(ok(undefined, 204));
-    await expect(
-      confirmSignup({ email: "a@b.test", code: "123456" }),
-    ).resolves.toBeNull();
+    await expect(confirmSignup({ email: "a@b.test", code: "123456" })).resolves.toBeNull();
     expect(postMock).toHaveBeenCalledWith("/v1/auth/confirm-signup", {
       body: { email: "a@b.test", code: "123456" },
     });
@@ -124,9 +122,7 @@ describe("auth endpoints — happy paths and URL/body wiring", () => {
       expires_in: 3600,
     };
     postMock.mockResolvedValueOnce(ok(tokens));
-    await expect(
-      login({ email: "a@b.test", password: "x" }),
-    ).resolves.toEqual(tokens);
+    await expect(login({ email: "a@b.test", password: "x" })).resolves.toEqual(tokens);
     expect(postMock).toHaveBeenCalledWith("/v1/auth/login", {
       body: { email: "a@b.test", password: "x" },
     });
@@ -216,12 +212,8 @@ describe("auth endpoints — error mapping", () => {
   });
 
   it("expectData → ApiError when fetch returns an error body", async () => {
-    postMock.mockResolvedValueOnce(
-      fail(401, { code: "auth.invalid_credentials" }),
-    );
-    await expect(
-      login({ email: "a@b.test", password: "x" }),
-    ).rejects.toMatchObject({
+    postMock.mockResolvedValueOnce(fail(401, { code: "auth.invalid_credentials" }));
+    await expect(login({ email: "a@b.test", password: "x" })).rejects.toMatchObject({
       name: "ApiError",
       status: 401,
       detail: { code: "auth.invalid_credentials" },
@@ -244,12 +236,8 @@ describe("auth endpoints — error mapping", () => {
   });
 
   it("expectVoid → ApiError when fetch returns an error body", async () => {
-    postMock.mockResolvedValueOnce(
-      fail(422, { code: "validation.request_invalid" }),
-    );
-    await expect(
-      confirmSignup({ email: "a@b.test", code: "wrong" }),
-    ).rejects.toMatchObject({
+    postMock.mockResolvedValueOnce(fail(422, { code: "validation.request_invalid" }));
+    await expect(confirmSignup({ email: "a@b.test", code: "wrong" })).rejects.toMatchObject({
       name: "ApiError",
       status: 422,
       detail: { code: "validation.request_invalid" },
@@ -270,9 +258,7 @@ describe("auth endpoints — error mapping", () => {
   });
 
   it("PATCH endpoints surface ApiError on failure", async () => {
-    patchMock.mockResolvedValueOnce(
-      fail(422, { code: "validation.request_invalid" }),
-    );
+    patchMock.mockResolvedValueOnce(fail(422, { code: "validation.request_invalid" }));
     await expect(patchMe({ display_name: "" })).rejects.toMatchObject({
       name: "ApiError",
       status: 422,

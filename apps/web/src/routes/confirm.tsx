@@ -39,8 +39,7 @@ export function ConfirmRoute() {
     // after a hard refresh of /confirm), fall back to the historical
     // "navigate to /login" path so the user can finish manually.
     const password = popSignupPassword();
-    const body =
-      password !== null ? { ...values, password } : values;
+    const body = password !== null ? { ...values, password } : values;
     confirmMutation.mutate(body, {
       onSuccess: (bundle) => {
         if (bundle !== null) {

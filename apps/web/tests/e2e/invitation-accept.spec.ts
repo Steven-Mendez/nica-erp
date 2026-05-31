@@ -14,11 +14,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import {
-  E2E_PASSWORD,
-  signupConfirmLogin,
-  uniqueEmail,
-} from "./fixtures/auth";
+import { E2E_PASSWORD, signupConfirmLogin, uniqueEmail } from "./fixtures/auth";
 import { createEmpresa, inviteMember } from "./fixtures/tenant";
 import { extractOtp, waitForEmail } from "./fixtures/mailpit";
 
@@ -51,12 +47,8 @@ test.describe("invitation accept (stash flow) @critical", () => {
     await expect(inviteePage.getByLabel(/Correo/i)).toHaveValue(inviteeEmail);
 
     // ── Invitee: complete signup → confirm (auto-authenticates). ────
-    await inviteePage
-      .getByLabel("Contraseña", { exact: true })
-      .fill(E2E_PASSWORD);
-    await inviteePage
-      .getByLabel("Confirmar contraseña")
-      .fill(E2E_PASSWORD);
+    await inviteePage.getByLabel("Contraseña", { exact: true }).fill(E2E_PASSWORD);
+    await inviteePage.getByLabel("Confirmar contraseña").fill(E2E_PASSWORD);
     await inviteePage.getByRole("button", { name: /Crear cuenta/i }).click();
     await inviteePage.waitForURL(/\/confirm/);
 
@@ -66,10 +58,7 @@ test.describe("invitation accept (stash flow) @critical", () => {
       subjectIncludes: "confirma",
     });
     const otp = extractOtp(confirmEmail);
-    await inviteePage
-      .locator("input[autocomplete='one-time-code']")
-      .first()
-      .focus();
+    await inviteePage.locator("input[autocomplete='one-time-code']").first().focus();
     await inviteePage.keyboard.type(otp);
     await inviteePage.getByRole("button", { name: /^Confirmar$/i }).click();
 
@@ -82,9 +71,7 @@ test.describe("invitation accept (stash flow) @critical", () => {
     // Assert we never transited through /login.
     expect(inviteePage.url()).not.toContain("/login");
     await inviteePage.getByLabel(/Nombre/i).fill("Stash Invitee");
-    await inviteePage
-      .getByRole("button", { name: /Continuar|Guardar/i })
-      .click();
+    await inviteePage.getByRole("button", { name: /Continuar|Guardar/i }).click();
 
     // ── After /welcome: active_tenant is already set by the
     //    invitation-accept's token rotation, so the route guard lets
@@ -92,16 +79,14 @@ test.describe("invitation accept (stash flow) @critical", () => {
     //    empresa-picker detour at /tenants.
     await inviteePage.waitForURL(/\/dashboard/);
     expect(inviteePage.url()).not.toContain("/tenants");
-    await expect(
-      inviteePage.getByRole("combobox", { name: /Empresa activa/i }),
-    ).toContainText(empresaName);
+    await expect(inviteePage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
+      empresaName,
+    );
 
     // ── Owner sees the invitee promoted from pending to member. ─────
     await ownerPage.goto("/empresa/users");
     await expect(ownerPage.getByText(inviteeEmail)).toBeVisible();
-    await expect(
-      ownerPage.getByRole("cell", { name: /Contador/i }).first(),
-    ).toBeVisible();
+    await expect(ownerPage.getByRole("cell", { name: /Contador/i }).first()).toBeVisible();
 
     await ownerContext.close();
     await inviteeContext.close();

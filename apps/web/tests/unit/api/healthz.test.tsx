@@ -15,11 +15,7 @@ vi.mock("@/api/client", () => ({
   api: { GET: getMock },
 }));
 
-import {
-  fetchHealthz,
-  useHealthz,
-  type HealthzResponse,
-} from "@/api/healthz";
+import { fetchHealthz, useHealthz, type HealthzResponse } from "@/api/healthz";
 
 describe("fetchHealthz", () => {
   beforeEach(() => {

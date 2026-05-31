@@ -9,13 +9,7 @@
 // (expired or replayed token from the backend) is covered via the
 // destructive Alert path.
 
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,8 +42,7 @@ interface MutationOverrides {
 }
 
 function installResetMutation(overrides: MutationOverrides = {}) {
-  const { outcome = "success", isPending = false, isError = false } =
-    overrides;
+  const { outcome = "success", isPending = false, isError = false } = overrides;
   useResetMock.mockReturnValue({
     mutate: (
       vars: { email: string; code: string; new_password: string },
@@ -90,9 +83,7 @@ describe("ResetPasswordRoute", () => {
 
   it("blocks submission when the code or password is missing", async () => {
     renderReset();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Restablecer contraseña/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Restablecer contraseña/i }));
     await waitFor(() => expect(resetSpy).not.toHaveBeenCalled());
   });
 
@@ -104,9 +95,7 @@ describe("ResetPasswordRoute", () => {
     fireEvent.change(screen.getByLabelText(/Nueva contraseña/i), {
       target: { value: "N3wP4ss!2026" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Restablecer contraseña/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Restablecer contraseña/i }));
     await waitFor(() => expect(resetSpy).toHaveBeenCalledTimes(1));
     expect(resetSpy).toHaveBeenCalledWith({
       email: "ada@nica.test",
@@ -123,9 +112,7 @@ describe("ResetPasswordRoute", () => {
     fireEvent.change(screen.getByLabelText(/Nueva contraseña/i), {
       target: { value: "N3wP4ss!2026" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Restablecer contraseña/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Restablecer contraseña/i }));
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith({ to: "/login" });
     });
@@ -134,9 +121,7 @@ describe("ResetPasswordRoute", () => {
   it("renders the destructive Alert when the mutation isError is true (e.g. expired token)", () => {
     installResetMutation({ isError: true, outcome: "noop" });
     renderReset();
-    expect(
-      screen.getByText(/No se pudo restablecer la contraseña/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/No se pudo restablecer la contraseña/i)).toBeInTheDocument();
   });
 
   it("shows 'Restableciendo...' and disables the submit while the mutation is pending", () => {
@@ -157,13 +142,12 @@ describe("ResetPasswordRoute", () => {
     fireEvent.change(screen.getByLabelText(/Nueva contraseña/i), {
       target: { value: "N3wP4ss!2026" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Restablecer contraseña/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Restablecer contraseña/i }));
     await waitFor(() => {
-      expect(
-        screen.getByLabelText(/Código de recuperación/i),
-      ).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByLabelText(/Código de recuperación/i)).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
     });
     expect(resetSpy).not.toHaveBeenCalled();
   });
@@ -176,14 +160,9 @@ describe("ResetPasswordRoute", () => {
     fireEvent.change(screen.getByLabelText(/Nueva contraseña/i), {
       target: { value: "short" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /Restablecer contraseña/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Restablecer contraseña/i }));
     await waitFor(() => {
-      expect(screen.getByLabelText(/Nueva contraseña/i)).toHaveAttribute(
-        "aria-invalid",
-        "true",
-      );
+      expect(screen.getByLabelText(/Nueva contraseña/i)).toHaveAttribute("aria-invalid", "true");
     });
     expect(resetSpy).not.toHaveBeenCalled();
   });

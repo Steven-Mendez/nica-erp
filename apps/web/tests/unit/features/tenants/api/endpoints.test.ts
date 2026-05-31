@@ -117,9 +117,9 @@ describe("tenant endpoints — happy paths", () => {
 
   it("updateTenant PATCHes /v1/tenants/{tenant_id} with body", async () => {
     patchMock.mockResolvedValueOnce(ok({ ...tenant, name: "Otro" }));
-    await expect(
-      updateTenant(TENANT_ID, { name: "Otro" }),
-    ).resolves.toMatchObject({ name: "Otro" });
+    await expect(updateTenant(TENANT_ID, { name: "Otro" })).resolves.toMatchObject({
+      name: "Otro",
+    });
     expect(patchMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}", {
       params: { path: { tenant_id: TENANT_ID } },
       body: { name: "Otro" },
@@ -135,9 +135,7 @@ describe("tenant endpoints — happy paths", () => {
       expires_in: 3600,
     };
     postMock.mockResolvedValueOnce(ok(bundle));
-    await expect(
-      switchTenant(TENANT_ID, { refresh_token: "rt-in" }),
-    ).resolves.toEqual(bundle);
+    await expect(switchTenant(TENANT_ID, { refresh_token: "rt-in" })).resolves.toEqual(bundle);
     expect(postMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/switch", {
       params: { path: { tenant_id: TENANT_ID } },
       body: { refresh_token: "rt-in" },
@@ -191,22 +189,18 @@ describe("member endpoints", () => {
     await expect(
       updateMemberRole(TENANT_ID, USER_ID, { role: "accountant" }),
     ).resolves.toBeUndefined();
-    expect(patchMock).toHaveBeenCalledWith(
-      "/v1/tenants/{tenant_id}/members/{user_id}",
-      {
-        params: { path: { tenant_id: TENANT_ID, user_id: USER_ID } },
-        body: { role: "accountant" },
-      },
-    );
+    expect(patchMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/members/{user_id}", {
+      params: { path: { tenant_id: TENANT_ID, user_id: USER_ID } },
+      body: { role: "accountant" },
+    });
   });
 
   it("removeMember DELETEs a single member", async () => {
     deleteMock.mockResolvedValueOnce(ok({}, 204));
     await expect(removeMember(TENANT_ID, USER_ID)).resolves.toBeUndefined();
-    expect(deleteMock).toHaveBeenCalledWith(
-      "/v1/tenants/{tenant_id}/members/{user_id}",
-      { params: { path: { tenant_id: TENANT_ID, user_id: USER_ID } } },
-    );
+    expect(deleteMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/members/{user_id}", {
+      params: { path: { tenant_id: TENANT_ID, user_id: USER_ID } },
+    });
   });
 });
 
@@ -214,10 +208,9 @@ describe("invitation endpoints", () => {
   it("listInvitations GETs the invitations collection", async () => {
     getMock.mockResolvedValueOnce(ok([]));
     await expect(listInvitations(TENANT_ID)).resolves.toEqual([]);
-    expect(getMock).toHaveBeenCalledWith(
-      "/v1/tenants/{tenant_id}/invitations",
-      { params: { path: { tenant_id: TENANT_ID } } },
-    );
+    expect(getMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/invitations", {
+      params: { path: { tenant_id: TENANT_ID } },
+    });
   });
 
   it("inviteMember POSTs an invitation", async () => {
@@ -236,28 +229,20 @@ describe("invitation endpoints", () => {
         proposed_role: "accountant",
       }),
     ).resolves.toEqual(invitation);
-    expect(postMock).toHaveBeenCalledWith(
-      "/v1/tenants/{tenant_id}/invitations",
-      {
-        params: { path: { tenant_id: TENANT_ID } },
-        body: { email: "c@d.test", proposed_role: "accountant" },
-      },
-    );
+    expect(postMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/invitations", {
+      params: { path: { tenant_id: TENANT_ID } },
+      body: { email: "c@d.test", proposed_role: "accountant" },
+    });
   });
 
   it("cancelInvitation DELETEs a single invitation", async () => {
     deleteMock.mockResolvedValueOnce(ok({}, 204));
-    await expect(
-      cancelInvitation(TENANT_ID, INVITATION_ID),
-    ).resolves.toBeUndefined();
-    expect(deleteMock).toHaveBeenCalledWith(
-      "/v1/tenants/{tenant_id}/invitations/{invitation_id}",
-      {
-        params: {
-          path: { tenant_id: TENANT_ID, invitation_id: INVITATION_ID },
-        },
+    await expect(cancelInvitation(TENANT_ID, INVITATION_ID)).resolves.toBeUndefined();
+    expect(deleteMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/invitations/{invitation_id}", {
+      params: {
+        path: { tenant_id: TENANT_ID, invitation_id: INVITATION_ID },
       },
-    );
+    });
   });
 
   it("acceptInvitation POSTs the token in the body (ADR-0031)", async () => {
@@ -295,12 +280,8 @@ describe("invitation endpoints", () => {
 
 describe("expectData / expectVoid error branches", () => {
   it("expectData throws ApiError when the call returns an error body", async () => {
-    postMock.mockResolvedValueOnce(
-      fail(422, { code: "validation.request_invalid" }),
-    );
-    await expect(
-      createTenant({ name: "", is_withholder: false }),
-    ).rejects.toMatchObject({
+    postMock.mockResolvedValueOnce(fail(422, { code: "validation.request_invalid" }));
+    await expect(createTenant({ name: "", is_withholder: false })).rejects.toMatchObject({
       name: "ApiError",
       status: 422,
       detail: { code: "validation.request_invalid" },
@@ -319,9 +300,7 @@ describe("expectData / expectVoid error branches", () => {
   });
 
   it("expectVoid throws ApiError when the call returns an error body", async () => {
-    deleteMock.mockResolvedValueOnce(
-      fail(403, { code: "rbac.forbidden" }),
-    );
+    deleteMock.mockResolvedValueOnce(fail(403, { code: "rbac.forbidden" }));
     await expect(removeMember(TENANT_ID, USER_ID)).rejects.toMatchObject({
       name: "ApiError",
       status: 403,
@@ -331,16 +310,12 @@ describe("expectData / expectVoid error branches", () => {
 
   it("expectVoid resolves with no error even if data is undefined", async () => {
     patchMock.mockResolvedValueOnce(undef(204));
-    await expect(
-      updateMemberRole(TENANT_ID, USER_ID, { role: "viewer" }),
-    ).resolves.toBeUndefined();
+    await expect(updateMemberRole(TENANT_ID, USER_ID, { role: "viewer" })).resolves.toBeUndefined();
   });
 
   it("interpolates the path id into the error label", async () => {
     deleteMock.mockResolvedValueOnce(fail(404, { code: "not_found" }));
-    await expect(
-      cancelInvitation(TENANT_ID, INVITATION_ID),
-    ).rejects.toMatchObject({
+    await expect(cancelInvitation(TENANT_ID, INVITATION_ID)).rejects.toMatchObject({
       message: `DELETE /v1/tenants/${TENANT_ID}/invitations/${INVITATION_ID} failed: 404`,
     });
   });

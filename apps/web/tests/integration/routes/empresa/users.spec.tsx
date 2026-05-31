@@ -83,21 +83,20 @@ vi.mock("@tanstack/react-router", async () => {
         },
         () => currentSearch,
       ),
-    useNavigate: () =>
-      (opts: { search?: unknown; replace?: boolean } | undefined) => {
-        if (opts === undefined) return undefined;
-        navigateCalls.push({ search: opts.search, replace: opts.replace });
-        if (typeof opts.search === "function") {
-          setSearchState(
-            (opts.search as (prev: Record<string, unknown>) => Record<string, unknown>)(
-              currentSearch,
-            ),
-          );
-        } else if (opts.search !== undefined) {
-          setSearchState(opts.search as Record<string, unknown>);
-        }
-        return undefined;
-      },
+    useNavigate: () => (opts: { search?: unknown; replace?: boolean } | undefined) => {
+      if (opts === undefined) return undefined;
+      navigateCalls.push({ search: opts.search, replace: opts.replace });
+      if (typeof opts.search === "function") {
+        setSearchState(
+          (opts.search as (prev: Record<string, unknown>) => Record<string, unknown>)(
+            currentSearch,
+          ),
+        );
+      } else if (opts.search !== undefined) {
+        setSearchState(opts.search as Record<string, unknown>);
+      }
+      return undefined;
+    },
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
       <a href={to}>{children}</a>
     ),
