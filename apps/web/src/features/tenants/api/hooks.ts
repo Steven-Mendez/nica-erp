@@ -47,16 +47,29 @@ export const invitationsKey = (id: string) => ["tenant", id, "invitations"] as c
 export const useMyTenantsQuery = (): UseQueryResult<MyTenants, Error> =>
   useQuery({ queryKey: myTenantsKey, queryFn: getMyTenants });
 
+// All per-tenant queries gate on a truthy tenantId. Callers commonly source
+// the id from `useMeQuery().data?.active_tenant`, which is `undefined` until
+// `/v1/me` resolves — without this gate the query would hit `/v1/tenants//…`
+// (note the double slash) and 404 every page refresh.
 export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> =>
-  useQuery({ queryKey: tenantKey(tenantId), queryFn: () => getTenant(tenantId) });
+  useQuery({
+    queryKey: tenantKey(tenantId),
+    queryFn: () => getTenant(tenantId),
+    enabled: tenantId !== "",
+  });
 
 export const useMembersQuery = (tenantId: string): UseQueryResult<Member[], Error> =>
-  useQuery({ queryKey: membersKey(tenantId), queryFn: () => listMembers(tenantId) });
+  useQuery({
+    queryKey: membersKey(tenantId),
+    queryFn: () => listMembers(tenantId),
+    enabled: tenantId !== "",
+  });
 
 export const useInvitationsQuery = (tenantId: string): UseQueryResult<Invitation[], Error> =>
   useQuery({
     queryKey: invitationsKey(tenantId),
     queryFn: () => listInvitations(tenantId),
+    enabled: tenantId !== "",
   });
 
 export const useCreateTenantMutation = (): UseMutationResult<Tenant, Error, CreateTenantInput> => {
