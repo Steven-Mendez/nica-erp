@@ -1,7 +1,7 @@
 // Unit tests for MembersTable. Covers loading skeleton, error alert,
 // the owner-row no-actions guarantee, Spanish role labels, search-box
 // global filter, and the empty-state copy.
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Member } from "@/features/tenants/api/endpoints";
@@ -104,17 +104,45 @@ describe("MembersTable", () => {
     expect(screen.queryByLabelText("Acciones de u-2")).toBeNull();
   });
 
-  it("filters rows via the search box (case-insensitive match on email)", () => {
-    renderTable({
-      data: [
-        makeMember({ user_id: "u-1", email: "ada@nica.test", role: "viewer" }),
-        makeMember({ user_id: "u-2", email: "bob@nica.test", role: "admin" }),
-      ],
-    });
+  it("debounces the search box and forwards the value via onViewStateChange", async () => {
+    // The table now runs in server-side mode (manualFiltering), so
+    // typing into the search box no longer hides rows itself. Instead,
+    // the debounced value reaches the route via `onViewStateChange`,
+    // which writes it to the URL search params and triggers a refetch.
+    // This test pins that contract.
+    const captured: string[] = [];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MembersTable
+          tenantId={tenantId}
+          data={[
+            makeMember({ user_id: "u-1", email: "ada@nica.test", role: "viewer" }),
+            makeMember({ user_id: "u-2", email: "bob@nica.test", role: "admin" }),
+          ]}
+          total={2}
+          isLoading={false}
+          isError={false}
+          canUpdateRole={false}
+          canRemove={false}
+          viewState={{
+            sorting: [],
+            columnFilters: [],
+            globalFilter: "",
+            pagination: { pageIndex: 0, pageSize: 10 },
+          }}
+          onViewStateChange={(next) => captured.push(next.globalFilter)}
+        />
+      </QueryClientProvider>,
+    );
     const search = screen.getByPlaceholderText(/Buscar miembro/i);
     fireEvent.change(search, { target: { value: "ada" } });
+    await waitFor(() => {
+      expect(captured).toContain("ada");
+    });
+    // Server-side mode means both rows remain visible — the table
+    // trusts the API to send back only matching ones.
     expect(screen.getByText("ada@nica.test")).toBeInTheDocument();
-    expect(screen.queryByText("bob@nica.test")).toBeNull();
+    expect(screen.getByText("bob@nica.test")).toBeInTheDocument();
   });
 
   it("shows the empty-state copy when there are no members", () => {

@@ -41,6 +41,31 @@ const emailSearchSchema = z.object({
   email: z.string().email().optional(),
 });
 
+// Search-param schema for /empresa/users. Each field is optional so a
+// bare `/empresa/users` still validates; the components fall back to
+// sensible defaults (no filter, page 1, default page size, default
+// sort). Arrays decode from repeated `?roles=admin&roles=viewer` or
+// from comma-separated values via `z.preprocess`.
+const csvList = <T extends z.ZodTypeAny>(item: T) =>
+  z.preprocess((v) => {
+    if (Array.isArray(v)) return v;
+    if (typeof v === "string" && v.length > 0) return v.split(",");
+    return undefined;
+  }, z.array(item).optional());
+
+const empresaUsersSearchSchema = z.object({
+  tab: z.enum(["members", "invitations"]).optional(),
+  q: z.string().optional(),
+  roles: csvList(z.enum(["owner", "admin", "accountant", "salesperson", "viewer"])),
+  statuses: csvList(z.enum(["active", "removed"])),
+  sort: z.enum(["display_name", "email", "role", "joined_at"]).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  size: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export type EmpresaUsersSearch = z.infer<typeof empresaUsersSearchSchema>;
+
 /**
  * Guard fired by every authenticated route's ``beforeLoad``. When the
  * user is not signed in it sends them to ``/login``; when they ARE
@@ -252,6 +277,7 @@ const empresaIndexRoute = createRoute({
 const empresaUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/empresa/users",
+  validateSearch: empresaUsersSearchSchema,
   beforeLoad: async () => {
     await authenticatedGuard("/empresa/users");
   },

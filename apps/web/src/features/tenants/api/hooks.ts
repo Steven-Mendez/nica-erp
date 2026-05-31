@@ -28,7 +28,8 @@ import {
   type CreateInvitationInput,
   type CreateTenantInput,
   type Invitation,
-  type Member,
+  type ListMembersParams,
+  type MembersPage,
   type MyTenants,
   type SwitchTenantInput,
   type Tenant,
@@ -43,6 +44,11 @@ import { setPickerConfirmed } from "@/lib/route-guard";
 export const myTenantsKey = ["tenants", "me"] as const;
 export const tenantKey = (id: string) => ["tenant", id] as const;
 export const membersKey = (id: string) => ["tenant", id, "members"] as const;
+// Each unique filter/page combination caches independently. The
+// invalidation strategy in mutations targets the broader
+// `membersKey(id)` prefix so every page cache refetches at once.
+export const membersPageKey = (id: string, params: ListMembersParams) =>
+  [...membersKey(id), params] as const;
 export const invitationsKey = (id: string) => ["tenant", id, "invitations"] as const;
 
 export const useMyTenantsQuery = (): UseQueryResult<MyTenants, Error> =>
@@ -60,15 +66,17 @@ export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> 
   });
 
 // `placeholderData: keepPreviousData` keeps the table populated while a
-// refetch (e.g. after a mutation, or when future server-side filter/page
-// keys produce a new queryKey) is in flight, instead of flashing the empty
-// skeleton. It does *not* survive `queryClient.clear()` on tenant switch
-// — that's intentional, we don't want to show stale rows from the wrong
-// empresa.
-export const useMembersQuery = (tenantId: string): UseQueryResult<Member[], Error> =>
+// refetch (e.g. switching pages, narrowing a filter) is in flight,
+// instead of flashing the empty skeleton. It does *not* survive
+// `queryClient.clear()` on tenant switch — that's intentional, we
+// don't want to show stale rows from the wrong empresa.
+export const useMembersQuery = (
+  tenantId: string,
+  params: ListMembersParams = {},
+): UseQueryResult<MembersPage, Error> =>
   useQuery({
-    queryKey: membersKey(tenantId),
-    queryFn: () => listMembers(tenantId),
+    queryKey: membersPageKey(tenantId, params),
+    queryFn: () => listMembers(tenantId, params),
     enabled: tenantId !== "",
     placeholderData: keepPreviousData,
   });

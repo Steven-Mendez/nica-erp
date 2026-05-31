@@ -119,7 +119,9 @@ export const handlers = [
   http.post("/v1/tenants/{tenant_id}/switch", ({ response }) => response(200).json(tokens)),
 
   // ---- Members + invitations --------------------------------------
-  http.get("/v1/tenants/{tenant_id}/members", ({ response }) => response(200).json([])),
+  http.get("/v1/tenants/{tenant_id}/members", ({ response }) =>
+    response(200).json({ items: [], total: 0, limit: 25, offset: 0 }),
+  ),
   http.patch("/v1/tenants/{tenant_id}/members/{user_id}", ({ response }) => response(204).empty()),
   http.delete("/v1/tenants/{tenant_id}/members/{user_id}", ({ response }) => response(204).empty()),
   http.get("/v1/tenants/{tenant_id}/invitations", ({ response }) => response(200).json([])),

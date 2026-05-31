@@ -87,6 +87,21 @@ class MemberResponse(BaseModel):
     email: str | None = None
 
 
+class MembersPageResponse(BaseModel):
+    """Paginated envelope for the members list endpoint.
+
+    ``total`` is the count of members matching the filter predicates,
+    *ignoring* ``limit`` / ``offset``. ``limit`` and ``offset`` echo
+    the effective request values so the SPA can build a pagination
+    footer without re-reading the URL.
+    """
+
+    items: list[MemberResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class UpdateMemberRoleRequest(BaseModel):
     role: Literal["admin", "accountant", "salesperson", "viewer"]
 

@@ -29,7 +29,7 @@ from contexts.tenants.domain.events import (
     TenantCreated,
 )
 from contexts.tenants.domain.invitation import Invitation
-from contexts.tenants.domain.membership import Membership
+from contexts.tenants.domain.membership import Membership, MembershipStatus
 from contexts.tenants.domain.municipality import KNOWN_MUNICIPALITIES, Municipality
 from contexts.tenants.domain.regime import Regime
 from contexts.tenants.domain.role import Role
@@ -53,6 +53,7 @@ __all__ = [
     "MemberRemoved",
     "MemberRoleChanged",
     "Membership",
+    "MembershipStatus",
     "Municipality",
     "NotAMemberError",
     "OwnerAlreadyExistsError",

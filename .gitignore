@@ -16,6 +16,10 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Web layout mirrors `src/lib/` under tests; the Python `lib/`
+# build-artifact rule above would otherwise hide those test files.
+!apps/web/src/lib/
+!apps/web/tests/unit/lib/
 parts/
 sdist/
 var/

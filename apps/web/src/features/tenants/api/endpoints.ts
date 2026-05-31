@@ -2,15 +2,33 @@
 // sourced from the generated OpenAPI types.
 
 import { api } from "@/api/client";
-import type { components } from "@/api/schema";
+import type { components, paths } from "@/api/schema";
 
 type Schemas = components["schemas"];
+type ListMembersQuery = NonNullable<
+  paths["/v1/tenants/{tenant_id}/members"]["get"]["parameters"]["query"]
+>;
 
 export type CreateTenantInput = Schemas["CreateTenantRequest"];
 export type UpdateTenantInput = Schemas["UpdateTenantRequest"];
 export type Tenant = Schemas["TenantResponse"];
 export type MyTenants = Schemas["MyTenantsResponse"];
 export type Member = Schemas["MemberResponse"];
+export type MembersPage = Schemas["MembersPageResponse"];
+export type MemberRole = Member["role"];
+export type MemberStatus = Member["status"];
+export type ListMembersSort = "joined_at" | "display_name" | "email" | "role";
+export type ListMembersDir = "asc" | "desc";
+
+export interface ListMembersParams {
+  q?: string;
+  roles?: MemberRole[];
+  statuses?: MemberStatus[];
+  sort?: ListMembersSort;
+  dir?: ListMembersDir;
+  limit?: number;
+  offset?: number;
+}
 export type Invitation = Schemas["InvitationResponse"];
 export type CreateInvitationInput = Schemas["CreateInvitationRequest"];
 export type UpdateMemberRoleInput = Schemas["UpdateMemberRoleRequest"];
@@ -84,9 +102,22 @@ export const switchTenant = async (
   return expectData(`POST /v1/tenants/${tenantId}/switch`, result);
 };
 
-export const listMembers = async (tenantId: string): Promise<Member[]> => {
+export const listMembers = async (
+  tenantId: string,
+  params: ListMembersParams = {},
+): Promise<MembersPage> => {
+  // The schema's query type uses `exactOptionalPropertyTypes`, so we
+  // can't pass `undefined`; only include keys the caller actually set.
+  const query: ListMembersQuery = {};
+  if (params.limit !== undefined) query.limit = params.limit;
+  if (params.offset !== undefined) query.offset = params.offset;
+  if (params.q !== undefined) query.q = params.q;
+  if (params.roles !== undefined) query.roles = params.roles;
+  if (params.statuses !== undefined) query.statuses = params.statuses;
+  if (params.sort !== undefined) query.sort = params.sort;
+  if (params.dir !== undefined) query.dir = params.dir;
   const result = await api.GET("/v1/tenants/{tenant_id}/members", {
-    params: { path: { tenant_id: tenantId } },
+    params: { path: { tenant_id: tenantId }, query },
   });
   return expectData(`GET /v1/tenants/${tenantId}/members`, result);
 };

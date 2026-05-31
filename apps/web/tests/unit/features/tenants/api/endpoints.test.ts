@@ -146,14 +146,43 @@ describe("tenant endpoints — happy paths", () => {
 });
 
 describe("member endpoints", () => {
-  it("listMembers GETs the members collection", async () => {
-    const members = [
-      { user_id: USER_ID, email: "a@b.test", role: "admin" as const },
-    ];
-    getMock.mockResolvedValueOnce(ok(members));
-    await expect(listMembers(TENANT_ID)).resolves.toEqual(members);
+  it("listMembers GETs the paginated members envelope with no params by default", async () => {
+    const page = {
+      items: [{ user_id: USER_ID, email: "a@b.test", role: "admin" as const }],
+      total: 1,
+      limit: 25,
+      offset: 0,
+    };
+    getMock.mockResolvedValueOnce(ok(page));
+    await expect(listMembers(TENANT_ID)).resolves.toEqual(page);
     expect(getMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/members", {
-      params: { path: { tenant_id: TENANT_ID } },
+      params: { path: { tenant_id: TENANT_ID }, query: {} },
+    });
+  });
+
+  it("listMembers forwards only the params the caller set", async () => {
+    const page = { items: [], total: 0, limit: 10, offset: 20 };
+    getMock.mockResolvedValueOnce(ok(page));
+    await listMembers(TENANT_ID, {
+      limit: 10,
+      offset: 20,
+      q: "ada",
+      roles: ["admin"],
+      sort: "display_name",
+      dir: "desc",
+    });
+    expect(getMock).toHaveBeenCalledWith("/v1/tenants/{tenant_id}/members", {
+      params: {
+        path: { tenant_id: TENANT_ID },
+        query: {
+          limit: 10,
+          offset: 20,
+          q: "ada",
+          roles: ["admin"],
+          sort: "display_name",
+          dir: "desc",
+        },
+      },
     });
   });
 

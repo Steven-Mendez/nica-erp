@@ -46,7 +46,11 @@ from contexts.tenants.adapters.inbound.http.router import router
 from contexts.tenants.application.use_cases.create_tenant import CreateTenantResult
 from contexts.tenants.application.use_cases.get_my_tenants import MyTenantView
 from contexts.tenants.application.use_cases.invite_member import InviteMemberResult
-from contexts.tenants.domain import Membership, Role, Tenant
+from contexts.tenants.application.use_cases.list_members import (
+    ListMembersResult,
+    MemberView,
+)
+from contexts.tenants.domain import Role, Tenant
 from shared_kernel.adapters.context import CurrentUser
 from shared_kernel.permissions import Actor
 
@@ -112,15 +116,32 @@ class _StubSwitchActiveTenant:
 
 
 class _StubListMembers:
-    async def execute(self, tenant_id: UUID) -> list[Membership]:
+    """Captures the ``ListMembersQuery`` it was invoked with and
+    returns a fixed one-row page so the router test can assert the
+    envelope shape and the query plumbing."""
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    async def execute(self, query: Any) -> ListMembersResult:
+        self.calls.append(query)
         now = datetime.now(UTC)
-        return [
-            Membership.create_owner(
-                user_id=_USER_ID,
-                tenant_id=tenant_id,
-                now=now,
-            )
-        ]
+        return ListMembersResult(
+            items=[
+                MemberView(
+                    id=_USER_ID,
+                    user_id=_USER_ID,
+                    tenant_id=query.tenant_id,
+                    role=Role.OWNER,
+                    status="active",
+                    joined_at=now,
+                    removed_at=None,
+                    display_name="Ada Lovelace",
+                    email="ada@nica.test",
+                )
+            ],
+            total=1,
+        )
 
 
 class _StubUpdateMemberRole:
@@ -278,27 +299,60 @@ async def test_post_switch_tenant_returns_token_bundle() -> None:
 
 
 @pytest.mark.integration
-async def test_get_members_returns_list_with_permission(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The list_members route instantiates UserRepositorySqlAlchemy directly
-    # for cross-context user enrichment (display_name + email). Stub its
-    # `get_by_id` so we don't need a real session.
-    async def _fake_get_by_id(self: Any, user_id: UUID) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "contexts.identity.adapters.outbound.persistence.sqlalchemy.user_repository."
-        "UserRepositorySqlAlchemy.get_by_id",
-        _fake_get_by_id,
-    )
-
+async def test_get_members_returns_paginated_envelope_with_permission() -> None:
     app = _build_app(permissions=frozenset({"members:read"}))
     async with _client(app) as c:
         r = await c.get(f"/v1/tenants/{_TENANT_ID}/members")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert isinstance(body, list)
-    assert body[0]["user_id"] == str(_USER_ID)
-    assert body[0]["role"] == "owner"
+    assert set(body.keys()) == {"items", "total", "limit", "offset"}
+    assert body["total"] == 1
+    assert body["limit"] == 25  # default
+    assert body["offset"] == 0
+    assert body["items"][0]["user_id"] == str(_USER_ID)
+    assert body["items"][0]["role"] == "owner"
+    assert body["items"][0]["display_name"] == "Ada Lovelace"
+    assert body["items"][0]["email"] == "ada@nica.test"
+
+
+@pytest.mark.integration
+async def test_get_members_forwards_query_params_to_use_case() -> None:
+    stub = _StubListMembers()
+    app = _build_app(permissions=frozenset({"members:read"}))
+    app.dependency_overrides[get_list_members] = lambda: stub
+    async with _client(app) as c:
+        r = await c.get(
+            f"/v1/tenants/{_TENANT_ID}/members",
+            params=[
+                ("limit", 10),
+                ("offset", 20),
+                ("q", "ada"),
+                ("roles", "admin"),
+                ("roles", "viewer"),
+                ("statuses", "active"),
+                ("sort", "display_name"),
+                ("dir", "desc"),
+            ],
+        )
+    assert r.status_code == 200, r.text
+    assert len(stub.calls) == 1
+    q = stub.calls[0]
+    assert q.tenant_id == _TENANT_ID
+    assert q.limit == 10
+    assert q.offset == 20
+    assert q.q == "ada"
+    assert {r.value for r in q.roles} == {"admin", "viewer"}
+    assert set(q.statuses) == {"active"}
+    assert q.sort == "display_name"
+    assert q.dir == "desc"
+
+
+@pytest.mark.integration
+async def test_get_members_rejects_limit_above_100() -> None:
+    app = _build_app(permissions=frozenset({"members:read"}))
+    async with _client(app) as c:
+        r = await c.get(f"/v1/tenants/{_TENANT_ID}/members?limit=101")
+    assert r.status_code == 422, r.text
 
 
 @pytest.mark.integration

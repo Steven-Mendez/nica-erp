@@ -80,6 +80,55 @@ async def test_get_by_id_missing(isolated_uow: SqlAlchemyUnitOfWork) -> None:
 
 
 @pytest.mark.integration
+async def test_list_by_ids_returns_matches_in_one_round_trip(
+    isolated_uow: SqlAlchemyUnitOfWork,
+) -> None:
+    now = datetime.now(UTC)
+    a = User(
+        id_=uuid4(),
+        external_sub="bulk-a",
+        email=Email.parse("a@example.com"),
+        display_name="A",
+        created_at=now,
+        updated_at=now,
+    )
+    b = User(
+        id_=uuid4(),
+        external_sub="bulk-b",
+        email=Email.parse("b@example.com"),
+        display_name="B",
+        created_at=now,
+        updated_at=now,
+    )
+
+    async with isolated_uow.begin():
+        repo = UserRepositorySqlAlchemy(isolated_uow)
+        await repo.add(a)
+        await repo.add(b)
+
+    missing = uuid4()
+    async with isolated_uow.begin():
+        # Duplicates collapse; unknown id is silently skipped.
+        loaded = await UserRepositorySqlAlchemy(isolated_uow).list_by_ids(
+            [a.id, b.id, a.id, missing]
+        )
+
+    by_id = {u.id: u for u in loaded}
+    assert set(by_id) == {a.id, b.id}
+    assert by_id[a.id].display_name == "A"
+    assert by_id[b.id].display_name == "B"
+
+
+@pytest.mark.integration
+async def test_list_by_ids_empty_input_does_not_query(
+    isolated_uow: SqlAlchemyUnitOfWork,
+) -> None:
+    async with isolated_uow.begin():
+        loaded = await UserRepositorySqlAlchemy(isolated_uow).list_by_ids([])
+    assert list(loaded) == []
+
+
+@pytest.mark.integration
 async def test_update_round_trips_profile_changes(
     isolated_uow: SqlAlchemyUnitOfWork,
 ) -> None:

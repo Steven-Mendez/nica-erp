@@ -313,7 +313,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List members of a tenant */
+        /** List members of a tenant (paginated, filterable, sortable) */
         get: operations["list_members_v1_tenants__tenant_id__members_get"];
         put?: never;
         post?: never;
@@ -794,6 +794,25 @@ export interface components {
             display_name?: string | null;
             /** Email */
             email?: string | null;
+        };
+        /**
+         * MembersPageResponse
+         * @description Paginated envelope for the members list endpoint.
+         *
+         *     ``total`` is the count of members matching the filter predicates,
+         *     *ignoring* ``limit`` / ``offset``. ``limit`` and ``offset`` echo
+         *     the effective request values so the SPA can build a pagination
+         *     footer without re-reading the URL.
+         */
+        MembersPageResponse: {
+            /** Items */
+            items: components["schemas"]["MemberResponse"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
         };
         /** MyTenantItem */
         MyTenantItem: {
@@ -1754,7 +1773,15 @@ export interface operations {
     };
     list_members_v1_tenants__tenant_id__members_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                offset?: number;
+                q?: string | null;
+                roles?: ("owner" | "admin" | "accountant" | "salesperson" | "viewer")[] | null;
+                statuses?: ("active" | "removed")[] | null;
+                sort?: "joined_at" | "display_name" | "email" | "role";
+                dir?: "asc" | "desc";
+            };
             header?: never;
             path: {
                 tenant_id: string;
@@ -1769,7 +1796,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemberResponse"][];
+                    "application/json": components["schemas"]["MembersPageResponse"];
                 };
             };
             /** @description Validation Error */

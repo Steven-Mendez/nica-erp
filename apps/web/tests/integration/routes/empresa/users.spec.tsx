@@ -42,8 +42,13 @@ vi.mock("@/features/tenants/api/hooks", () => ({
   // Sidebar's TenantSwitcher consumes these — stub.
   useMyTenantsQuery: () => ({ data: { items: [] }, isLoading: false, isError: false }),
   useSwitchTenantMutation: () => ({ mutate: () => undefined, isPending: false }),
-  // Route-level hooks.
-  useMembersQuery: () => ({ data: members, isLoading: false, isError: false }),
+  // Route-level hooks. The members hook now returns the paginated
+  // envelope; the test seeds an `items` array via `members`.
+  useMembersQuery: () => ({
+    data: { items: members, total: members.length, limit: 25, offset: 0 },
+    isLoading: false,
+    isError: false,
+  }),
   useInvitationsQuery: () => ({ data: invitations, isLoading: false }),
   useInviteMemberMutation: () => ({ mutate: () => undefined, isPending: false }),
   useRemoveMemberMutation: () => ({ mutate: () => undefined, isPending: false }),
@@ -51,12 +56,48 @@ vi.mock("@/features/tenants/api/hooks", () => ({
   useUpdateMemberRoleMutation: () => ({ mutate: () => undefined, isPending: false }),
 }));
 
+// Reactive search-state stand-in. `useSearch` subscribes via
+// `useSyncExternalStore` so consumers re-render when `useNavigate`
+// updates the value. Tests can pre-seed via `setSearchState(...)` and
+// assert what the route wrote with `currentSearch`.
+let currentSearch: Record<string, unknown> = {};
+const navigateCalls: Array<{ search: unknown; replace: boolean | undefined }> = [];
+const searchSubscribers = new Set<() => void>();
+
+function setSearchState(next: Record<string, unknown>): void {
+  currentSearch = next;
+  for (const fn of searchSubscribers) fn();
+}
+
 vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual<object>("@tanstack/react-router");
+  const { useSyncExternalStore } = await import("react");
   return {
     ...actual,
     useRouterState: () => ({ pathname: "/empresa/users" }),
-    useNavigate: () => () => undefined,
+    useSearch: () =>
+      useSyncExternalStore(
+        (cb) => {
+          searchSubscribers.add(cb);
+          return () => searchSubscribers.delete(cb);
+        },
+        () => currentSearch,
+      ),
+    useNavigate: () =>
+      (opts: { search?: unknown; replace?: boolean } | undefined) => {
+        if (opts === undefined) return undefined;
+        navigateCalls.push({ search: opts.search, replace: opts.replace });
+        if (typeof opts.search === "function") {
+          setSearchState(
+            (opts.search as (prev: Record<string, unknown>) => Record<string, unknown>)(
+              currentSearch,
+            ),
+          );
+        } else if (opts.search !== undefined) {
+          setSearchState(opts.search as Record<string, unknown>);
+        }
+        return undefined;
+      },
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
       <a href={to}>{children}</a>
     ),
@@ -76,6 +117,8 @@ afterEach(() => {
   permissions = [];
   members = [];
   invitations = [];
+  setSearchState({});
+  navigateCalls.length = 0;
 });
 
 describe("EmpresaUsuariosRoute", () => {
@@ -83,6 +126,8 @@ describe("EmpresaUsuariosRoute", () => {
     permissions = [];
     members = [];
     invitations = [];
+    setSearchState({});
+    navigateCalls.length = 0;
   });
 
   it("with members:update-role true, exposes a row actions menu for non-owner rows", () => {
@@ -132,6 +177,38 @@ describe("EmpresaUsuariosRoute", () => {
     expect(inviteBtn).toBeInTheDocument();
     fireEvent.click(inviteBtn);
     expect(screen.getByText(/Invitar miembro/i)).toBeInTheDocument();
+  });
+
+  it("seeds the global filter input from the URL `q` search param", () => {
+    permissions = [];
+    members = [
+      { user_id: "u-1", role: "viewer" },
+      { user_id: "u-2", role: "admin" },
+    ];
+    setSearchState({ q: "viewer" });
+    renderRoute();
+    const search = screen.getByPlaceholderText(/Buscar miembro/i) as HTMLInputElement;
+    expect(search.value).toBe("viewer");
+  });
+
+  it("pushes the active tab to URL search params and survives back to default", async () => {
+    permissions = ["members:invite"];
+    invitations = [{ id: "i-1", email: "x@y.com", proposed_role: "viewer", status: "pending" }];
+    renderRoute();
+    const invitationsTab = screen.getByRole("tab", { name: /Invitaciones/i });
+    await act(async () => {
+      fireEvent.mouseDown(invitationsTab);
+      fireEvent.click(invitationsTab);
+    });
+    expect(currentSearch).toEqual({ tab: "invitations" });
+
+    const membersTab = screen.getByRole("tab", { name: /Miembros/i });
+    await act(async () => {
+      fireEvent.mouseDown(membersTab);
+      fireEvent.click(membersTab);
+    });
+    // Default tab collapses away — never persisted as `tab=members`.
+    expect(currentSearch).toEqual({});
   });
 
   it("renders pending invitations with a Cancelar button under the Invitaciones tab", async () => {

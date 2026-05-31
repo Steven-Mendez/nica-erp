@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from bootstrap.db import get_uow as get_request_uow
-from bootstrap.dependencies import get_request_uow as get_shared_request_uow
 from bootstrap.dependencies import require
 from contexts.identity.adapters.inbound.http.dependencies import get_current_user
-from contexts.identity.adapters.outbound.persistence.sqlalchemy.user_repository import (
-    UserRepositorySqlAlchemy,
-)
 from contexts.tenants.adapters.inbound.http.dependencies import (
     get_accept_invitation,
     get_cancel_invitation,
@@ -39,6 +36,7 @@ from contexts.tenants.adapters.inbound.http.schemas import (
     CreateTenantRequest,
     InvitationResponse,
     MemberResponse,
+    MembersPageResponse,
     MyTenantItem,
     MyTenantsResponse,
     SwitchTenantRequest,
@@ -74,6 +72,12 @@ from contexts.tenants.application.use_cases.cancel_invitation import (
 )
 from contexts.tenants.application.use_cases.create_tenant import CreateTenantCommand
 from contexts.tenants.application.use_cases.invite_member import InviteMemberCommand
+from contexts.tenants.application.use_cases.list_members import (
+    LIST_MEMBERS_DEFAULT_LIMIT,
+    LIST_MEMBERS_MAX_LIMIT,
+    LIST_MEMBERS_MAX_Q_LENGTH,
+    ListMembersQuery,
+)
 from contexts.tenants.application.use_cases.remove_member import RemoveMemberCommand
 from contexts.tenants.application.use_cases.switch_active_tenant import (
     SwitchActiveTenantCommand,
@@ -82,7 +86,7 @@ from contexts.tenants.application.use_cases.update_member_role import (
     UpdateMemberRoleCommand,
 )
 from contexts.tenants.application.use_cases.update_tenant import UpdateTenantCommand
-from contexts.tenants.domain import AuthorizationDgi, Tenant
+from contexts.tenants.domain import AuthorizationDgi, Role, Tenant
 from shared_kernel.adapters.context import CurrentUser
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 from shared_kernel.permissions import Actor
@@ -277,38 +281,53 @@ async def switch_active_tenant(
 
 @router.get(
     "/v1/tenants/{tenant_id}/members",
-    response_model=list[MemberResponse],
+    response_model=MembersPageResponse,
     tags=["tenants"],
-    summary="List members of a tenant",
+    summary="List members of a tenant (paginated, filterable, sortable)",
 )
 async def list_members(
     tenant_id: UUID,
+    limit: int = Query(default=LIST_MEMBERS_DEFAULT_LIMIT, ge=1, le=LIST_MEMBERS_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=LIST_MEMBERS_MAX_Q_LENGTH),
+    roles: list[Literal["owner", "admin", "accountant", "salesperson", "viewer"]] | None = Query(
+        default=None
+    ),
+    statuses: list[Literal["active", "removed"]] | None = Query(default=None),
+    sort: Literal["joined_at", "display_name", "email", "role"] = Query(default="joined_at"),
+    dir: Literal["asc", "desc"] = Query(default="asc"),
     _actor: Actor = Depends(require("members:read")),
     uc: ListMembers = Depends(get_list_members),
-    uow: SqlAlchemyUnitOfWork = Depends(get_shared_request_uow),
-) -> list[MemberResponse]:
-    members = await uc.execute(tenant_id=tenant_id)
-    # Enrich each row with the user's display_name + email by reading
-    # from the identity context's UserRepository. Cross-context composition
-    # is allowed at the HTTP adapter layer (the composition root for HTTP).
-    user_repo = UserRepositorySqlAlchemy(uow)
-    enriched: list[MemberResponse] = []
-    async with uow.begin():
-        for m in members:
-            user = await user_repo.get_by_id(m.user_id)
-            enriched.append(
-                MemberResponse(
-                    user_id=m.user_id,
-                    tenant_id=m.tenant_id,
-                    role=m.role.value,
-                    status=m.status,
-                    joined_at=m.joined_at,
-                    removed_at=m.removed_at,
-                    display_name=user.display_name if user is not None else None,
-                    email=user.email.value if user is not None else None,
-                )
+) -> MembersPageResponse:
+    query = ListMembersQuery(
+        tenant_id=tenant_id,
+        q=q,
+        roles=tuple(Role(r) for r in (roles or [])),
+        statuses=tuple(statuses or []),
+        sort=sort,
+        dir=dir,
+        limit=limit,
+        offset=offset,
+    )
+    result = await uc.execute(query)
+    return MembersPageResponse(
+        items=[
+            MemberResponse(
+                user_id=v.user_id,
+                tenant_id=v.tenant_id,
+                role=v.role.value,
+                status=v.status,
+                joined_at=v.joined_at,
+                removed_at=v.removed_at,
+                display_name=v.display_name,
+                email=v.email,
             )
-    return enriched
+            for v in result.items
+        ],
+        total=result.total,
+        limit=query.limit,
+        offset=query.offset,
+    )
 
 
 @router.patch(

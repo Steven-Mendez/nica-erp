@@ -9,11 +9,12 @@ aggregate stays free of SQLAlchemy, mirroring the
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import RowMapping, text
+from sqlalchemy import RowMapping, bindparam, text
 
 from contexts.identity.domain import Email, User
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
@@ -22,6 +23,10 @@ _SELECT_BY_ID = text(
     "SELECT id, external_sub, email, display_name, locale, timezone, "
     "preferences, created_at, updated_at FROM users WHERE id = :id"
 )
+_SELECT_BY_IDS = text(
+    "SELECT id, external_sub, email, display_name, locale, timezone, "
+    "preferences, created_at, updated_at FROM users WHERE id IN :ids"
+).bindparams(bindparam("ids", expanding=True))
 _SELECT_BY_EXTERNAL_SUB = text(
     "SELECT id, external_sub, email, display_name, locale, timezone, "
     "preferences, created_at, updated_at FROM users WHERE external_sub = :external_sub"
@@ -56,6 +61,13 @@ class UserRepositorySqlAlchemy:
         result = await self._uow.current_session.execute(_SELECT_BY_ID, {"id": user_id})
         row = result.mappings().one_or_none()
         return self._hydrate(row) if row is not None else None
+
+    async def list_by_ids(self, user_ids: Iterable[UUID]) -> Sequence[User]:
+        ids = list({uid for uid in user_ids})
+        if not ids:
+            return []
+        result = await self._uow.current_session.execute(_SELECT_BY_IDS, {"ids": ids})
+        return [self._hydrate(row) for row in result.mappings().all()]
 
     async def get_by_external_sub(self, external_sub: str) -> User | None:
         result = await self._uow.current_session.execute(

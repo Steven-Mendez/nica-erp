@@ -107,6 +107,37 @@ class FakeMembershipRepository:
     async def list_active_for_user(self, user_id: UUID) -> list[Membership]:
         return [m for m in self.rows if m.user_id == user_id and m.status == "active"]
 
+    async def list_page(self, query: Any) -> tuple[list[Any], int]:
+        # Filter by tenant and the optional role/status sets; ignore
+        # `q` here (the SQL adapter owns LIKE semantics). Tests that
+        # need q-matching exercise the integration test instead.
+        from contexts.tenants.application.use_cases.list_members import MemberView
+
+        rows = [m for m in self.rows if m.tenant_id == query.tenant_id]
+        if len(query.roles) > 0:
+            role_values = {r.value for r in query.roles}
+            rows = [m for m in rows if m.role.value in role_values]
+        if len(query.statuses) > 0:
+            status_values = set(query.statuses)
+            rows = [m for m in rows if m.status in status_values]
+        total = len(rows)
+        page = rows[query.offset : query.offset + query.limit]
+        views = [
+            MemberView(
+                id=m.id,
+                user_id=m.user_id,
+                tenant_id=m.tenant_id,
+                role=m.role,
+                status=m.status,
+                joined_at=m.joined_at,
+                removed_at=m.removed_at,
+                display_name=None,
+                email=None,
+            )
+            for m in page
+        ]
+        return views, total
+
 
 @dataclass
 class FakeInvitationRepository:

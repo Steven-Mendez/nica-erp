@@ -114,12 +114,18 @@ describe("queries", () => {
     expect(vi.mocked(getTenant).mock.calls[0]).toEqual([tenantId]);
   });
 
-  it("useMembersQuery scopes to tenantId", async () => {
-    vi.mocked(listMembers).mockResolvedValueOnce([]);
+  it("useMembersQuery scopes to tenantId and forwards params", async () => {
+    vi.mocked(listMembers).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
     const client = makeClient();
-    renderHook(() => useMembersQuery(tenantId), { wrapper: wrapper(client) });
+    const params = { limit: 10, offset: 0, q: "ada" } as const;
+    renderHook(() => useMembersQuery(tenantId, params), { wrapper: wrapper(client) });
     await waitFor(() => expect(vi.mocked(listMembers).mock.calls.length).toBe(1));
-    expect(vi.mocked(listMembers).mock.calls[0]).toEqual([tenantId]);
+    expect(vi.mocked(listMembers).mock.calls[0]).toEqual([tenantId, params]);
   });
 
   it("useInvitationsQuery scopes to tenantId", async () => {

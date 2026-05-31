@@ -1,15 +1,16 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type ColumnDef,
+  type ColumnFiltersState,
+  type OnChangeFn,
+  type PaginationState,
   type SortingState,
+  type Updater,
   type VisibilityState,
   flexRender,
   getCoreRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
@@ -45,6 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
   Select,
   SelectContent,
@@ -86,7 +88,7 @@ const ROLE_LABELS: Record<Member["role"], string> = {
 const ASSIGNABLE_ROLES: ReadonlyArray<RoleValue> = ["admin", "accountant", "salesperson", "viewer"];
 
 const COLUMN_LABELS: Record<string, string> = {
-  user: "Usuario",
+  display_name: "Usuario",
   email: "Correo",
   role: "Rol",
   status: "Estado",
@@ -118,25 +120,105 @@ function initialsFrom(displayName: string | null | undefined, fallback: string):
   return fallback.slice(0, 2).toUpperCase();
 }
 
+// View-state slice that's worth syncing to URL search params. Column
+// visibility lives outside this — it's a per-user preference, not a
+// shareable view of the data.
+export interface MembersTableViewState {
+  sorting: SortingState;
+  columnFilters: ColumnFiltersState;
+  globalFilter: string;
+  pagination: PaginationState;
+}
+
+export const DEFAULT_MEMBERS_TABLE_VIEW_STATE: MembersTableViewState = {
+  sorting: [],
+  columnFilters: [],
+  globalFilter: "",
+  pagination: { pageIndex: 0, pageSize: 10 },
+};
+
 export interface MembersTableProps {
   tenantId: string;
   data: Member[] | undefined;
+  /** Filtered total reported by the API; used to compute pageCount in
+   *  manual pagination mode and to render the result counter. */
+  total?: number;
   isLoading: boolean;
   isError: boolean;
   canUpdateRole: boolean;
   canRemove: boolean;
+  // Pass both to operate the table as a controlled component (the route
+  // does this to round-trip state through URL search params). Pass
+  // neither for the previous self-contained behavior (tests, isolated
+  // usage).
+  viewState?: MembersTableViewState;
+  onViewStateChange?: (next: MembersTableViewState) => void;
+}
+
+function resolveUpdater<T>(updater: Updater<T>, prev: T): T {
+  return typeof updater === "function" ? (updater as (p: T) => T)(prev) : updater;
 }
 
 export function MembersTable({
   tenantId,
   data,
+  total,
   isLoading,
   isError,
   canUpdateRole,
   canRemove,
+  viewState,
+  onViewStateChange,
 }: MembersTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const isControlled = viewState !== undefined && onViewStateChange !== undefined;
+  const [internalState, setInternalState] = useState<MembersTableViewState>(
+    viewState ?? DEFAULT_MEMBERS_TABLE_VIEW_STATE,
+  );
+  const currentState = isControlled ? viewState : internalState;
+  const setState = useCallback(
+    (next: MembersTableViewState) => {
+      if (isControlled) {
+        onViewStateChange(next);
+      } else {
+        setInternalState(next);
+      }
+    },
+    [isControlled, onViewStateChange],
+  );
+  const { sorting, columnFilters, globalFilter, pagination } = currentState;
+
+  // `searchInput` updates on every keystroke so the field stays responsive;
+  // the debounced value is what we push into `globalFilter` (which drives
+  // the filtered row model + URL search param).
+  const [searchInput, setSearchInput] = useState(globalFilter);
+  const debouncedSearch = useDebouncedValue(searchInput, 250);
+  useEffect(() => {
+    if (debouncedSearch !== globalFilter) {
+      setState({ ...currentState, globalFilter: debouncedSearch });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+  // External resets (e.g. clearing the URL search params) should flow
+  // back into the visible input value.
+  useEffect(() => {
+    if (globalFilter !== searchInput && globalFilter !== debouncedSearch) {
+      setSearchInput(globalFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalFilter]);
+
+  const setSorting: OnChangeFn<SortingState> = (updater) =>
+    setState({ ...currentState, sorting: resolveUpdater(updater, sorting) });
+  const setColumnFilters: OnChangeFn<ColumnFiltersState> = (updater) =>
+    setState({ ...currentState, columnFilters: resolveUpdater(updater, columnFilters) });
+  const setGlobalFilter: OnChangeFn<string> = (updater) => {
+    const next = resolveUpdater(updater, globalFilter);
+    setState({ ...currentState, globalFilter: next });
+    setSearchInput(next);
+  };
+  const setPagination: OnChangeFn<PaginationState> = (updater) =>
+    setState({ ...currentState, pagination: resolveUpdater(updater, pagination) });
+
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const updateRoleMut = useUpdateMemberRoleMutation(tenantId);
@@ -145,7 +227,10 @@ export function MembersTable({
   const columns = useMemo<ColumnDef<Member>[]>(
     () => [
       {
-        id: "user",
+        // Column id aligns with the API sort key so the URL search
+        // param `sort=display_name` round-trips cleanly to the table's
+        // sorting state.
+        id: "display_name",
         accessorFn: (row) => row.display_name ?? row.user_id,
         header: ({ column }) => (
           <Button
@@ -324,34 +409,37 @@ export function MembersTable({
   const table = useReactTable({
     data: data ?? [],
     columns,
-    state: { sorting, globalFilter, columnVisibility },
+    state: { sorting, columnFilters, globalFilter, pagination, columnVisibility },
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     getRowId: (row) => row.user_id,
-    globalFilterFn: (row, _columnId, value) => {
-      const needle = String(value).toLowerCase();
-      if (!needle) return true;
-      const member = row.original;
-      return (
-        member.user_id.toLowerCase().includes(needle) ||
-        member.role.toLowerCase().includes(needle) ||
-        (member.display_name?.toLowerCase().includes(needle) ?? false) ||
-        (member.email?.toLowerCase().includes(needle) ?? false)
-      );
-    },
+    // Server-side mode: the route forwards filter/sort/pagination to
+    // the API and returns the matching slice. The table only renders
+    // what it's given and surfaces state changes to the route so the
+    // next refetch covers the new view.
+    manualPagination: true,
+    manualFiltering: true,
+    manualSorting: true,
+    // `rowCount` lets `getPageCount()` work without `getFilteredRowModel`.
+    // Falls back to in-page data length when `total` isn't supplied
+    // (e.g. legacy uncontrolled callers + the unit test renderer).
+    rowCount: total ?? data?.length ?? 0,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    // Facets are computed off the currently-loaded slice. With
+    // server-side filtering they're approximations — accurate enough
+    // for a multi-select "Rol" / "Estado" picker; revisit if the
+    // product needs precise counts.
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 10 } },
   });
 
   const roleColumn = table.getColumn("role");
   const statusColumn = table.getColumn("status");
-  const isFiltered = globalFilter.length > 0 || table.getState().columnFilters.length > 0;
+  const isFiltered =
+    searchInput.length > 0 || globalFilter.length > 0 || columnFilters.length > 0;
 
   if (isLoading) {
     return <Skeleton className="h-32 w-full" />;
@@ -371,8 +459,8 @@ export function MembersTable({
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Buscar miembro..."
               className="pl-8"
             />
@@ -394,6 +482,7 @@ export function MembersTable({
               size="sm"
               className="h-8 px-2"
               onClick={() => {
+                setSearchInput("");
                 setGlobalFilter("");
                 table.resetColumnFilters();
               }}
@@ -405,7 +494,7 @@ export function MembersTable({
         </div>
         <div className="flex items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            {table.getFilteredRowModel().rows.length} resultado(s)
+            {table.getRowCount()} resultado(s)
           </p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -484,7 +573,7 @@ export function MembersTable({
         onFirst={() => table.setPageIndex(0)}
         onLast={() => table.setPageIndex(table.getPageCount() - 1)}
         onPageSizeChange={(size) => table.setPageSize(size)}
-        totalCount={table.getFilteredRowModel().rows.length}
+        totalCount={table.getRowCount()}
       />
     </div>
   );
