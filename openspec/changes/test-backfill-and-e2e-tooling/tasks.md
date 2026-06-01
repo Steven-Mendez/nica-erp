@@ -171,11 +171,17 @@
 
 ## 7. Frontend integration tests — `routes/`
 
-- [ ] 7.1 vitest + MSW render tests for `/login`, `/signup`,
+- [x] 7.1 vitest + MSW render tests for `/login`, `/signup`,
       `/confirm`, `/forgot-password`, `/reset-password`,
       `/account`, `/dashboard`, `/tenants`, `/tenants/new`,
       `/tenants/$tenantId/members`,
-      `/invitations/$token/accept`, `/me` redirect. (Partial: `/confirm`, `/welcome`, `/onboarding`, `/tenants/new`, `/health` covered today.)
+      `/invitations/$token/accept`, `/me` redirect. (All
+      routes covered as of 2026-06-01 under
+      `apps/web/tests/integration/routes/` and
+      `apps/web/tests/integration/router/me-redirect.spec.tsx`.
+      `/tenants/$tenantId/members` lives at `/empresa/users`
+      per sprint 03 rename and is covered by
+      `routes/empresa/users.spec.tsx`.)
 - [x] 7.2 TanStack Router unauth → `/login` and
       `/me` → `/account` redirect tests. (Covered by `route-guard.test.ts`.)
 
@@ -188,7 +194,7 @@
       projects, `webServer` that spawns the vite dev server,
       `baseURL` from `PLAYWRIGHT_BASE_URL`,
       `reuseExistingServer: false` in CI.
-- [ ] 8.3 `apps/web/tests/e2e/fixtures/auth.ts` and
+- [x] 8.3 `apps/web/tests/e2e/fixtures/auth.ts` and
       `tenant.ts` helpers (no API shortcuts).
 - [x] 8.4 `apps/web/.gitignore` entries for
       `playwright-report/` and `test-results/`.
@@ -197,15 +203,15 @@
 
 - [x] 9.1 `auth.spec.ts` — signup → confirm → login →
       `/account` data matches.
-- [ ] 9.2 `tenant-onboarding.spec.ts` — login → create first
+- [x] 9.2 `tenant-onboarding.spec.ts` — login → create first
       tenant via current `/tenants/new` form → switch → land
       on the dashboard placeholder.
-- [ ] 9.3 `member-management.spec.ts` — admin invites in one
+- [x] 9.3 `member-management.spec.ts` — admin invites in one
       browser context; invitee accepts via deep link in a
       second context; both observe the member; admin removes.
-- [ ] 9.4 `permission-gating.spec.ts` — `viewer` and `admin`
+- [x] 9.4 `permission-gating.spec.ts` — `viewer` and `admin`
       see different affordances on the members page.
-- [ ] 9.5 `rls-isolation.spec.ts` — two simultaneous browser
+- [x] 9.5 `rls-isolation.spec.ts` — two simultaneous browser
       contexts, no data crosses tenants from the UI.
 
 ## 10. Frontend coverage configuration
@@ -236,6 +242,10 @@
        all are green.
 - [ ] 12.2 CI green for three consecutive runs on `main`
        before the e2e job is promoted to merge-blocking.
+       (As of 2026-06-01: `api-checks` ≥3 consecutive green on
+       main; `web-checks` 2 consecutive green after the
+       Prettier + healthz hook fixes in 0a45dc2/580e802 —
+       observe one more main run before flipping the gate.)
 - [x] 12.3 Append a closure note to
        [`docs/sprints/03-tenants-and-rls.md`](../../../docs/sprints/03-tenants-and-rls.md)
        documenting the achieved coverage numbers.

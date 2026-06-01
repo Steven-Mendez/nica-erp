@@ -140,9 +140,14 @@
 - [x] 7.2 Click on a card calls
       `useSwitchTenantMutation` and navigates to
       `/dashboard`.
-- [ ] 7.3 vitest unit `organizations-list.test.tsx` and
-      Playwright `organizations-picker.spec.ts`. (Not added;
-      tracked under [[test-backfill-and-e2e-tooling]] §5–§9.)
+- [x] 7.3 vitest unit `organizations-list.test.tsx` and
+      Playwright `organizations-picker.spec.ts`. (Landed
+      under different file names per the test-layout rule:
+      integration `tests/integration/routes/tenants-index.spec.tsx`
+      covers the cards/search/CTA; e2e
+      `tests/e2e/tenant-onboarding.spec.ts` (§9.2 of
+      `test-backfill-and-e2e-tooling`) walks the create →
+      switch → dashboard flow.)
 
 ## 8. Manual invitation acceptance
 
@@ -166,10 +171,11 @@
       signup→confirm→login — same end-state with one less code
       path to maintain. The fully inline form remains a
       follow-up if operator feedback warrants it.)
-- [ ] 8.5 vitest + Playwright `invitation-accept.spec.ts`
+- [x] 8.5 vitest + Playwright `invitation-accept.spec.ts`
       covers hash, no-hash, and unauthenticated paths.
-      (Deferred — paired with §3.4 and
-      [[test-backfill-and-e2e-tooling]] §9.3.)
+      (Integration: `tests/integration/routes/invitations-accept.spec.tsx`;
+      e2e: `tests/e2e/invitation-accept.spec.ts` plus
+      `invitation-accept-veteran.spec.ts`.)
 
 ## 9. Member role-change UI
 
@@ -184,9 +190,13 @@
 - [x] 9.3 Mutation `useUpdateMemberRoleMutation` POSTs to
       `PATCH /v1/tenants/{id}/members/{user_id}` and
       invalidates the members query on success.
-- [ ] 9.4 vitest + Playwright `member-role-change.spec.ts`.
-      (Not added; tracked under
-      [[test-backfill-and-e2e-tooling]] §9.3.)
+- [x] 9.4 vitest + Playwright `member-role-change.spec.ts`.
+      (Integration: `tests/integration/routes/empresa/users.spec.tsx`
+      asserts the row-actions menu is permission-gated by
+      `members:update-role`; e2e role-change flow rides on
+      `tests/e2e/member-management.spec.ts` (§9.3 of
+      `test-backfill-and-e2e-tooling`) and
+      `permission-gating.spec.ts` (§9.4).)
 
 ## 10. Route guard
 

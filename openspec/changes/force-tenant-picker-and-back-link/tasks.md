@@ -58,4 +58,18 @@
 ## 8. Forward-compat checks
 
 - [ ] 8.1 Confirm `/onboarding`, `/welcome`, `/tenants/new`, `/invitations/$token/accept` still pass through without being redirected to the picker (TENANT_EXEMPT coverage). Visit each in dev with the picker flag unset.
+      **NOTE (2026-06-01 audit):** Both invitation routes
+      (`/invitations/accept` and the legacy
+      `/invitations/$token/accept`) are registered in
+      `apps/web/src/router.ts:314-335` **without a `beforeLoad`
+      guard**, so `nextRouteForCurrentState` never runs for
+      them — `TENANT_EXEMPT` membership is irrelevant. The
+      route component handles auth state itself and calls
+      `setPickerConfirmed()` on a successful accept so any
+      follow-up nav is also unblocked. `/welcome`,
+      `/onboarding`, `/tenants/new` ARE in `TENANT_EXEMPT`
+      (`apps/web/src/lib/route-guard.ts:36-43`). Smoke can
+      assume all four paths pass through correctly; this is
+      kept open only because the visual confirm in dev hasn't
+      been clicked yet.
 - [x] 8.2 `openspec validate force-tenant-picker-and-back-link` exits 0.
