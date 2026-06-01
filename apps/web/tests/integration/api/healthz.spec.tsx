@@ -1,8 +1,8 @@
-// apps/web/tests/unit/api/healthz.test.ts
+// apps/web/tests/integration/api/healthz.spec.tsx
 //
-// Unit-level coverage for `fetchHealthz`. The TanStack hook itself
-// (`useHealthz`) is exercised by the routes/health integration spec; here we
-// just pin the request adapter so a backend contract change surfaces fast.
+// Covers `fetchHealthz` (adapter contract) and `useHealthz` (TanStack hook
+// wiring). Lives under tests/integration/ because the hook test imports
+// `@tanstack/react-query`, which the unit-layer layout gate forbids.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
