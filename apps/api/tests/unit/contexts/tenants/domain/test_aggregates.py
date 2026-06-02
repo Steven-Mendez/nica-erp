@@ -66,7 +66,8 @@ class TestTenant:
         assert tenant.name == "Empresa A2"
         assert tenant.updated_at == later
 
-    def test_update_fiscal_rejects_ruc_keyword(self) -> None:
+    def test_update_fiscal_accepts_ruc(self) -> None:
+        """RUC is editable from the fiscal-settings editor (2026-06-02)."""
         tenant = Tenant.register(
             name="X",
             ruc=Ruc("0010101800010X"),
@@ -77,8 +78,9 @@ class TestTenant:
             is_withholder=False,
             now=_NOW,
         )
-        with pytest.raises(TypeError):
-            tenant.update_fiscal(now=_NOW, ruc=Ruc("9999999999999Z"))  # type: ignore[call-arg]
+        tenant.update_fiscal(now=_NOW, ruc=Ruc("9999999999999Z"))
+        assert tenant.ruc is not None
+        assert tenant.ruc.value == "9999999999999Z"
 
 
 class TestMembership:

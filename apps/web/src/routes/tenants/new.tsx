@@ -162,7 +162,7 @@ type CreateTenantBody = {
   name: string;
   is_withholder: boolean;
   ruc?: string | null;
-  regime?: "general" | "simplified" | null;
+  regime?: "general" | "cuota_fija" | "pequeno_contribuyente" | null;
   municipality?: string | null;
   authorization_dgi?: { number: string; valid_from: string; valid_to: string } | null;
   fiscal_address?: string | null;
@@ -527,15 +527,16 @@ export function TenantsNewRoute() {
                           <Field>
                             <FieldLabel htmlFor="regime" className="gap-1.5">
                               Régimen
-                              <InfoTip text="General: factura IVA estándar. Simplificado: cuota fija mensual para pequeñas empresas." />
+                              <InfoTip text="General: facturación IVA estándar. Cuota fija: tarifa mensual fija para microempresas. Pequeño contribuyente: régimen simplificado con tarifas reducidas." />
                             </FieldLabel>
                             <Select value={field.value ?? ""} onValueChange={field.onChange}>
                               <SelectTrigger id="regime" className="w-full">
                                 <SelectValue placeholder="Selecciona un régimen" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="general">General</SelectItem>
-                                <SelectItem value="simplified">Simplificado</SelectItem>
+                                <SelectItem value="general">Régimen general</SelectItem>
+                                <SelectItem value="cuota_fija">Cuota fija</SelectItem>
+                                <SelectItem value="pequeno_contribuyente">Pequeño contribuyente</SelectItem>
                               </SelectContent>
                             </Select>
                           </Field>
@@ -742,7 +743,7 @@ export function TenantsNewRoute() {
 type ReviewSummaryProps = {
   name: string;
   ruc: string | undefined | null;
-  regime: "general" | "simplified" | undefined | null;
+  regime: "general" | "cuota_fija" | "pequeno_contribuyente" | undefined | null;
   municipality: string | undefined | null;
   isWithholder: boolean;
   dgiNumber: string | undefined | null;
@@ -753,7 +754,13 @@ type ReviewSummaryProps = {
 
 function ReviewSummary(props: ReviewSummaryProps) {
   const regimeLabel =
-    props.regime === "general" ? "General" : props.regime === "simplified" ? "Simplificado" : "—";
+    props.regime === "general"
+      ? "Régimen general"
+      : props.regime === "cuota_fija"
+        ? "Cuota fija"
+        : props.regime === "pequeno_contribuyente"
+          ? "Pequeño contribuyente"
+          : "—";
 
   return (
     <div className="space-y-4 rounded-lg border bg-muted/30 p-5">

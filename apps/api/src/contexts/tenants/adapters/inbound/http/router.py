@@ -118,6 +118,7 @@ def _tenant_to_response(tenant: Tenant) -> TenantResponse:
         name=tenant.name,
         ruc=tenant.ruc.value if tenant.ruc is not None else None,
         regime=tenant.regime.value if tenant.regime is not None else None,
+        departamento=tenant.departamento,
         municipality=tenant.municipality.value if tenant.municipality is not None else None,
         authorization_dgi=AuthorizationDgiPayload(
             number=dgi.number,
@@ -127,6 +128,8 @@ def _tenant_to_response(tenant: Tenant) -> TenantResponse:
         if dgi is not None
         else None,
         fiscal_address=tenant.fiscal_address,
+        fiscal_email=tenant.fiscal_email.value if tenant.fiscal_email is not None else None,
+        fiscal_phone=tenant.fiscal_phone.value if tenant.fiscal_phone is not None else None,
         is_withholder=tenant.is_withholder,
         status=tenant.status,
         created_at=tenant.created_at,
@@ -156,9 +159,12 @@ async def create_tenant(
             name=body.name,
             ruc=body.ruc,
             regime=body.regime,
+            departamento=body.departamento,
             municipality=body.municipality,
             authorization_dgi=_dgi_to_vo(body.authorization_dgi),
             fiscal_address=body.fiscal_address,
+            fiscal_email=body.fiscal_email,
+            fiscal_phone=body.fiscal_phone,
             is_withholder=body.is_withholder,
         )
     )
@@ -234,12 +240,16 @@ async def update_tenant(
         UpdateTenantCommand(
             tenant_id=tenant_id,
             name=body.name,
+            ruc=body.ruc,
             regime=body.regime,
+            departamento=body.departamento,
             municipality=body.municipality,
             authorization_dgi=_dgi_to_vo(body.authorization_dgi)
             if body.authorization_dgi is not None
             else None,
             fiscal_address=body.fiscal_address,
+            fiscal_email=body.fiscal_email,
+            fiscal_phone=body.fiscal_phone,
             is_withholder=body.is_withholder,
         )
     )

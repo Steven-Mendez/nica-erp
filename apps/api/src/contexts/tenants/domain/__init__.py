@@ -28,6 +28,7 @@ from contexts.tenants.domain.events import (
     MemberRoleChanged,
     TenantCreated,
 )
+from contexts.tenants.domain.fiscal_contact import FiscalEmail, FiscalPhone
 from contexts.tenants.domain.invitation import Invitation
 from contexts.tenants.domain.membership import Membership, MembershipStatus
 from contexts.tenants.domain.municipality import KNOWN_MUNICIPALITIES, Municipality
@@ -41,6 +42,8 @@ __all__ = [
     "AuthorizationDgi",
     "CannotDemoteOwnerError",
     "CannotRemoveOwnerError",
+    "FiscalEmail",
+    "FiscalPhone",
     "Invitation",
     "InvitationAlreadyAcceptedError",
     "InvitationCancelled",

@@ -146,6 +146,17 @@ There are two boundary layers:
 
 The recovery button is auth-aware: `getAccessToken()` is read synchronously (never `useMeQuery`, which may itself be the source of the boundary) and links to `/dashboard` when present, `/login` otherwise. The link is a plain `<a>` — a hard navigation forces a fresh app boot, which is the correct recovery action from a broken state.
 
+#### Empresa-scoped editor forms
+
+Forms that mutate the active empresa's data (e.g. the fiscal-settings editor at `/empresa/settings`) live under `apps/web/src/features/tenants/`:
+
+- **Schema** in `features/tenants/schemas/<form>.ts` (Zod). The schema owns every error message in Spanish; the form's RHF + `zodResolver` pipes Zod issues into RHF field state automatically.
+- **Component** in `features/tenants/components/<form>.tsx` (RHF + `<Controller>`). Permission gating happens here via `useHasPermission("tenant.update")` — without the permission the form renders a read-only summary card with a Spanish help-card explaining who can edit.
+- **Route** in `routes/empresa/<x>.tsx` stays thin: it reads `useMeQuery().data?.active_tenant`, calls `useTenantQuery(activeId)`, renders a skeleton while the payload loads, and hands the resolved tenant to the form component.
+- **Mutation** uses `useUpdateActiveTenantMutation` from `features/tenants/api/hooks.ts`, which reads `useActiveTenantId()` so consumers don't pass the empresa id explicitly. On success the hook does `setQueryData(tenantKey(activeId), updated)` and invalidates `myTenantsKey`; the dashboard banner watching the same key disappears without a reload.
+
+Backend error mapping flows through the form's `onError` handler: a 422 problem-detail body's `errors[]` array is walked by `mapApiProblemToFormErrors(form, problem)` (exported alongside the form component), which calls `form.setError(path, …)` per JSON-pointer. A 409 RUC collision renders as a top-of-form `<Alert>` rather than a field-level error since the value is syntactically fine.
+
 #### Form errors
 
 Inline auth-error display lives in a single component — `apps/web/src/components/form/form-error-alert.tsx`:

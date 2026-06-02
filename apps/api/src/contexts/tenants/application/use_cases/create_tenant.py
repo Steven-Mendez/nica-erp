@@ -21,6 +21,8 @@ from contexts.tenants.application.ports.outbound import (
 )
 from contexts.tenants.domain import (
     AuthorizationDgi,
+    FiscalEmail,
+    FiscalPhone,
     Membership,
     Municipality,
     Regime,
@@ -43,9 +45,12 @@ class CreateTenantCommand:
     is_withholder: bool = False
     ruc: str | None = None
     regime: str | None = None
+    departamento: str | None = None
     municipality: str | None = None
     authorization_dgi: AuthorizationDgi | None = None
     fiscal_address: str | None = None
+    fiscal_email: str | None = None
+    fiscal_phone: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,11 +76,18 @@ class CreateTenant:
             name=command.name,
             ruc=Ruc.parse(command.ruc) if command.ruc is not None else None,
             regime=Regime(command.regime) if command.regime is not None else None,  # type: ignore[arg-type]
+            departamento=command.departamento,
             municipality=Municipality(command.municipality)
             if command.municipality is not None
             else None,
             authorization_dgi=command.authorization_dgi,
             fiscal_address=command.fiscal_address,
+            fiscal_email=FiscalEmail(command.fiscal_email)
+            if command.fiscal_email is not None
+            else None,
+            fiscal_phone=FiscalPhone(command.fiscal_phone)
+            if command.fiscal_phone is not None
+            else None,
             is_withholder=command.is_withholder,
             now=now,
             id_=uuid4(),

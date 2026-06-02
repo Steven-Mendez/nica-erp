@@ -29,7 +29,7 @@ export const createTenantSchema = z.object({
     .min(1, { message: "El nombre es obligatorio." })
     .max(200, { message: "El nombre no puede superar los 200 caracteres." }),
   ruc: rucPattern.optional(),
-  regime: z.enum(["general", "simplified"]).optional(),
+  regime: z.enum(["general", "cuota_fija", "pequeno_contribuyente"]).optional(),
   municipality: z.enum(MUNICIPALITIES).optional(),
   authorization_dgi: dgiSchema.optional(),
   fiscal_address: z

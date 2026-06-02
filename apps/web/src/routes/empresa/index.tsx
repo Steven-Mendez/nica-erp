@@ -110,9 +110,11 @@ export function EmpresaIndexRoute() {
                 label="Régimen"
                 value={
                   t.regime === "general" ? (
-                    "General"
-                  ) : t.regime === "simplified" ? (
-                    "Simplificado"
+                    "Régimen general"
+                  ) : t.regime === "cuota_fija" ? (
+                    "Cuota fija"
+                  ) : t.regime === "pequeno_contribuyente" ? (
+                    "Pequeño contribuyente"
                   ) : (
                     <Badge variant="secondary">Pendiente</Badge>
                   )

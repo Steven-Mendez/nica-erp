@@ -44,14 +44,65 @@ class TestMunicipality:
         assert len(KNOWN_MUNICIPALITIES) >= 17
 
 
+class TestFiscalContact:
+    @pytest.mark.parametrize(
+        "value",
+        ["facturacion@miempresa.ni", "ada@example.com", "x.y+tag@a.bc.de"],
+    )
+    def test_valid_email(self, value: str) -> None:
+        from contexts.tenants.domain.fiscal_contact import FiscalEmail
+
+        assert FiscalEmail(value).value == value
+
+    @pytest.mark.parametrize("value", ["", "no-at-sign", "@nodomain", "u@", "u@x"])
+    def test_invalid_email(self, value: str) -> None:
+        from contexts.tenants.domain.fiscal_contact import FiscalEmail
+
+        with pytest.raises(ValueError):
+            FiscalEmail(value)
+
+    @pytest.mark.parametrize("value", ["+505 8888-8888", "+505 2222-1111", "+505 8888-0000"])
+    def test_valid_phone(self, value: str) -> None:
+        from contexts.tenants.domain.fiscal_contact import FiscalPhone
+
+        assert FiscalPhone(value).value == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            "+505 888-8888",  # short
+            "+505 8888-888",  # short
+            "+506 8888-8888",  # wrong country code
+            "505 8888-8888",  # missing +
+            "+5058888-8888",  # missing space
+            "+505 88888888",  # missing hyphen
+        ],
+    )
+    def test_invalid_phone(self, value: str) -> None:
+        from contexts.tenants.domain.fiscal_contact import FiscalPhone
+
+        with pytest.raises(ValueError):
+            FiscalPhone(value)
+
+
 class TestRegime:
-    @pytest.mark.parametrize("value", ["general", "simplified"])
+    @pytest.mark.parametrize("value", ["general", "cuota_fija", "pequeno_contribuyente"])
     def test_valid(self, value: str) -> None:
         assert Regime(value).value == value  # type: ignore[arg-type]
 
     def test_invalid(self) -> None:
         with pytest.raises(ValueError):
             Regime("custom")  # type: ignore[arg-type]
+
+    def test_legacy_simplified_rejected(self) -> None:
+        """Pre-0006 'simplified' is no longer a valid regime value.
+
+        The 0006 migration rewrites any pre-existing rows from
+        ``simplified`` to ``cuota_fija`` before the constraint tightens.
+        """
+        with pytest.raises(ValueError):
+            Regime("simplified")  # type: ignore[arg-type]
 
 
 class TestAuthorizationDgi:

@@ -123,6 +123,36 @@ export const useCreateTenantMutation = (): UseMutationResult<Tenant, Error, Crea
   });
 };
 
+// Empresa-scoped update keyed on the operator's active tenant.
+// The fiscal-settings editor uses this hook so it doesn't have to
+// reach for the active id at every callsite. The hook reads
+// `me.active_tenant` synchronously from the QueryClient cache via
+// `useActiveTenantId` (the shared hook also used by the per-tenant
+// queries' stale-id guard) and short-circuits if there's no active
+// empresa — that state is a route-guard bug, not a save bug.
+export const useUpdateActiveTenantMutation = (): UseMutationResult<
+  Tenant,
+  Error,
+  UpdateTenantInput
+> => {
+  const qc = useQueryClient();
+  const activeId = useActiveTenantId();
+  return useMutation({
+    mutationFn: async (body: UpdateTenantInput) => {
+      if (activeId === null || activeId === "") {
+        throw new Error("No hay empresa activa. Vuelve a /tenants.");
+      }
+      return updateTenant(activeId, body);
+    },
+    onSuccess: (tenant) => {
+      if (activeId !== null && activeId !== "") {
+        qc.setQueryData(tenantKey(activeId), tenant);
+      }
+      void qc.invalidateQueries({ queryKey: myTenantsKey });
+    },
+  });
+};
+
 export const useUpdateTenantMutation = (
   tenantId: string,
 ): UseMutationResult<Tenant, Error, UpdateTenantInput> => {

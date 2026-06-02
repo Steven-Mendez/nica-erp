@@ -17,7 +17,7 @@ from hypothesis import strategies as st
 from contexts.tenants.domain import KNOWN_MUNICIPALITIES, Municipality, Regime, Ruc
 
 _RUC_RE = re.compile(r"^\d{13}[A-Z]$")
-_VALID_REGIMES = ("general", "simplified")
+_VALID_REGIMES = ("general", "cuota_fija", "pequeno_contribuyente")
 
 
 # --- Ruc ------------------------------------------------------------------

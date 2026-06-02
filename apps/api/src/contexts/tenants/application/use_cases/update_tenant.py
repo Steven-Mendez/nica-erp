@@ -1,4 +1,4 @@
-"""``UpdateTenant`` — mutate mutable fiscal metadata (not RUC)."""
+"""``UpdateTenant`` — mutate mutable fiscal metadata."""
 
 from __future__ import annotations
 
@@ -10,8 +10,11 @@ from uuid import UUID
 from contexts.tenants.application.ports.outbound import TenantRepository
 from contexts.tenants.domain import (
     AuthorizationDgi,
+    FiscalEmail,
+    FiscalPhone,
     Municipality,
     Regime,
+    Ruc,
     Tenant,
     TenantNotFoundError,
 )
@@ -26,10 +29,14 @@ def _utc_now() -> datetime:
 class UpdateTenantCommand:
     tenant_id: UUID
     name: str | None = None
+    ruc: str | None = None
     regime: str | None = None
+    departamento: str | None = None
     municipality: str | None = None
     authorization_dgi: AuthorizationDgi | None = None
     fiscal_address: str | None = None
+    fiscal_email: str | None = None
+    fiscal_phone: str | None = None
     is_withholder: bool | None = None
 
 
@@ -47,10 +54,14 @@ class UpdateTenant:
             tenant.update_fiscal(
                 now=self.now(),
                 name=command.name,
+                ruc=Ruc(command.ruc) if command.ruc else None,
                 regime=Regime(command.regime) if command.regime else None,  # type: ignore[arg-type]
+                departamento=command.departamento,
                 municipality=(Municipality(command.municipality) if command.municipality else None),
                 authorization_dgi=command.authorization_dgi,
                 fiscal_address=command.fiscal_address,
+                fiscal_email=FiscalEmail(command.fiscal_email) if command.fiscal_email else None,
+                fiscal_phone=FiscalPhone(command.fiscal_phone) if command.fiscal_phone else None,
                 is_withholder=command.is_withholder,
             )
             await self.tenant_repository.update(tenant)

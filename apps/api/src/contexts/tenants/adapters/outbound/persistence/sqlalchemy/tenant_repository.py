@@ -14,6 +14,8 @@ from sqlalchemy import RowMapping, text
 
 from contexts.tenants.domain import (
     AuthorizationDgi,
+    FiscalEmail,
+    FiscalPhone,
     Municipality,
     Regime,
     Ruc,
@@ -22,9 +24,10 @@ from contexts.tenants.domain import (
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
 _COLUMNS = (
-    "id, name, ruc, regime, municipality, authorization_dgi_number, "
-    "authorization_dgi_valid_from, authorization_dgi_valid_to, "
-    "fiscal_address, is_withholder, status, created_at, updated_at"
+    "id, name, ruc, regime, departamento, municipality, "
+    "authorization_dgi_number, authorization_dgi_valid_from, "
+    "authorization_dgi_valid_to, fiscal_address, fiscal_email, "
+    "fiscal_phone, is_withholder, status, created_at, updated_at"
 )
 
 # The SQL strings below interpolate only the trusted module-level
@@ -50,25 +53,31 @@ _SELECT_FOR_USER = text(_SELECT_FOR_USER_SQL)
 
 _INSERT = text(
     "INSERT INTO tenants ("
-    "id, name, ruc, regime, municipality, authorization_dgi_number, "
-    "authorization_dgi_valid_from, authorization_dgi_valid_to, "
-    "fiscal_address, is_withholder, status, created_at, updated_at"
+    "id, name, ruc, regime, departamento, municipality, "
+    "authorization_dgi_number, authorization_dgi_valid_from, "
+    "authorization_dgi_valid_to, fiscal_address, fiscal_email, "
+    "fiscal_phone, is_withholder, status, created_at, updated_at"
     ") VALUES ("
-    ":id, :name, :ruc, :regime, :municipality, :authorization_dgi_number, "
-    ":authorization_dgi_valid_from, :authorization_dgi_valid_to, "
-    ":fiscal_address, :is_withholder, :status, :created_at, :updated_at"
+    ":id, :name, :ruc, :regime, :departamento, :municipality, "
+    ":authorization_dgi_number, :authorization_dgi_valid_from, "
+    ":authorization_dgi_valid_to, :fiscal_address, :fiscal_email, "
+    ":fiscal_phone, :is_withholder, :status, :created_at, :updated_at"
     ")"
 )
 
 _UPDATE = text(
     "UPDATE tenants SET "
     "name = :name, "
+    "ruc = :ruc, "
     "regime = :regime, "
+    "departamento = :departamento, "
     "municipality = :municipality, "
     "authorization_dgi_number = :authorization_dgi_number, "
     "authorization_dgi_valid_from = :authorization_dgi_valid_from, "
     "authorization_dgi_valid_to = :authorization_dgi_valid_to, "
     "fiscal_address = :fiscal_address, "
+    "fiscal_email = :fiscal_email, "
+    "fiscal_phone = :fiscal_phone, "
     "is_withholder = :is_withholder, "
     "status = :status, "
     "updated_at = :updated_at "
@@ -119,11 +128,18 @@ class TenantRepositorySqlAlchemy:
             name=row["name"],
             ruc=Ruc(row["ruc"]) if row["ruc"] is not None else None,
             regime=Regime(row["regime"]) if row["regime"] is not None else None,
+            departamento=row["departamento"],
             municipality=Municipality(row["municipality"])
             if row["municipality"] is not None
             else None,
             authorization_dgi=authorization_dgi,
             fiscal_address=row["fiscal_address"],
+            fiscal_email=FiscalEmail(row["fiscal_email"])
+            if row["fiscal_email"] is not None
+            else None,
+            fiscal_phone=FiscalPhone(row["fiscal_phone"])
+            if row["fiscal_phone"] is not None
+            else None,
             is_withholder=bool(row["is_withholder"]),
             status=row["status"],
             created_at=_as_dt(row["created_at"]),
@@ -138,11 +154,14 @@ class TenantRepositorySqlAlchemy:
             "name": tenant.name,
             "ruc": tenant.ruc.value if tenant.ruc is not None else None,
             "regime": tenant.regime.value if tenant.regime is not None else None,
+            "departamento": tenant.departamento,
             "municipality": tenant.municipality.value if tenant.municipality is not None else None,
             "authorization_dgi_number": dgi.number if dgi is not None else None,
             "authorization_dgi_valid_from": dgi.valid_from if dgi is not None else None,
             "authorization_dgi_valid_to": dgi.valid_to if dgi is not None else None,
             "fiscal_address": tenant.fiscal_address,
+            "fiscal_email": tenant.fiscal_email.value if tenant.fiscal_email is not None else None,
+            "fiscal_phone": tenant.fiscal_phone.value if tenant.fiscal_phone is not None else None,
             "is_withholder": tenant.is_withholder,
             "status": tenant.status,
             "created_at": tenant.created_at,

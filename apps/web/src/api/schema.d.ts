@@ -558,7 +558,12 @@ export interface components {
              * Regime
              * @example general
              */
-            regime?: ("general" | "simplified") | null;
+            regime?: ("general" | "cuota_fija" | "pequeno_contribuyente") | null;
+            /**
+             * Departamento
+             * @example Managua
+             */
+            departamento?: string | null;
             /**
              * Municipality
              * @example Managua
@@ -570,6 +575,16 @@ export interface components {
              * @example Rotonda Centroamérica, Managua
              */
             fiscal_address?: string | null;
+            /**
+             * Fiscal Email
+             * @example facturacion@miempresa.ni
+             */
+            fiscal_email?: string | null;
+            /**
+             * Fiscal Phone
+             * @example +505 8888-8888
+             */
+            fiscal_phone?: string | null;
             /**
              * Is Withholder
              * @default false
@@ -971,12 +986,18 @@ export interface components {
             /** Ruc */
             ruc?: string | null;
             /** Regime */
-            regime?: ("general" | "simplified") | null;
+            regime?: ("general" | "cuota_fija" | "pequeno_contribuyente") | null;
+            /** Departamento */
+            departamento?: string | null;
             /** Municipality */
             municipality?: string | null;
             authorization_dgi?: components["schemas"]["AuthorizationDgiPayload"] | null;
             /** Fiscal Address */
             fiscal_address?: string | null;
+            /** Fiscal Email */
+            fiscal_email?: string | null;
+            /** Fiscal Phone */
+            fiscal_phone?: string | null;
             /** Is Withholder */
             is_withholder: boolean;
             /** Status */
@@ -1078,13 +1099,24 @@ export interface components {
         UpdateTenantRequest: {
             /** Name */
             name?: string | null;
+            /**
+             * Ruc
+             * @example 0010101800010X
+             */
+            ruc?: string | null;
             /** Regime */
-            regime?: ("general" | "simplified") | null;
+            regime?: ("general" | "cuota_fija" | "pequeno_contribuyente") | null;
+            /** Departamento */
+            departamento?: string | null;
             /** Municipality */
             municipality?: string | null;
             authorization_dgi?: components["schemas"]["AuthorizationDgiPayload"] | null;
             /** Fiscal Address */
             fiscal_address?: string | null;
+            /** Fiscal Email */
+            fiscal_email?: string | null;
+            /** Fiscal Phone */
+            fiscal_phone?: string | null;
             /** Is Withholder */
             is_withholder?: boolean | null;
         };

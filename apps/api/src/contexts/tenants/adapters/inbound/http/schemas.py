@@ -20,10 +20,14 @@ class AuthorizationDgiPayload(BaseModel):
 # --- create / update tenant -----------------------------------------------
 
 
+RegimeLiteral = Literal["general", "cuota_fija", "pequeno_contribuyente"]
+
+
 class CreateTenantRequest(BaseModel):
     name: str = Field(examples=["Mi Empresa"], max_length=200)
     ruc: str | None = Field(default=None, examples=["0010101800010X"])
-    regime: Literal["general", "simplified"] | None = Field(default=None, examples=["general"])
+    regime: RegimeLiteral | None = Field(default=None, examples=["general"])
+    departamento: str | None = Field(default=None, examples=["Managua"], max_length=64)
     municipality: str | None = Field(default=None, examples=["Managua"])
     authorization_dgi: AuthorizationDgiPayload | None = Field(default=None)
     fiscal_address: str | None = Field(
@@ -31,6 +35,10 @@ class CreateTenantRequest(BaseModel):
         examples=["Rotonda Centroamérica, Managua"],
         max_length=500,
     )
+    fiscal_email: str | None = Field(
+        default=None, examples=["facturacion@miempresa.ni"], max_length=320
+    )
+    fiscal_phone: str | None = Field(default=None, examples=["+505 8888-8888"], max_length=32)
     is_withholder: bool = Field(default=False)
 
 
@@ -38,10 +46,14 @@ class UpdateTenantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, max_length=200)
-    regime: Literal["general", "simplified"] | None = None
+    ruc: str | None = Field(default=None, examples=["0010101800010X"])
+    regime: RegimeLiteral | None = None
+    departamento: str | None = Field(default=None, max_length=64)
     municipality: str | None = None
     authorization_dgi: AuthorizationDgiPayload | None = None
     fiscal_address: str | None = Field(default=None, max_length=500)
+    fiscal_email: str | None = Field(default=None, max_length=320)
+    fiscal_phone: str | None = Field(default=None, max_length=32)
     is_withholder: bool | None = None
 
 
@@ -49,10 +61,13 @@ class TenantResponse(BaseModel):
     id: UUID
     name: str
     ruc: str | None = None
-    regime: Literal["general", "simplified"] | None = None
+    regime: RegimeLiteral | None = None
+    departamento: str | None = None
     municipality: str | None = None
     authorization_dgi: AuthorizationDgiPayload | None = None
     fiscal_address: str | None = None
+    fiscal_email: str | None = None
+    fiscal_phone: str | None = None
     is_withholder: bool
     status: str
     created_at: datetime

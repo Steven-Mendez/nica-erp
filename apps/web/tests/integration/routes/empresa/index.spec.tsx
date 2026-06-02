@@ -13,7 +13,7 @@ let tenantPayload:
       id: string;
       name: string;
       ruc: string | null;
-      regime: "general" | "simplified" | null;
+      regime: "general" | "cuota_fija" | "pequeno_contribuyente" | null;
       municipality: string | null;
       authorization_dgi: { number: string; valid_from: string; valid_to: string } | null;
       fiscal_address: string | null;
