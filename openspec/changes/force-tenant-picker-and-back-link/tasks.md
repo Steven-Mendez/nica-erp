@@ -49,15 +49,15 @@
 
 ## 7. Smoke
 
-- [ ] 7.1 In the dev server, log in as a single-empresa operator. Verify the SPA lands on `/tenants` with one card visible and the `+ Nueva empresa` button on the right. Click the card → SPA navigates to `/dashboard`.
-- [ ] 7.2 From `/dashboard`, open the sidebar's `TenantSwitcher` and click `Cambiar empresa`. Verify the SPA navigates to `/tenants`.
-- [ ] 7.3 Refresh the tab. The flag is preserved (in-tab navigation, not new session) — the SPA can re-enter the dashboard without re-confirming.
-- [ ] 7.4 Open a new browser tab (same origin), sign in, verify the picker re-appears.
-- [ ] 7.5 Log out from the existing tab; sign back in; verify the picker re-appears.
+- [x] 7.1 In the dev server, log in as a single-empresa operator. Verify the SPA lands on `/tenants` with one card visible and the `+ Nueva empresa` button on the right. Click the card → SPA navigates to `/dashboard`. **Closed 2026-06-02**: operator validó en dev.
+- [x] 7.2 From `/dashboard`, open the sidebar's `TenantSwitcher` and click `Cambiar empresa`. Verify the SPA navigates to `/tenants`. **Closed 2026-06-02**: operator validó en dev.
+- [x] 7.3 Refresh the tab. The flag is preserved (in-tab navigation, not new session) — the SPA can re-enter the dashboard without re-confirming. **Closed 2026-06-02**: operator validó en dev.
+- [x] 7.4 Open a new browser tab (same origin), sign in, verify the picker re-appears. **Closed 2026-06-02**: operator validó en dev.
+- [x] 7.5 Log out from the existing tab; sign back in; verify the picker re-appears. **Closed 2026-06-02**: operator validó en dev.
 
 ## 8. Forward-compat checks
 
-- [ ] 8.1 Confirm `/onboarding`, `/welcome`, `/tenants/new`, `/invitations/$token/accept` still pass through without being redirected to the picker (TENANT_EXEMPT coverage). Visit each in dev with the picker flag unset.
+- [x] 8.1 Confirm `/onboarding`, `/welcome`, `/tenants/new`, `/invitations/$token/accept` still pass through without being redirected to the picker (TENANT_EXEMPT coverage). Visit each in dev with the picker flag unset. **Closed 2026-06-02**: operator validó en dev (complementa la auditoría de código del 2026-06-01).
       **NOTE (2026-06-01 audit):** Both invitation routes
       (`/invitations/accept` and the legacy
       `/invitations/$token/accept`) are registered in

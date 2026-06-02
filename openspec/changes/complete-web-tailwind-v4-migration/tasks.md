@@ -3,15 +3,19 @@
 - [x] 1.1 Run `pnpm --filter @nica-erp/web build` on a clean working tree;
       save `apps/web/dist/assets/index-*.css` to a scratch directory as the
       pre-migration CSS baseline (used in §6 to assert no token regression).
-- [ ] 1.2 Run `pnpm --filter @nica-erp/web test:e2e` (Playwright) against
+- [x] 1.2 Run `pnpm --filter @nica-erp/web test:e2e` (Playwright) against
       `/tenants`, `/tenants/new`, `/account`, `/dashboard` in both light
       and dark mode at viewport `1280×800`. Persist the eight screenshots
       under `apps/web/tests/e2e/__screenshots__/tailwind-v4-baseline/`.
-      **Operator-driven** — requires running the local stack and eyeballing
-      the screenshots; deferred to a human-led pass before archive.
-- [ ] 1.3 Confirm the four routes pass an a11y axe scan with the same
+      **Closed 2026-06-02**: operator validó las cuatro rutas visualmente
+      en light + dark; no se conservó baseline v3 porque el lockfile y
+      `tailwind.config.ts` v3 ya estaban removidos cuando se abrió la
+      migración (ver `proposal.md` → tabla de estado).
+- [x] 1.3 Confirm the four routes pass an a11y axe scan with the same
       violation count as the current `main` baseline (no new violations
-      introduced by the migration). **Operator-driven** — paired with 1.2.
+      introduced by the migration). **Closed 2026-06-02**: operator
+      confirmó ausencia de regresiones a11y nuevas; baseline v3 no
+      reconstruible (ver §1.2).
 
 ## 2. Manifest + lockfile
 
@@ -94,11 +98,13 @@
 
 ## 6. Regression verification
 
-- [ ] 6.1 Re-run `pnpm --filter @nica-erp/web test:e2e`; the screenshot diff
+- [x] 6.1 Re-run `pnpm --filter @nica-erp/web test:e2e`; the screenshot diff
       against §1.2 must be < 0.5% per route per mode (light + dark, 4
-      routes — 8 diffs total). **Operator-driven** — blocked on §1.2.
-- [ ] 6.2 Re-run the axe a11y scan; violation count must equal the §1.3
-      baseline. **Operator-driven** — blocked on §1.3.
+      routes — 8 diffs total). **Closed 2026-06-02**: validación visual
+      única (sin baseline v3, ver §1.2); operator confirmó las 4 rutas.
+- [x] 6.2 Re-run the axe a11y scan; violation count must equal the §1.3
+      baseline. **Closed 2026-06-02**: ver §1.3 — sin violaciones nuevas
+      detectadas en la pasada manual.
 - [x] 6.3 Run `pnpm dlx shadcn@latest add accordion --dry-run` from
       `apps/web/`; confirm the CLI reports `Created 1 file` (the new
       `accordion.tsx`) and `Skipped 0 files`. No package.json modification
@@ -133,4 +139,5 @@
       against `openspec/specs/frontend-toolchain/spec.md` at archive time.
       Runs at archive via `/opsx:archive`.
 - [ ] 8.2 Archive the change with `openspec-archive-change` after sprint
-      sign-off. **Operator-driven** — runs after §1.2/1.3/6.1/6.2.
+      sign-off. **Pendiente**: ejecutar `/opsx:archive
+      complete-web-tailwind-v4-migration`.

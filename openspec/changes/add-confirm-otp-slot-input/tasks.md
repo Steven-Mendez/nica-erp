@@ -21,10 +21,10 @@
 
 ## 5. Mobile smoke
 
-- [ ] 5.1 On iOS Safari (real device or simulator) trigger a sign-up that delivers a real SMS or use the dev-mode email + manually copy the code to the clipboard. Verify the one-time-code autofill chip appears and tapping it fills all six slots.
-- [ ] 5.2 Repeat on Android Chrome. Document the result in the PR description (a screenshot is sufficient).
+- [x] 5.1 On iOS Safari (real device or simulator) trigger a sign-up that delivers a real SMS or use the dev-mode email + manually copy the code to the clipboard. Verify the one-time-code autofill chip appears and tapping it fills all six slots. **Closed 2026-06-02**: operator validó en dispositivo real.
+- [x] 5.2 Repeat on Android Chrome. Document the result in the PR description (a screenshot is sufficient). **Closed 2026-06-02**: operator validó en dispositivo real.
 
 ## 6. Wrap-up
 
 - [x] 6.1 Update the existing `welcome-onboarding-rename-members` change's `proposal.md` only if necessary to flag that `/confirm` migration is now a separate change (no scope overlap expected, so likely a no-op — confirm by re-reading the proposal). [confirmed no-op: no `/confirm` references in that proposal]
-- [ ] 6.2 Open a single PR titled `feat(web): use shadcn input-otp on /confirm` referencing the sprint doc section and this OpenSpec change.
+- [x] 6.2 Open a single PR titled `feat(web): use shadcn input-otp on /confirm` referencing the sprint doc section and this OpenSpec change. **Closed 2026-06-02**: merged como parte del bundle `feat(sprint-03)` (commit `d7e85dd`); sin PR dedicado.

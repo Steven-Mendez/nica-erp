@@ -61,11 +61,11 @@
 
 ## 8. Smoke
 
-- [ ] 8.1 In the dev server, log in. Confirm the sidebar shows `Empresa` (not `Tenants`) and that expanding it reveals Vista general / Usuarios / Configuración.
-- [ ] 8.2 Click each sub-item. Verify the page renders inside the AppShell with the parent + child rows highlighted.
-- [ ] 8.3 On `/empresa/usuarios`, verify the members table renders the owner row without affordances, and (as owner) the invite dialog works end-to-end (POST 201, dialog closes, both queries reload).
-- [ ] 8.4 From `/dashboard`, open the user menu in the sidebar footer and click `Mi cuenta`. Verify the SPA navigates to `/account` and the AppShell chrome is replaced by `IdentityLayout` (no sidebar, only a top bar with `← Volver` and the empresa chip).
-- [ ] 8.5 From `/account`, click `← Volver` and verify the SPA returns to `/dashboard` (or wherever the operator was last).
+- [x] 8.1 In the dev server, log in. Confirm the sidebar shows `Empresa` (not `Tenants`) and that expanding it reveals Vista general / Usuarios / Configuración. **Closed 2026-06-02**: operator validó en dev.
+- [x] 8.2 Click each sub-item. Verify the page renders inside the AppShell with the parent + child rows highlighted. **Closed 2026-06-02**: operator validó en dev.
+- [x] 8.3 On `/empresa/usuarios`, verify the members table renders the owner row without affordances, and (as owner) the invite dialog works end-to-end (POST 201, dialog closes, both queries reload). **Closed 2026-06-02**: operator validó en dev.
+- [x] 8.4 From `/dashboard`, open the user menu in the sidebar footer and click `Mi cuenta`. Verify the SPA navigates to `/account` and the AppShell chrome is replaced by `IdentityLayout` (no sidebar, only a top bar with `← Volver` and the empresa chip). **Closed 2026-06-02**: operator validó en dev.
+- [x] 8.5 From `/account`, click `← Volver` and verify the SPA returns to `/dashboard` (or wherever the operator was last). **Closed 2026-06-02**: operator validó en dev.
 
 ## 9. Backend gap docs
 
@@ -75,4 +75,4 @@
 ## 10. Validation
 
 - [x] 10.1 `openspec validate restructure-sidebar-empresa-and-account` exits 0.
-- [ ] 10.2 `openspec list` reports the change as Active with 100% tasks complete (when this work lands).
+- [x] 10.2 `openspec list` reports the change as Active with 100% tasks complete (when this work lands). **Closed 2026-06-02**: 100% al cerrar §8.x.
