@@ -47,11 +47,16 @@ class InvitationNotFoundError(Exception):
     """No invitation found for the provided token hash."""
 
 
+class InvitationDuplicatePendingError(Exception):
+    """A pending invitation already exists for the same tenant + email."""
+
+
 __all__ = [
     "CannotDemoteOwnerError",
     "CannotRemoveOwnerError",
     "InvitationAlreadyAcceptedError",
     "InvitationCancelledError",
+    "InvitationDuplicatePendingError",
     "InvitationExpiredError",
     "InvitationInvalidError",
     "InvitationNotFoundError",

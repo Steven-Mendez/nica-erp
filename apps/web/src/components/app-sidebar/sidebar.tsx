@@ -1,12 +1,51 @@
-import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useState,
+  type ButtonHTMLAttributes,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
 
 export const SIDEBAR_WIDTH_EXPANDED = "16rem";
 export const SIDEBAR_WIDTH_COLLAPSED = "3.5rem";
 
+export const SIDEBAR_ROOT_ID = "app-sidebar";
+
+// True while the viewport is below the md breakpoint (768px). The
+// closed-mobile a11y trio (aria-hidden + inert + hidden) only fires
+// in that regime — at md+ the sidebar is always visible and tab-
+// reachable. We watch `matchMedia` so device rotation flips the
+// guards without a re-render of the consuming tree.
+function useIsMobileViewport(): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 767px)").matches;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
 export function Sidebar({ className, children, ...props }: HTMLAttributes<HTMLElement>) {
   const { state, mobileOpen, setMobileOpen } = useSidebar();
+  const isMobile = useIsMobileViewport();
+
+  // Closed-mobile guard: when the sidebar is closed AND the viewport
+  // is in the mobile regime, the entire panel is removed from the
+  // a11y tree (aria-hidden), made non-interactive (inert), and
+  // hidden from layout (display:none via Tailwind's `hidden`). The
+  // three guards cover screen-reader users, keyboard users, and CSS
+  // size-respecting consumers respectively. When the sidebar opens
+  // or the viewport widens, every guard is removed.
+  const hideFromMobile = isMobile && !mobileOpen;
 
   return (
     <>
@@ -17,9 +56,15 @@ export function Sidebar({ className, children, ...props }: HTMLAttributes<HTMLEl
         aria-hidden="true"
       />
       <aside
+        id={SIDEBAR_ROOT_ID}
         data-sidebar="root"
         data-state={state}
         data-mobile-state={mobileOpen ? "open" : "closed"}
+        aria-hidden={hideFromMobile ? "true" : undefined}
+        // `inert` is set as a string attribute because TS DOM types
+        // pre-date the property; React accepts the empty string and
+        // emits the boolean attribute correctly.
+        {...(hideFromMobile ? ({ inert: "" } as Record<string, string>) : {})}
         style={{
           ["--sidebar-width" as string]:
             state === "expanded" ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
@@ -29,6 +74,7 @@ export function Sidebar({ className, children, ...props }: HTMLAttributes<HTMLEl
           "w-[var(--sidebar-width)]",
           "data-[mobile-state=closed]:-translate-x-full md:data-[mobile-state=closed]:translate-x-0",
           "md:sticky md:translate-x-0",
+          hideFromMobile && "hidden",
           className,
         )}
         {...props}

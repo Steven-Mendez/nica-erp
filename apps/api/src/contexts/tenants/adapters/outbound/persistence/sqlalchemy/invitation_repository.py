@@ -21,6 +21,10 @@ _SELECT_BY_HASH_SQL = f"SELECT {_COLUMNS} FROM invitations WHERE token_hash = :t
 _SELECT_BY_TENANT_SQL = (
     f"SELECT {_COLUMNS} FROM invitations WHERE tenant_id = :tenant_id ORDER BY created_at DESC"
 )
+_SELECT_PENDING_BY_EMAIL_SQL = (
+    f"SELECT {_COLUMNS} FROM invitations "
+    "WHERE tenant_id = :tenant_id AND lower(email) = lower(:email) AND status = 'pending'"
+)
 _SELECT_BY_ID = text(
     _SELECT_BY_ID_SQL
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
@@ -29,6 +33,9 @@ _SELECT_BY_HASH = text(
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
 _SELECT_BY_TENANT = text(
     _SELECT_BY_TENANT_SQL
+)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+_SELECT_PENDING_BY_EMAIL = text(
+    _SELECT_PENDING_BY_EMAIL_SQL
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
 
 _INSERT = text(
@@ -78,6 +85,12 @@ class InvitationRepositorySqlAlchemy:
     async def list_by_tenant(self, tenant_id: UUID) -> list[Invitation]:
         result = await self._uow.current_session.execute(
             _SELECT_BY_TENANT, {"tenant_id": tenant_id}
+        )
+        return [self._hydrate(row) for row in result.mappings().all()]
+
+    async def list_pending_by_email(self, tenant_id: UUID, email: str) -> list[Invitation]:
+        result = await self._uow.current_session.execute(
+            _SELECT_PENDING_BY_EMAIL, {"tenant_id": tenant_id, "email": email}
         )
         return [self._hydrate(row) for row in result.mappings().all()]
 

@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { AccountMenu } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSidebar } from "@/components/app-sidebar/sidebar-context";
+import { SIDEBAR_ROOT_ID } from "@/components/app-sidebar/sidebar";
 
 type Crumb = { label: string; href: string };
 
@@ -43,7 +44,7 @@ function buildBreadcrumbs(pathname: string): Crumb[] {
 }
 
 export function SiteHeader() {
-  const { toggleMobile, toggle, state } = useSidebar();
+  const { toggleMobile, toggle, state, mobileOpen } = useSidebar();
   const routerState = useRouterState({ select: (s) => ({ pathname: s.location.pathname }) });
   const crumbs = buildBreadcrumbs(routerState.pathname);
 
@@ -53,7 +54,9 @@ export function SiteHeader() {
         variant="ghost"
         size="icon"
         className="md:hidden"
-        aria-label="Abrir navegación"
+        aria-controls={SIDEBAR_ROOT_ID}
+        aria-expanded={mobileOpen}
+        aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
         onClick={toggleMobile}
       >
         <Menu className="h-4 w-4" aria-hidden="true" />

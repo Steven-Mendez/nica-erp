@@ -53,9 +53,7 @@ describe("useLogoutMutation cache eviction", () => {
       items: [{ id: "u-1", email: "alice@a.test" }],
       total: 1,
     });
-    client.setQueryData(invitationsKey(tenantId), [
-      { id: "i-1", email: "bob@a.test" },
-    ]);
+    client.setQueryData(invitationsKey(tenantId), [{ id: "i-1", email: "bob@a.test" }]);
     expect(client.getQueryCache().getAll().length).toBeGreaterThan(0);
 
     const { result } = renderHook(() => useLogoutMutation(), {

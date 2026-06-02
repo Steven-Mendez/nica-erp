@@ -27,9 +27,7 @@ describe("FormErrorAlert", () => {
         }}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Correo o contraseña incorrectos.",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Correo o contraseña incorrectos.");
   });
 
   it("renders the lockout copy with the retry window for 429 lockouts", () => {
@@ -49,9 +47,7 @@ describe("FormErrorAlert", () => {
 
   it("falls back to the generic Spanish copy for unknown error shapes", () => {
     render(<FormErrorAlert error={new Error("network exploded")} />);
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Ocurrió un error. Intenta de nuevo.",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Ocurrió un error. Intenta de nuevo.");
   });
 
   it("is announced assertively to assistive tech", () => {

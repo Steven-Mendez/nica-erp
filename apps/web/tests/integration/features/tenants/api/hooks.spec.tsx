@@ -227,6 +227,50 @@ describe("mutations", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: invitationsKey(tenantId) });
   });
 
+  it("useCancelInvitationMutation eagerly removes the row before the network response", async () => {
+    const client = makeClient();
+    type Row = { id: string; email: string };
+    const seeded: Row[] = [
+      { id: "i-1", email: "x@y.com" },
+      { id: "i-2", email: "z@w.com" },
+    ];
+    client.setQueryData<Row[]>(invitationsKey(tenantId), seeded);
+    const deferred: { resolve: () => void } = { resolve: () => undefined };
+    vi.mocked(cancelInvitation).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          deferred.resolve = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useCancelInvitationMutation(tenantId), {
+      wrapper: wrapper(client),
+    });
+    result.current.mutate({ invitationId: "i-1" });
+    await waitFor(() => {
+      const cached = client.getQueryData<Row[]>(invitationsKey(tenantId));
+      expect(cached?.map((i) => i.id)).toEqual(["i-2"]);
+    });
+    deferred.resolve();
+  });
+
+  it("useCancelInvitationMutation rolls back the row on error", async () => {
+    const client = makeClient();
+    type Row = { id: string; email: string };
+    const seeded: Row[] = [
+      { id: "i-1", email: "x@y.com" },
+      { id: "i-2", email: "z@w.com" },
+    ];
+    client.setQueryData<Row[]>(invitationsKey(tenantId), seeded);
+    vi.mocked(cancelInvitation).mockRejectedValueOnce(new Error("boom"));
+    const { result } = renderHook(() => useCancelInvitationMutation(tenantId), {
+      wrapper: wrapper(client),
+    });
+    result.current.mutate({ invitationId: "i-1" });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    const cached = client.getQueryData<Row[]>(invitationsKey(tenantId));
+    expect(cached?.map((i) => i.id)).toEqual(["i-1", "i-2"]);
+  });
+
   it("useRemoveMemberMutation invalidates membersKey on success", async () => {
     vi.mocked(removeMember).mockResolvedValueOnce(undefined as never);
     const client = makeClient();

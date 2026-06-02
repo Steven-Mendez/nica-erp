@@ -24,11 +24,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProblemDetail } from "@/api/errors";
-import {
-  DEPARTAMENTOS,
-  isValidMunicipio,
-  municipiosOf,
-} from "../data/nicaragua-geography";
+import { DEPARTAMENTOS, isValidMunicipio, municipiosOf } from "../data/nicaragua-geography";
 import {
   EMPRESA_FISCAL_REGIMEN_LABELS,
   empresaFiscalSettingsSchema,
@@ -103,9 +99,7 @@ const POINTER_TO_FIELD: Record<string, keyof EmpresaFiscalSettingsValues> = {
   "/authorization_dgi/valid_to": "vigencia_vencimiento",
 };
 
-function pointerToField(
-  pointer: string,
-): keyof EmpresaFiscalSettingsValues | null {
+function pointerToField(pointer: string): keyof EmpresaFiscalSettingsValues | null {
   return POINTER_TO_FIELD[pointer] ?? null;
 }
 
@@ -132,9 +126,7 @@ function tenantToFormValues(tenant: Tenant): EmpresaFiscalSettingsValues {
   };
 }
 
-function formValuesToUpdateInput(
-  values: EmpresaFiscalSettingsValues,
-): UpdateTenantInput {
+function formValuesToUpdateInput(values: EmpresaFiscalSettingsValues): UpdateTenantInput {
   return {
     ruc: values.ruc,
     regime: values.regimen,
@@ -208,11 +200,9 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
 
   const formError = mutation.error;
   const isRucCollision =
-    (formError as { detail?: ProblemDetail } | null)?.detail?.code ===
-      RUC_COLLISION_CODE ||
+    (formError as { detail?: ProblemDetail } | null)?.detail?.code === RUC_COLLISION_CODE ||
     ((formError as { status?: number } | null)?.status === 409 &&
-      (formError as { detail?: ProblemDetail } | null)?.detail?.code !==
-        undefined);
+      (formError as { detail?: ProblemDetail } | null)?.detail?.code !== undefined);
 
   if (!canEdit) {
     return <ReadOnlyFiscalSettings tenant={tenant} />;
@@ -233,9 +223,7 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
 
       {isRucCollision ? (
         <Alert role="alert" variant="destructive">
-          <AlertDescription>
-            Este RUC ya está registrado en otra empresa.
-          </AlertDescription>
+          <AlertDescription>Este RUC ya está registrado en otra empresa.</AlertDescription>
         </Alert>
       ) : (
         <FormErrorAlert error={mutation.error} />
@@ -277,9 +265,11 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
                   <SelectValue placeholder="Selecciona un régimen" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(EMPRESA_FISCAL_REGIMEN_LABELS) as Array<
-                    keyof typeof EMPRESA_FISCAL_REGIMEN_LABELS
-                  >).map((key) => (
+                  {(
+                    Object.keys(EMPRESA_FISCAL_REGIMEN_LABELS) as Array<
+                      keyof typeof EMPRESA_FISCAL_REGIMEN_LABELS
+                    >
+                  ).map((key) => (
                     <SelectItem key={key} value={key}>
                       {EMPRESA_FISCAL_REGIMEN_LABELS[key]}
                     </SelectItem>
@@ -340,17 +330,11 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
             return (
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="municipio">Municipio</FieldLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={!departamento}
-                >
+                <Select value={field.value} onValueChange={field.onChange} disabled={!departamento}>
                   <SelectTrigger id="municipio" aria-invalid={fieldState.invalid}>
                     <SelectValue
                       placeholder={
-                        departamento
-                          ? "Selecciona un municipio"
-                          : "Primero elige un departamento"
+                        departamento ? "Selecciona un municipio" : "Primero elige un departamento"
                       }
                     />
                   </SelectTrigger>
@@ -491,13 +475,7 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
 
 // --- Section helper -------------------------------------------------------
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card>
       <CardHeader>
@@ -523,8 +501,7 @@ function ReadOnlyFiscalSettings({ tenant }: { tenant: Tenant }) {
           <CardTitle className="text-base">Permiso requerido</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Solo el propietario o administrador de la empresa puede editar los
-          datos fiscales.
+          Solo el propietario o administrador de la empresa puede editar los datos fiscales.
         </CardContent>
       </Card>
       <Card>
@@ -539,13 +516,7 @@ function ReadOnlyFiscalSettings({ tenant }: { tenant: Tenant }) {
   );
 }
 
-function ReadRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null | undefined;
-}) {
+function ReadRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="grid grid-cols-[140px_1fr] gap-2">
       <span className="font-medium">{label}</span>

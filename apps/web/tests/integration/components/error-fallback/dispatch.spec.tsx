@@ -18,7 +18,14 @@ import { RouteNotFoundCard } from "@/components/error-fallback/route-not-found-c
 import { server } from "@/../tests/integration/msw/server";
 import { renderWithProviders } from "@/../tests/integration/_support/renderRoute";
 import { http } from "@/../tests/integration/msw/handlers";
-import { Outlet, RouterProvider, createMemoryHistory, createRouter, createRoute, createRootRoute } from "@tanstack/react-router";
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRouter,
+  createRoute,
+  createRootRoute,
+} from "@tanstack/react-router";
 
 // Reusable ApiError stub — the real classes (declared per-slice) are
 // recognised by name + numeric status, so this duck-typed stand-in is
@@ -45,7 +52,13 @@ describe("dispatchRouteError", () => {
 
   it("renders RouteSchemaErrorCard for a ZodError", () => {
     const zodError = new ZodError([
-      { code: "invalid_type", path: ["x"], message: "Expected string", expected: "string", received: "number" } as never,
+      {
+        code: "invalid_type",
+        path: ["x"],
+        message: "Expected string",
+        expected: "string",
+        received: "number",
+      } as never,
     ]);
     renderWithProviders(<>{dispatchRouteError(zodError)}</>);
     expect(screen.getByRole("alert")).toHaveTextContent(/respuesta inesperada del servidor/i);

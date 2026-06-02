@@ -10,9 +10,8 @@ export function RouteRuntimeErrorCard() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Ocurrió un error inesperado</h2>
           <p className="text-sm text-muted-foreground">
-            Algo falló al cargar esta pantalla. Vuelve a intentarlo
-            en unos segundos. Si el problema persiste, contacta al
-            equipo técnico.
+            Algo falló al cargar esta pantalla. Vuelve a intentarlo en unos segundos. Si el problema
+            persiste, contacta al equipo técnico.
           </p>
           <RecoveryLink>Volver al inicio</RecoveryLink>
         </div>

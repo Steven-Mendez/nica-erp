@@ -166,6 +166,30 @@ export const cancelInvitation = async (tenantId: string, invitationId: string): 
   expectVoid(`DELETE /v1/tenants/${tenantId}/invitations/${invitationId}`, result);
 };
 
+// `POST /v1/tenants/{id}/invitations/{invitation_id}/resend` is not in
+// the OpenAPI schema yet — it landed in this change without a schema
+// regen (regen requires a running backend, which the operator is the
+// canonical source of). Calling it through the untyped escape hatch on
+// `api` keeps the runtime path identical while the schema catches up.
+export const resendInvitation = async (
+  tenantId: string,
+  invitationId: string,
+): Promise<Invitation> => {
+  const path = `/v1/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}/resend`;
+  // openapi-fetch exposes `client.POST(path, init)`; passing the path
+  // as a string with a cast lets us reuse `fetchWithAuth` + the JSON
+  // parsing without forking a manual fetch helper.
+  const result = await (
+    api as unknown as {
+      POST: (
+        url: string,
+        init?: Record<string, unknown>,
+      ) => Promise<{ data?: Invitation; error?: unknown; response: Response }>;
+    }
+  ).POST(path);
+  return expectData(`POST ${path}`, result);
+};
+
 export const acceptInvitation = async (
   token: string,
   refresh_token?: string | null,

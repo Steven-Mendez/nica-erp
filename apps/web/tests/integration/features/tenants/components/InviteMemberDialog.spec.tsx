@@ -16,6 +16,7 @@ let mutateImpl: (args: MutateArgs) => void = ({ handlers }) => {
   handlers.onSuccess?.();
 };
 let isPending = false;
+let mutationError: unknown = null;
 
 vi.mock("@/features/tenants/api/hooks", () => ({
   useInviteMemberMutation: () => ({
@@ -25,6 +26,10 @@ vi.mock("@/features/tenants/api/hooks", () => ({
       mutateImpl(args);
     },
     isPending,
+    error: mutationError,
+    reset: () => {
+      mutationError = null;
+    },
   }),
 }));
 
@@ -50,6 +55,7 @@ afterEach(() => {
   mutateCalls = [];
   mutateImpl = ({ handlers }) => handlers.onSuccess?.();
   isPending = false;
+  mutationError = null;
 });
 
 describe("InviteMemberDialog", () => {
@@ -104,20 +110,30 @@ describe("InviteMemberDialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("renders the mutation error message inside the destructive Alert", async () => {
-    mutateImpl = ({ handlers }) => handlers.onError?.(new Error("Boom"));
+  it("renders the FormErrorAlert with the registry copy on a 409 duplicate-pending error", async () => {
+    // The mutation's `error` is what drives <FormErrorAlert> now; the
+    // mock surfaces an ApiError-shaped value that maps to the
+    // duplicate-pending registry entry.
+    mutationError = {
+      name: "ApiError",
+      status: 409,
+      detail: { code: "tenants.invitation_duplicate_pending" },
+    };
+    mutateImpl = () => undefined; // suppress onSuccess close on submit
     renderDialog();
     openDialog();
 
-    const email = screen.getByLabelText(/Correo/i);
-    fireEvent.change(email, { target: { value: "ada@nica.test" } });
-
-    const submit = screen.getByRole("button", { name: /Enviar invitación/i });
-    await act(async () => {
-      fireEvent.click(submit);
-    });
-
-    expect(await screen.findByText("Boom")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/esta persona ya tiene una invitación pendiente\./i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("shows 'Enviando…' and disables the submit while pending", () => {
+    isPending = true;
+    renderDialog();
+    openDialog();
+    const submit = screen.getByRole("button", { name: /Enviando…/i });
+    expect(submit).toBeDisabled();
   });
 });

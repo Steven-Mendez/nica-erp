@@ -126,14 +126,17 @@ const SPANISH_BY_CODE: Record<string, (p: ProblemDetail) => string> = {
   "auth.invalid_credentials": () => "Correo o contraseña incorrectos.",
   "auth.lockout_active": (p) =>
     `Demasiados intentos. Intenta de nuevo en ${formatLockoutMinutes(p.retry_after_seconds)}.`,
-  "auth.invalid_confirmation_code": () =>
-    "Código incorrecto o expirado. Solicita uno nuevo.",
-  "auth.signup_email_not_confirmed": () =>
-    "Confirma tu correo antes de iniciar sesión.",
+  "auth.invalid_confirmation_code": () => "Código incorrecto o expirado. Solicita uno nuevo.",
+  "auth.signup_email_not_confirmed": () => "Confirma tu correo antes de iniciar sesión.",
   "auth.token_expired": () => "Tu sesión expiró. Inicia sesión de nuevo.",
-  "auth.reset_token_used": () =>
-    "Este enlace ya fue utilizado. Solicita uno nuevo.",
+  "auth.reset_token_used": () => "Este enlace ya fue utilizado. Solicita uno nuevo.",
   "auth.reset_token_expired": () => "El enlace expiró. Solicita uno nuevo.",
+  // Tenants — invitation conflicts. The backend does not emit this
+  // exact code today (the invite-member use case writes a new
+  // invitation row on every call); the entry is forward-compatible
+  // so an MSW-mocked 409 in the integration test, and an eventual
+  // backend handler, both hit the same Spanish copy.
+  "tenants.invitation_duplicate_pending": () => "Esta persona ya tiene una invitación pendiente.",
 };
 
 /**
@@ -157,10 +160,18 @@ export const messageForProblem = (input: unknown): string => {
 };
 
 /**
- * Identifies the codes ``messageForProblem`` knows about. Used by the
- * unit test that asserts every code emitted by the auth router has a
- * registry entry.
+ * Auth codes the registry recognises. Used by the unit test that
+ * asserts every code emitted by the auth router has a Spanish
+ * entry. Tenant + other-context codes also live in
+ * ``SPANISH_BY_CODE`` but are listed separately so a registry
+ * change in one context does not silently extend the auth catalog.
  */
-export const KNOWN_AUTH_PROBLEM_CODES: readonly string[] = Object.freeze(
-  Object.keys(SPANISH_BY_CODE),
-);
+export const KNOWN_AUTH_PROBLEM_CODES: readonly string[] = Object.freeze([
+  "auth.invalid_credentials",
+  "auth.lockout_active",
+  "auth.invalid_confirmation_code",
+  "auth.signup_email_not_confirmed",
+  "auth.token_expired",
+  "auth.reset_token_used",
+  "auth.reset_token_expired",
+]);

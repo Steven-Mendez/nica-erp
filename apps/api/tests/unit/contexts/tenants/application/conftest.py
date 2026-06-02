@@ -164,6 +164,14 @@ class FakeInvitationRepository:
     async def list_by_tenant(self, tenant_id: UUID) -> list[Invitation]:
         return [i for i in self.by_id.values() if i.tenant_id == tenant_id]
 
+    async def list_pending_by_email(self, tenant_id: UUID, email: str) -> list[Invitation]:
+        needle = email.lower()
+        return [
+            i
+            for i in self.by_id.values()
+            if i.tenant_id == tenant_id and i.email.lower() == needle and i.status == "pending"
+        ]
+
 
 @dataclass
 class FakeOutbox:

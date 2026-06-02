@@ -24,7 +24,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Invitation } from "../api/endpoints";
-import { useCancelInvitationMutation } from "../api/hooks";
+import { useCancelInvitationMutation, useResendInvitationMutation } from "../api/hooks";
+import { DestructiveActionDialog } from "@/components/dialog/destructive-action-dialog";
 
 export interface InvitationsTableProps {
   tenantId: string;
@@ -37,6 +38,8 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const cancelMut = useCancelInvitationMutation(tenantId);
+  const resendMut = useResendInvitationMutation(tenantId);
+  const [pendingCancel, setPendingCancel] = useState<Invitation | null>(null);
 
   const pending = useMemo(() => (data ?? []).filter((i) => i.status === "pending"), [data]);
 
@@ -79,13 +82,22 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
         cell: ({ row }) => {
           if (!canCancel) return null;
           return (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => cancelMut.mutate({ invitationId: row.original.id })}
-                disabled={cancelMut.isPending}
+                onClick={() => resendMut.mutate({ invitationId: row.original.id })}
+                disabled={resendMut.isPending || cancelMut.isPending}
+              >
+                {resendMut.isPending ? "Enviando…" : "Reenviar"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPendingCancel(row.original)}
+                disabled={cancelMut.isPending || resendMut.isPending}
               >
                 Cancelar
               </Button>
@@ -94,7 +106,7 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
         },
       },
     ],
-    [canCancel, cancelMut],
+    [canCancel, cancelMut, resendMut],
   );
 
   const table = useReactTable({
@@ -132,6 +144,21 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
 
   return (
     <div className="space-y-3">
+      {cancelMut.isError ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>No se pudo cancelar la invitación.</AlertDescription>
+        </Alert>
+      ) : null}
+      {resendMut.isError ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>No se pudo reenviar la invitación.</AlertDescription>
+        </Alert>
+      ) : null}
+      {resendMut.isSuccess ? (
+        <Alert role="status">
+          <AlertDescription>Invitación reenviada con un nuevo enlace.</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -174,6 +201,28 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
           </TableBody>
         </Table>
       </div>
+      <DestructiveActionDialog
+        open={pendingCancel !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingCancel(null);
+        }}
+        title="Cancelar invitación"
+        description={
+          pendingCancel
+            ? `¿Cancelar la invitación enviada a ${pendingCancel.email}? Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmLabel="Sí, cancelar"
+        cancelLabel="Volver"
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (pendingCancel === null) return;
+          cancelMut.mutate(
+            { invitationId: pendingCancel.id },
+            { onSettled: () => setPendingCancel(null) },
+          );
+        }}
+      />
     </div>
   );
 }

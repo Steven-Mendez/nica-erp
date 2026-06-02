@@ -146,6 +146,42 @@ There are two boundary layers:
 
 The recovery button is auth-aware: `getAccessToken()` is read synchronously (never `useMeQuery`, which may itself be the source of the boundary) and links to `/dashboard` when present, `/login` otherwise. The link is a plain `<a>` — a hard navigation forces a fresh app boot, which is the correct recovery action from a broken state.
 
+#### Destructive-confirm pattern
+
+Every destructive action in the empresa surface (remove member, cancel invitation, delete tenant data) is gated by `<DestructiveActionDialog>` (`src/components/dialog/destructive-action-dialog.tsx`). The wrapper is a thin facade over shadcn's `<AlertDialog>` that codifies four contracts:
+
+- **Cancel is the focused default.** The cancel button is rendered first and carries `autoFocus`, so an accidental `Enter` after the dialog opens does NOT fire the destructive action. Operators reach the confirm button only after a deliberate `Tab`.
+- **Confirm uses the destructive variant.** The confirm button picks up `buttonVariants({ variant: "destructive" })` so the styling matches across all call sites.
+- **Escape and overlay click close without firing `onConfirm`.** Inherited from the Radix primitive; the wrapper never overrides it.
+- **Pending state disables both buttons.** Pass `pending` from the mutation's `isPending` to prevent double-clicks and Enter-spam while the destructive request is in flight.
+
+Use it whenever the operator's next click is irreversible. The wrapper's trigger lives at the call site (a row button, a dropdown menu item) — the wrapper itself only renders the dialog.
+
+#### Mobile-card pattern for data tables
+
+Data tables that hosts surfaces are routinely opened on phones (members, invitations, future invoice lists) render two layouts side-by-side:
+
+```tsx
+<div className="hidden md:block">  {/* desktop <table> */} </div>
+<div className="md:hidden space-y-2"> {/* one <Card> per row */} </div>
+```
+
+The desktop branch is the canonical TanStack Table render. The mobile branch reuses the same `table.getRowModel().rows` so sorting, filtering, and pagination apply once and the two layouts stay in lock-step. The mobile card orders fields top-to-bottom: title (nombre / asunto), subtitle (correo), then a row of badges (rol, estado), with the action affordance (if any) at the bottom. Pagination renders outside both branches via `<TablePagination>` so the operator sees one set of page controls regardless of viewport.
+
+The breakpoint is fixed at `md` (768px) — pre-tablet phones get the cards, everything else gets the table. The cards do not collapse to a denser table on intermediate widths because the resulting wrapping looks worse than either pure layout.
+
+#### Closed-sidebar a11y contract
+
+When the app sidebar is closed on a mobile viewport (`< 768px`), the panel applies three guards in tandem (`src/components/app-sidebar/sidebar.tsx::Sidebar`):
+
+- `aria-hidden="true"` — screen readers skip the panel entirely.
+- `inert` (HTML boolean attribute) — keyboard `Tab` traversal does not enter the panel, and focus cannot land on any descendant.
+- `hidden` (Tailwind `display:none`) — the panel takes up no layout space and is invisible to sighted users.
+
+All three are removed in lock-step when the sidebar opens OR the viewport widens past 768px (watched via `window.matchMedia("(max-width: 767px)")`). The header trigger button carries `aria-controls={SIDEBAR_ROOT_ID}` + `aria-expanded={mobileOpen}` and swaps its Spanish label between `"Abrir menú"` and `"Cerrar menú"` so assistive tech announces the state change after every click.
+
+The trio is intentional: any one of the guards alone is insufficient for one of the user classes. `aria-hidden` alone leaves the panel keyboard-traversable; `inert` alone leaves it announced by screen readers in some configurations; `hidden` alone leaves the markup parseable but tab order skipping is browser-dependent.
+
 #### Empresa-scoped editor forms
 
 Forms that mutate the active empresa's data (e.g. the fiscal-settings editor at `/empresa/settings`) live under `apps/web/src/features/tenants/`:

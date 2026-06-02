@@ -15,6 +15,7 @@ from contexts.tenants.application.ports.outbound import (
 )
 from contexts.tenants.domain import (
     Invitation,
+    InvitationDuplicatePendingError,
     MemberInvited,
     Role,
     TenantNotFoundError,
@@ -88,6 +89,13 @@ class InviteMember:
             tenant = await self.tenant_repository.get(command.tenant_id)
             if tenant is None:
                 raise TenantNotFoundError(str(command.tenant_id))
+            existing_pending = await self.invitation_repository.list_pending_by_email(
+                command.tenant_id, command.email
+            )
+            if existing_pending:
+                raise InvitationDuplicatePendingError(
+                    f"A pending invitation for {command.email} already exists"
+                )
             await self.invitation_repository.add(invitation)
             await self.outbox.append(
                 # Outbox primary key is the event_id. Cancelling and

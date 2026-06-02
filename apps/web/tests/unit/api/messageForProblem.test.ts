@@ -55,9 +55,9 @@ describe("messageForProblem", () => {
   });
 
   it("renders auth.signup_email_not_confirmed in Spanish", () => {
-    expect(
-      messageForProblem(problem({ code: "auth.signup_email_not_confirmed" })),
-    ).toBe("Confirma tu correo antes de iniciar sesión.");
+    expect(messageForProblem(problem({ code: "auth.signup_email_not_confirmed" }))).toBe(
+      "Confirma tu correo antes de iniciar sesión.",
+    );
   });
 
   it("renders auth.token_expired in Spanish", () => {
@@ -80,17 +80,13 @@ describe("messageForProblem", () => {
 
   it("formats auth.lockout_active with the retry window in minutos", () => {
     expect(
-      messageForProblem(
-        problem({ code: "auth.lockout_active", retry_after_seconds: 600 }),
-      ),
+      messageForProblem(problem({ code: "auth.lockout_active", retry_after_seconds: 600 })),
     ).toBe("Demasiados intentos. Intenta de nuevo en 10 minutos.");
   });
 
   it("rounds 125-second lockout window up to 3 minutos", () => {
     expect(
-      messageForProblem(
-        problem({ code: "auth.lockout_active", retry_after_seconds: 125 }),
-      ),
+      messageForProblem(problem({ code: "auth.lockout_active", retry_after_seconds: 125 })),
     ).toBe("Demasiados intentos. Intenta de nuevo en 3 minutos.");
   });
 
@@ -102,12 +98,8 @@ describe("messageForProblem", () => {
 
   it("falls back to the generic copy for non-problem inputs", () => {
     expect(messageForProblem(null)).toBe("Ocurrió un error. Intenta de nuevo.");
-    expect(messageForProblem(undefined)).toBe(
-      "Ocurrió un error. Intenta de nuevo.",
-    );
-    expect(messageForProblem({ foo: "bar" })).toBe(
-      "Ocurrió un error. Intenta de nuevo.",
-    );
+    expect(messageForProblem(undefined)).toBe("Ocurrió un error. Intenta de nuevo.");
+    expect(messageForProblem({ foo: "bar" })).toBe("Ocurrió un error. Intenta de nuevo.");
   });
 
   it("unwraps an ApiError-shaped { detail: ProblemDetail } envelope", () => {

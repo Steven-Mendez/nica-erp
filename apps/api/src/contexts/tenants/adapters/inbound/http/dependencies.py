@@ -30,6 +30,7 @@ from contexts.tenants.application.use_cases import (
     ListInvitations,
     ListMembers,
     RemoveMember,
+    ResendInvitation,
     SwitchActiveTenant,
     UpdateMemberRole,
     UpdateTenant,
@@ -154,6 +155,23 @@ def get_cancel_invitation(
     outbox: OutboxWriterSqlAlchemy = Depends(get_outbox),
 ) -> CancelInvitation:
     return CancelInvitation(uow=uow, invitation_repository=invitation_repo, outbox=outbox)
+
+
+def get_resend_invitation(
+    uow: SqlAlchemyUnitOfWork = Depends(get_request_uow),
+    tenant_repo: TenantRepository = Depends(get_tenant_repository),
+    invitation_repo: InvitationRepository = Depends(get_invitation_repository),
+    token_gen: InvitationTokenGenerator = Depends(get_invitation_token_generator),
+    outbox: OutboxWriterSqlAlchemy = Depends(get_outbox),
+) -> ResendInvitation:
+    return ResendInvitation(
+        uow=uow,
+        tenant_repository=tenant_repo,
+        invitation_repository=invitation_repo,
+        token_generator=token_gen,
+        email_sender=build_email_sender(),
+        outbox=outbox,
+    )
 
 
 def get_remove_member(

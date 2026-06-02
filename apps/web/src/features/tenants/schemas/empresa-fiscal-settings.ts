@@ -33,9 +33,7 @@ export const empresaFiscalSettingsSchema = z
     retenedor: z.boolean(),
 
     // --- Dirección fiscal -------------------------------------------
-    departamento: z
-      .string()
-      .min(1, { message: "Selecciona un departamento." }),
+    departamento: z.string().min(1, { message: "Selecciona un departamento." }),
     municipio: z.string().min(1, { message: "Selecciona un municipio." }),
     direccion: z
       .string()
@@ -47,12 +45,8 @@ export const empresaFiscalSettingsSchema = z
       .string()
       .min(1, { message: "Ingresa el número de resolución DGI." })
       .max(32, { message: "Máximo 32 caracteres." }),
-    vigencia_inicio: z
-      .string()
-      .min(1, { message: "Selecciona la fecha de inicio de vigencia." }),
-    vigencia_vencimiento: z
-      .string()
-      .min(1, { message: "Selecciona la fecha de vencimiento." }),
+    vigencia_inicio: z.string().min(1, { message: "Selecciona la fecha de inicio de vigencia." }),
+    vigencia_vencimiento: z.string().min(1, { message: "Selecciona la fecha de vencimiento." }),
 
     // --- Contacto fiscal --------------------------------------------
     correo_fiscal: z
@@ -87,14 +81,9 @@ export const empresaFiscalSettingsSchema = z
     }
   });
 
-export type EmpresaFiscalSettingsValues = z.infer<
-  typeof empresaFiscalSettingsSchema
->;
+export type EmpresaFiscalSettingsValues = z.infer<typeof empresaFiscalSettingsSchema>;
 
-export const EMPRESA_FISCAL_REGIMEN_LABELS: Record<
-  (typeof REGIMEN_VALUES)[number],
-  string
-> = {
+export const EMPRESA_FISCAL_REGIMEN_LABELS: Record<(typeof REGIMEN_VALUES)[number], string> = {
   general: "Régimen general",
   cuota_fija: "Cuota fija",
   pequeno_contribuyente: "Pequeño contribuyente",

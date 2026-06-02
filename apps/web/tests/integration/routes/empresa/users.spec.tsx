@@ -50,9 +50,20 @@ vi.mock("@/features/tenants/api/hooks", () => ({
     isError: false,
   }),
   useInvitationsQuery: () => ({ data: invitations, isLoading: false }),
-  useInviteMemberMutation: () => ({ mutate: () => undefined, isPending: false }),
+  useInviteMemberMutation: () => ({
+    mutate: () => undefined,
+    isPending: false,
+    error: null,
+    reset: () => undefined,
+  }),
   useRemoveMemberMutation: () => ({ mutate: () => undefined, isPending: false }),
   useCancelInvitationMutation: () => ({ mutate: () => undefined, isPending: false }),
+  useResendInvitationMutation: () => ({
+    mutate: () => undefined,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+  }),
   useUpdateMemberRoleMutation: () => ({ mutate: () => undefined, isPending: false }),
 }));
 
@@ -147,15 +158,18 @@ describe("EmpresaUsuariosRoute", () => {
     members = [{ user_id: "u-2", role: "viewer" }];
     renderRoute();
     expect(screen.queryByLabelText("Acciones de u-2")).toBeNull();
-    // The role is still surfaced as a badge.
-    expect(screen.getByText("Lector")).toBeInTheDocument();
+    // The role is still surfaced as a badge. The MembersTable renders
+    // both a desktop <table> branch and a mobile <Card> branch
+    // (CSS-toggled by viewport) so each Spanish role label appears
+    // twice in the DOM under jsdom (where no media query applies).
+    expect(screen.getAllByText("Lector").length).toBeGreaterThanOrEqual(1);
   });
 
   it("owner row renders the role badge but never the actions menu", () => {
     permissions = ["members:update-role", "members:remove"];
     members = [{ user_id: "u-owner", role: "owner" }];
     renderRoute();
-    expect(screen.getByText("Propietario")).toBeInTheDocument();
+    expect(screen.getAllByText("Propietario").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByLabelText("Acciones de u-owner")).toBeNull();
     expect(screen.queryByRole("menuitem", { name: /Remover/i })).toBeNull();
   });

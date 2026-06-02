@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { UserPlus } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { FormErrorAlert } from "@/components/form/form-error-alert";
 import {
   Dialog,
   DialogContent,
@@ -33,8 +33,6 @@ const ROLE_OPTIONS: ReadonlyArray<{ value: InviteMemberValues["proposed_role"]; 
 ];
 
 export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
-  const [open, setOpen] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const mutation = useInviteMemberMutation(tenantId);
 
   const { register, handleSubmit, formState, reset, control } = useForm<InviteMemberValues>({
@@ -42,18 +40,26 @@ export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     defaultValues: { email: "", proposed_role: "accountant" },
   });
 
-  useEffect(() => {
-    if (!open) {
-      setSubmitError(null);
+  // Reset is driven by the open-state edge instead of a useEffect on
+  // `mutation`. `useInviteMemberMutation` returns a fresh object each
+  // render; depending on it inside useEffect would re-fire the cleanup
+  // on every render and could deadlock if RHF's `reset` schedules
+  // a follow-up render of its own.
+  const [open, setOpenInternal] = useState(false);
+  const setOpen = (next: boolean) => {
+    if (!next) {
       reset({ email: "", proposed_role: "accountant" });
+      mutation.reset();
     }
-  }, [open, reset]);
+    setOpenInternal(next);
+  };
 
   const onSubmit = (values: InviteMemberValues) => {
-    setSubmitError(null);
+    // Modal closes only on success — onError leaves the inline alert
+    // mounted with the Spanish copy from the registry so the
+    // operator can fix the email and resubmit without losing context.
     mutation.mutate(values, {
       onSuccess: () => setOpen(false),
-      onError: (err) => setSubmitError(err.message),
     });
   };
 
@@ -112,11 +118,7 @@ export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               <FieldError>{formState.errors.proposed_role.message}</FieldError>
             ) : null}
           </Field>
-          {submitError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          ) : null}
+          <FormErrorAlert error={mutation.error} />
           <DialogFooter>
             <Button
               type="button"
@@ -127,7 +129,7 @@ export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               Cancelar
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Enviando..." : "Enviar invitación"}
+              {mutation.isPending ? "Enviando…" : "Enviar invitación"}
             </Button>
           </DialogFooter>
         </form>

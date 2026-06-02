@@ -240,9 +240,7 @@ describe("auth-login success clears error", () => {
       </QueryClientProvider>,
     );
     // The alert is visible on the first render.
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /correo o contraseña incorrectos/i,
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/correo o contraseña incorrectos/i);
 
     // The operator types fresh credentials and submits — the mock
     // mutation fires `onSuccess`, which the route maps to a
@@ -254,9 +252,7 @@ describe("auth-login success clears error", () => {
       target: { value: "Sup3rPass!2026" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Iniciar sesión/i }));
-    await waitFor(() =>
-      expect(navigateSpy).toHaveBeenCalledWith({ to: "/" }),
-    );
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith({ to: "/" }));
 
     // On the next render with a cleared error (the real
     // useLoginMutation would expose `error: null` after success),

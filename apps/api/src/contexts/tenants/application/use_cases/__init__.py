@@ -11,6 +11,7 @@ from contexts.tenants.application.use_cases.invite_member import InviteMember
 from contexts.tenants.application.use_cases.list_invitations import ListInvitations
 from contexts.tenants.application.use_cases.list_members import ListMembers
 from contexts.tenants.application.use_cases.remove_member import RemoveMember
+from contexts.tenants.application.use_cases.resend_invitation import ResendInvitation
 from contexts.tenants.application.use_cases.switch_active_tenant import (
     SwitchActiveTenant,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "ListInvitations",
     "ListMembers",
     "RemoveMember",
+    "ResendInvitation",
     "SwitchActiveTenant",
     "UpdateMemberRole",
     "UpdateTenant",

@@ -93,9 +93,7 @@ describe("EmpresaFiscalSettingsForm — prefill", () => {
   it("prefills every section from the tenant payload", () => {
     renderForm(fullyPrefilledTenant);
     expect(screen.getByLabelText(/^RUC$/i)).toHaveValue("J03-100000-00010");
-    expect(screen.getByLabelText(/Dirección/i)).toHaveValue(
-      "Rotonda Centroamérica, Managua",
-    );
+    expect(screen.getByLabelText(/Dirección/i)).toHaveValue("Rotonda Centroamérica, Managua");
     expect(screen.getByLabelText(/Correo/i)).toHaveValue("facturacion@a.test");
     expect(screen.getByLabelText(/Teléfono/i)).toHaveValue("+505 8888-8888");
     expect(screen.getByLabelText(/Resolución DGI/i)).toHaveValue("A-001");
@@ -114,21 +112,15 @@ describe("EmpresaFiscalSettingsForm — permission gating", () => {
   it("renders the help card when the operator lacks tenant.update", () => {
     renderForm(fullyPrefilledTenant, /* permissions= */ []);
     expect(
-      screen.getByText(
-        /solo el propietario o administrador de la empresa puede editar/i,
-      ),
+      screen.getByText(/solo el propietario o administrador de la empresa puede editar/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Guardar cambios/i })).toBeNull();
   });
 
   it("renders the editable form when the operator has tenant.update", () => {
     renderForm(fullyPrefilledTenant);
-    expect(
-      screen.queryByText(/solo el propietario o administrador/i),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Guardar cambios/i }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/solo el propietario o administrador/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Guardar cambios/i })).toBeInTheDocument();
   });
 });
 
@@ -140,9 +132,7 @@ describe("EmpresaFiscalSettingsForm — date cross-validation", () => {
     fireEvent.click(screen.getByRole("button", { name: /Guardar cambios/i }));
     await waitFor(() =>
       expect(
-        screen.getByText(
-          /la fecha de vencimiento debe ser posterior al inicio/i,
-        ),
+        screen.getByText(/la fecha de vencimiento debe ser posterior al inicio/i),
       ).toBeInTheDocument(),
     );
   });
@@ -154,9 +144,7 @@ describe("EmpresaFiscalSettingsForm — RUC validation", () => {
     const ruc = screen.getByLabelText(/^RUC$/i);
     fireEvent.change(ruc, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /Guardar cambios/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/el ruc es obligatorio\./i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/el ruc es obligatorio\./i)).toBeInTheDocument());
   });
 
   it("rejects a RUC that doesn't match the mask", async () => {
@@ -164,9 +152,7 @@ describe("EmpresaFiscalSettingsForm — RUC validation", () => {
     const ruc = screen.getByLabelText(/^RUC$/i);
     fireEvent.change(ruc, { target: { value: "123" } });
     fireEvent.click(screen.getByRole("button", { name: /Guardar cambios/i }));
-    await waitFor(() =>
-      expect(screen.getByText(/formato de ruc inválido\./i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/formato de ruc inválido\./i)).toBeInTheDocument());
   });
 });
 
@@ -203,16 +189,13 @@ describe("RUC + phone masking helpers", () => {
   });
 
   it("masks a 14-digit RUC paste into NNN-NNNNNN-NNNNN", async () => {
-    const { maskRuc } = await import(
-      "@/features/tenants/components/empresa-fiscal-settings-form"
-    );
+    const { maskRuc } = await import("@/features/tenants/components/empresa-fiscal-settings-form");
     expect(maskRuc("J031000000001X")).toBe("J03-100000-0001X");
   });
 
   it("masks an 8-digit phone paste into +505 NNNN-NNNN", async () => {
-    const { maskPhone } = await import(
-      "@/features/tenants/components/empresa-fiscal-settings-form"
-    );
+    const { maskPhone } =
+      await import("@/features/tenants/components/empresa-fiscal-settings-form");
     expect(maskPhone("88880000")).toBe("+505 8888-0000");
     expect(maskPhone("+50588880000")).toBe("+505 8888-0000");
   });
@@ -223,9 +206,7 @@ describe("RUC + phone masking helpers", () => {
 // dependent integration tests above.
 describe("EmpresaFiscalSettingsForm — exports", () => {
   it("exports maskRuc, maskPhone, and mapApiProblemToFormErrors", async () => {
-    const mod = await import(
-      "@/features/tenants/components/empresa-fiscal-settings-form"
-    );
+    const mod = await import("@/features/tenants/components/empresa-fiscal-settings-form");
     expect(typeof mod.maskRuc).toBe("function");
     expect(typeof mod.maskPhone).toBe("function");
     expect(typeof mod.mapApiProblemToFormErrors).toBe("function");

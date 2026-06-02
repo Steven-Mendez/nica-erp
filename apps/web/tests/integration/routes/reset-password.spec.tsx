@@ -43,12 +43,7 @@ interface MutationOverrides {
 }
 
 function installResetMutation(overrides: MutationOverrides = {}) {
-  const {
-    outcome = "success",
-    isPending = false,
-    isError = false,
-    error = null,
-  } = overrides;
+  const { outcome = "success", isPending = false, isError = false, error = null } = overrides;
   useResetMock.mockReturnValue({
     mutate: (
       vars: { email: string; code: string; new_password: string },

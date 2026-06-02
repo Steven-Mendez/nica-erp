@@ -10,8 +10,8 @@ export function RouteNotFoundCard() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">No encontramos esa página</h2>
           <p className="text-sm text-muted-foreground">
-            La URL que abriste no corresponde a ninguna sección de la app.
-            Puede que el enlace esté desactualizado.
+            La URL que abriste no corresponde a ninguna sección de la app. Puede que el enlace esté
+            desactualizado.
           </p>
           <RecoveryLink>Volver al inicio</RecoveryLink>
         </div>

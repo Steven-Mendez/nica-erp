@@ -20,11 +20,27 @@ export interface Departamento {
 export const DEPARTAMENTOS: readonly Departamento[] = Object.freeze([
   {
     name: "Boaco",
-    municipios: ["Boaco", "Camoapa", "San José de los Remates", "San Lorenzo", "Santa Lucía", "Teustepe"],
+    municipios: [
+      "Boaco",
+      "Camoapa",
+      "San José de los Remates",
+      "San Lorenzo",
+      "Santa Lucía",
+      "Teustepe",
+    ],
   },
   {
     name: "Carazo",
-    municipios: ["Diriamba", "Dolores", "El Rosario", "Jinotepe", "La Conquista", "La Paz de Carazo", "San Marcos", "Santa Teresa"],
+    municipios: [
+      "Diriamba",
+      "Dolores",
+      "El Rosario",
+      "Jinotepe",
+      "La Conquista",
+      "La Paz de Carazo",
+      "San Marcos",
+      "Santa Teresa",
+    ],
   },
   {
     name: "Chinandega",
@@ -61,7 +77,14 @@ export const DEPARTAMENTOS: readonly Departamento[] = Object.freeze([
   },
   {
     name: "Estelí",
-    municipios: ["Condega", "Estelí", "La Trinidad", "Pueblo Nuevo", "San Juan de Limay", "San Nicolás"],
+    municipios: [
+      "Condega",
+      "Estelí",
+      "La Trinidad",
+      "Pueblo Nuevo",
+      "San Juan de Limay",
+      "San Nicolás",
+    ],
   },
   {
     name: "Granada",
@@ -189,7 +212,14 @@ export const DEPARTAMENTOS: readonly Departamento[] = Object.freeze([
   },
   {
     name: "Río San Juan",
-    municipios: ["El Almendro", "El Castillo", "Morrito", "San Carlos", "San Juan de Nicaragua", "San Miguelito"],
+    municipios: [
+      "El Almendro",
+      "El Castillo",
+      "Morrito",
+      "San Carlos",
+      "San Juan de Nicaragua",
+      "San Miguelito",
+    ],
   },
 ]);
 

@@ -536,7 +536,9 @@ export function TenantsNewRoute() {
                               <SelectContent>
                                 <SelectItem value="general">Régimen general</SelectItem>
                                 <SelectItem value="cuota_fija">Cuota fija</SelectItem>
-                                <SelectItem value="pequeno_contribuyente">Pequeño contribuyente</SelectItem>
+                                <SelectItem value="pequeno_contribuyente">
+                                  Pequeño contribuyente
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </Field>

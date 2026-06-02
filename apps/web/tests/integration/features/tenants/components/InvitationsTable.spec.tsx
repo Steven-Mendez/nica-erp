@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Invitation } from "@/features/tenants/api/endpoints";
 
 type CancelArgs = { invitationId: string };
+type ResendArgs = { invitationId: string };
 let cancelCalls: CancelArgs[] = [];
+let cancelIsError = false;
+let resendCalls: ResendArgs[] = [];
+let resendIsError = false;
+let resendIsSuccess = false;
 
 vi.mock("@/features/tenants/api/hooks", () => ({
   useCancelInvitationMutation: () => ({
@@ -15,6 +20,15 @@ vi.mock("@/features/tenants/api/hooks", () => ({
       cancelCalls.push(args);
     },
     isPending: false,
+    isError: cancelIsError,
+  }),
+  useResendInvitationMutation: () => ({
+    mutate: (args: ResendArgs) => {
+      resendCalls.push(args);
+    },
+    isPending: false,
+    isError: resendIsError,
+    isSuccess: resendIsSuccess,
   }),
 }));
 
@@ -52,6 +66,10 @@ function renderTable(props: { data?: Invitation[]; isLoading?: boolean; canCance
 afterEach(() => {
   cleanup();
   cancelCalls = [];
+  cancelIsError = false;
+  resendCalls = [];
+  resendIsError = false;
+  resendIsSuccess = false;
 });
 
 describe("InvitationsTable", () => {
@@ -81,13 +99,19 @@ describe("InvitationsTable", () => {
     expect(screen.queryByText("z@w.com")).toBeNull();
   });
 
-  it("renders the Cancelar button when canCancel is true and triggers the mutation", () => {
+  it("opens the destructive confirm dialog when Cancelar is clicked; fires mutation only after confirmation", async () => {
     renderTable({
       data: [makeInvitation({ id: "i-1", email: "x@y.com" })],
       canCancel: true,
     });
-    const cancelBtn = screen.getByRole("button", { name: /Cancelar/i });
+    const cancelBtn = screen.getByRole("button", { name: "Cancelar" });
     fireEvent.click(cancelBtn);
+    // Dialog opens — no mutation yet.
+    expect(cancelCalls).toEqual([]);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/cancelar la invitación enviada a x@y\.com/i);
+    // Confirm fires the mutation exactly once.
+    fireEvent.click(screen.getByRole("button", { name: /Sí, cancelar/i }));
     expect(cancelCalls).toEqual([{ invitationId: "i-1" }]);
   });
 
@@ -97,5 +121,30 @@ describe("InvitationsTable", () => {
       canCancel: false,
     });
     expect(screen.queryByRole("button", { name: /Cancelar/i })).toBeNull();
+  });
+
+  it("renders the Spanish rollback alert when the cancel mutation errors", () => {
+    cancelIsError = true;
+    renderTable({ data: [makeInvitation()] });
+    expect(screen.getByText(/No se pudo cancelar la invitación\./i)).toBeInTheDocument();
+  });
+
+  it("fires the resend mutation when the Reenviar button is clicked", () => {
+    renderTable({ data: [makeInvitation({ id: "i-1" })] });
+    const resend = screen.getByRole("button", { name: /Reenviar/i });
+    fireEvent.click(resend);
+    expect(resendCalls).toEqual([{ invitationId: "i-1" }]);
+  });
+
+  it("surfaces the success copy when the resend mutation succeeds", () => {
+    resendIsSuccess = true;
+    renderTable({ data: [makeInvitation()] });
+    expect(screen.getByText(/Invitación reenviada con un nuevo enlace\./i)).toBeInTheDocument();
+  });
+
+  it("surfaces the error copy when the resend mutation fails", () => {
+    resendIsError = true;
+    renderTable({ data: [makeInvitation()] });
+    expect(screen.getByText(/No se pudo reenviar la invitación\./i)).toBeInTheDocument();
   });
 });

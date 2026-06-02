@@ -20,5 +20,7 @@ class InvitationRepository(Protocol):
 
     async def list_by_tenant(self, tenant_id: UUID) -> list[Invitation]: ...
 
+    async def list_pending_by_email(self, tenant_id: UUID, email: str) -> list[Invitation]: ...
+
 
 __all__ = ["InvitationRepository"]

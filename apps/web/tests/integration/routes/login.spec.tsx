@@ -90,9 +90,7 @@ describe("LoginRoute", () => {
       detail: { code: "auth.invalid_credentials" },
     };
     renderLogin();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /correo o contraseña incorrectos/i,
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/correo o contraseña incorrectos/i);
   });
 
   it("renders the lockout copy with the retry window for a 429 lockout", () => {

@@ -30,6 +30,7 @@ import {
   listInvitations,
   listMembers,
   removeMember,
+  resendInvitation,
   switchTenant,
   updateMemberRole,
   updateTenant,
@@ -201,12 +202,57 @@ export const useUpdateMemberRoleMutation = (
   });
 };
 
+// Cancel-invitation is wrapped in TanStack's standard optimistic
+// pattern: `onMutate` snapshots the current invitations list and
+// removes the cancelled row eagerly; `onError` rolls the snapshot
+// back; `onSettled` invalidates so the next refetch picks up any
+// server-side drift. The Spanish error copy renders as an inline
+// `<Alert>` in `InvitationsTable`; the shared `<Toaster />` is not
+// mounted yet so the inline path is the canonical surface today.
 export const useCancelInvitationMutation = (
   tenantId: string,
-): UseMutationResult<void, Error, { invitationId: string }> => {
+): UseMutationResult<
+  void,
+  Error,
+  { invitationId: string },
+  { previous: Invitation[] | undefined }
+> => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ invitationId }) => cancelInvitation(tenantId, invitationId),
+    onMutate: async ({ invitationId }) => {
+      // Stop in-flight refetches so the optimistic write isn't
+      // overwritten by a stale response landing mid-mutation.
+      await qc.cancelQueries({ queryKey: invitationsKey(tenantId) });
+      const previous = qc.getQueryData<Invitation[]>(invitationsKey(tenantId));
+      if (previous !== undefined) {
+        qc.setQueryData<Invitation[]>(
+          invitationsKey(tenantId),
+          previous.filter((i) => i.id !== invitationId),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        qc.setQueryData(invitationsKey(tenantId), context.previous);
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: invitationsKey(tenantId) });
+    },
+  });
+};
+
+// Resend cancels the pending invitation and issues a fresh one with a
+// new token + expiration. Reads as a normal mutation on the operator
+// side; the backend takes care of the cancel + re-issue in one UoW.
+export const useResendInvitationMutation = (
+  tenantId: string,
+): UseMutationResult<Invitation, Error, { invitationId: string }> => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invitationId }) => resendInvitation(tenantId, invitationId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: invitationsKey(tenantId) });
     },

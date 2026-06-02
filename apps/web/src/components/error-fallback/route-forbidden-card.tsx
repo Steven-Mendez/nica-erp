@@ -10,8 +10,8 @@ export function RouteForbiddenCard() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">No tienes permiso para ver esto</h2>
           <p className="text-sm text-muted-foreground">
-            Tu rol actual no incluye este recurso. Si crees que es un error,
-            pide a un administrador de la empresa que te dé acceso.
+            Tu rol actual no incluye este recurso. Si crees que es un error, pide a un administrador
+            de la empresa que te dé acceso.
           </p>
           <RecoveryLink>Volver al inicio</RecoveryLink>
         </div>

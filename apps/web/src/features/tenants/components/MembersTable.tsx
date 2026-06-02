@@ -66,6 +66,7 @@ import {
 import type { Member, UpdateMemberRoleInput } from "../api/endpoints";
 import { useRemoveMemberMutation, useUpdateMemberRoleMutation } from "../api/hooks";
 import { DataTableFacetedFilter } from "./DataTableFacetedFilter";
+import { DestructiveActionDialog } from "@/components/dialog/destructive-action-dialog";
 
 type RoleValue = UpdateMemberRoleInput["role"];
 
@@ -223,6 +224,7 @@ export function MembersTable({
 
   const updateRoleMut = useUpdateMemberRoleMutation(tenantId);
   const removeMut = useRemoveMemberMutation(tenantId);
+  const [pendingRemove, setPendingRemove] = useState<Member | null>(null);
 
   const columns = useMemo<ColumnDef<Member>[]>(
     () => [
@@ -390,7 +392,7 @@ export function MembersTable({
                   {canRemove ? (
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onSelect={() => removeMut.mutate({ userId: member.user_id })}
+                      onSelect={() => setPendingRemove(member)}
                       disabled={removeMut.isPending}
                     >
                       Remover
@@ -403,7 +405,7 @@ export function MembersTable({
         },
       },
     ],
-    [canRemove, canUpdateRole, removeMut, updateRoleMut],
+    [canRemove, canUpdateRole, removeMut.isPending, updateRoleMut],
   );
 
   const table = useReactTable({
@@ -520,7 +522,10 @@ export function MembersTable({
           </DropdownMenu>
         </div>
       </div>
-      <div className="overflow-hidden rounded-md border">
+      {/* Desktop layout: the data table. Hidden below the md
+          breakpoint so phones don't have to horizontally scroll
+          a 5-column table. */}
+      <div className="hidden md:block overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -559,6 +564,47 @@ export function MembersTable({
           </TableBody>
         </Table>
       </div>
+      {/* Mobile layout: one card per member ordered nombre,
+          correo, rol badge, estado badge. Pagination is shared
+          with the desktop layout via the same `<TablePagination>`
+          below, so swiping through pages on mobile updates the
+          desktop view when the operator rotates the device. */}
+      <div className="md:hidden space-y-2">
+        {table.getRowModel().rows.length > 0 ? (
+          table.getRowModel().rows.map((row) => {
+            const member = row.original;
+            const initials = initialsFrom(member.display_name, member.user_id);
+            const displayName = member.display_name?.trim();
+            return (
+              <div key={row.id} className="rounded-md border bg-card p-4 shadow-xs" role="listitem">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-sm font-medium">
+                      {displayName && displayName.length > 0 ? displayName : "—"}
+                    </p>
+                    {member.email ? (
+                      <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <Badge variant={ROLE_VARIANTS[member.role]}>{ROLE_LABELS[member.role]}</Badge>
+                      <Badge variant={member.status === "active" ? "ok" : "outline"}>
+                        {member.status === "active" ? "Activo" : "Removido"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-md border bg-card p-6 text-center text-sm text-muted-foreground">
+            Sin miembros para mostrar.
+          </div>
+        )}
+      </div>
       <TablePagination
         pageIndex={table.getState().pagination.pageIndex}
         pageSize={table.getState().pagination.pageSize}
@@ -571,6 +617,28 @@ export function MembersTable({
         onLast={() => table.setPageIndex(table.getPageCount() - 1)}
         onPageSizeChange={(size) => table.setPageSize(size)}
         totalCount={table.getRowCount()}
+      />
+      <DestructiveActionDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemove(null);
+        }}
+        title="Remover miembro"
+        description={
+          pendingRemove
+            ? `¿Remover a ${pendingRemove.display_name ?? pendingRemove.email ?? "este miembro"} de la empresa? Perderá acceso inmediatamente.`
+            : ""
+        }
+        confirmLabel="Sí, remover"
+        cancelLabel="Volver"
+        pending={removeMut.isPending}
+        onConfirm={() => {
+          if (pendingRemove === null) return;
+          removeMut.mutate(
+            { userId: pendingRemove.user_id },
+            { onSettled: () => setPendingRemove(null) },
+          );
+        }}
       />
     </div>
   );

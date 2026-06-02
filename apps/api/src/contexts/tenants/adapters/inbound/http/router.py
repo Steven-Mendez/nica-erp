@@ -23,6 +23,7 @@ from contexts.tenants.adapters.inbound.http.dependencies import (
     get_list_invitations,
     get_list_members,
     get_remove_member,
+    get_resend_invitation,
     get_switch_active_tenant,
     get_tenant_repository,
     get_update_member_role,
@@ -60,6 +61,7 @@ from contexts.tenants.application.use_cases import (
     ListInvitations,
     ListMembers,
     RemoveMember,
+    ResendInvitation,
     SwitchActiveTenant,
     UpdateMemberRole,
     UpdateTenant,
@@ -79,6 +81,9 @@ from contexts.tenants.application.use_cases.list_members import (
     ListMembersQuery,
 )
 from contexts.tenants.application.use_cases.remove_member import RemoveMemberCommand
+from contexts.tenants.application.use_cases.resend_invitation import (
+    ResendInvitationCommand,
+)
 from contexts.tenants.application.use_cases.switch_active_tenant import (
     SwitchActiveTenantCommand,
 )
@@ -449,6 +454,42 @@ async def cancel_invitation(
     uc: CancelInvitation = Depends(get_cancel_invitation),
 ) -> None:
     await uc.execute(CancelInvitationCommand(tenant_id=tenant_id, invitation_id=invitation_id))
+
+
+@router.post(
+    "/v1/tenants/{tenant_id}/invitations/{invitation_id}/resend",
+    response_model=InvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["tenants"],
+    summary="Cancel a pending invitation and issue a fresh one",
+)
+async def resend_invitation(
+    tenant_id: UUID,
+    invitation_id: UUID,
+    _actor: Actor = Depends(require("members:invite")),
+    uc: ResendInvitation = Depends(get_resend_invitation),
+    invitation_repo: InvitationRepository = Depends(get_invitation_repository),
+) -> InvitationResponse:
+    result = await uc.execute(
+        ResendInvitationCommand(
+            tenant_id=tenant_id,
+            invitation_id=invitation_id,
+            invite_url_template=_DEFAULT_INVITE_URL_TEMPLATE,
+        )
+    )
+    fresh = await invitation_repo.get(result.invitation_id)
+    if fresh is None:
+        raise HTTPException(status_code=500, detail="Resend succeeded but row not found")
+    return InvitationResponse(
+        id=fresh.id,
+        tenant_id=fresh.tenant_id,
+        email=fresh.email,
+        proposed_role=fresh.proposed_role.value,
+        status=fresh.status,
+        expires_at=fresh.expires_at,
+        created_at=fresh.created_at,
+        cancelled_at=fresh.cancelled_at,
+    )
 
 
 # --- /v1/invitations/* (public, allowlisted) ------------------------------

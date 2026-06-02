@@ -10,8 +10,8 @@ export function RouteSchemaErrorCard() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Respuesta inesperada del servidor</h2>
           <p className="text-sm text-muted-foreground">
-            La respuesta del servidor no tiene el formato esperado.
-            Si el problema persiste, reporta el incidente al equipo técnico.
+            La respuesta del servidor no tiene el formato esperado. Si el problema persiste, reporta
+            el incidente al equipo técnico.
           </p>
           <RecoveryLink>Volver al inicio</RecoveryLink>
         </div>

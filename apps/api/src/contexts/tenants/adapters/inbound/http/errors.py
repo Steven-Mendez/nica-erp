@@ -12,6 +12,7 @@ from contexts.tenants.domain import (
     CannotRemoveOwnerError,
     InvitationAlreadyAcceptedError,
     InvitationCancelledError,
+    InvitationDuplicatePendingError,
     InvitationExpiredError,
     InvitationInvalidError,
     InvitationNotFoundError,
@@ -170,6 +171,20 @@ def register_tenants_exception_handlers(app: FastAPI) -> None:
                 status=410,
                 code="invitation.not_found",
                 title="Invitation not found",
+                detail=str(exc),
+            ),
+        )
+
+    @app.exception_handler(InvitationDuplicatePendingError)
+    async def _inv_dup_pending(
+        _request: Request, exc: InvitationDuplicatePendingError
+    ) -> JSONResponse:
+        return _problem_response(
+            409,
+            ProblemDetail(
+                status=409,
+                code="tenants.invitation_duplicate_pending",
+                title="A pending invitation already exists",
                 detail=str(exc),
             ),
         )

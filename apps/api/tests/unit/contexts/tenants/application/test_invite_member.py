@@ -10,7 +10,7 @@ from contexts.tenants.application.use_cases.invite_member import (
     InviteMember,
     InviteMemberCommand,
 )
-from contexts.tenants.domain import TenantNotFoundError
+from contexts.tenants.domain import InvitationDuplicatePendingError, TenantNotFoundError
 
 
 async def test_invite_member_persists_invitation_and_emits_outbox(
@@ -84,6 +84,51 @@ async def test_invite_member_rejects_owner_role(
                 invite_url_template="https://localhost/i/{token}",
             )
         )
+
+
+async def test_invite_member_rejects_duplicate_pending_invitation(
+    fake_uow,
+    tenant_repo,
+    invitation_repo,
+    token_generator,
+    email_sender,
+    outbox,
+    seeded_tenant,
+    fixed_now,
+) -> None:
+    uc = InviteMember(
+        uow=fake_uow,
+        tenant_repository=tenant_repo,
+        invitation_repository=invitation_repo,
+        token_generator=token_generator,
+        email_sender=email_sender,
+        outbox=outbox,
+        now=lambda: fixed_now,
+    )
+
+    await uc.execute(
+        InviteMemberCommand(
+            tenant_id=seeded_tenant.id,
+            email="dupe@test.dev",
+            proposed_role="viewer",
+            invite_url_template="https://localhost/i/{token}",
+        )
+    )
+    assert invitation_repo.add_count == 1
+    sent_before = len(email_sender.sent)
+
+    with pytest.raises(InvitationDuplicatePendingError):
+        await uc.execute(
+            InviteMemberCommand(
+                tenant_id=seeded_tenant.id,
+                email="DUPE@test.dev",  # case-insensitive match
+                proposed_role="viewer",
+                invite_url_template="https://localhost/i/{token}",
+            )
+        )
+    # The second call MUST NOT persist a new invitation or send another email.
+    assert invitation_repo.add_count == 1
+    assert len(email_sender.sent) == sent_before
 
 
 async def test_invite_member_raises_when_tenant_missing(
