@@ -27,6 +27,7 @@ vi.mock("@/features/tenants/api/endpoints", async () => {
 
 vi.mock("@/api/tokenStore", () => ({
   setTokens: vi.fn(),
+  getAccessToken: vi.fn().mockReturnValue("access-token"),
 }));
 
 import {
@@ -62,9 +63,28 @@ import {
   useUpdateTenantMutation,
 } from "@/features/tenants/api/hooks";
 import { setTokens } from "@/api/tokenStore";
+import { meQueryKey } from "@/api/queryKeys";
 import { PICKER_FLAG_KEY } from "@/lib/route-guard";
 
 const tenantId = "00000000-0000-0000-0000-0000000000aa";
+
+// Seed the /v1/me cache so the stale-tenant guard (`tenantId ===
+// me.active_tenant`) lets per-tenant queries run. Without this every
+// useTenantQuery/useMembersQuery/useInvitationsQuery stays disabled
+// and the underlying endpoint stub is never invoked.
+function seedActiveTenant(client: QueryClient, id: string): void {
+  client.setQueryData(meQueryKey, {
+    id: "u-1",
+    email: "ada@nica.test",
+    display_name: "Ada",
+    locale: "es-NI",
+    timezone: "America/Managua",
+    preferences: {},
+    active_tenant: id,
+    role: "owner",
+    permissions: [],
+  });
+}
 
 function wrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
@@ -109,6 +129,7 @@ describe("queries", () => {
       ReturnType<typeof getTenant>
     >);
     const client = makeClient();
+    seedActiveTenant(client, tenantId);
     const { result } = renderHook(() => useTenantQuery(tenantId), { wrapper: wrapper(client) });
     await waitFor(() => expect(result.current.data).toBeDefined());
     expect(vi.mocked(getTenant).mock.calls[0]).toEqual([tenantId]);
@@ -122,6 +143,7 @@ describe("queries", () => {
       offset: 0,
     });
     const client = makeClient();
+    seedActiveTenant(client, tenantId);
     const params = { limit: 10, offset: 0, q: "ada" } as const;
     renderHook(() => useMembersQuery(tenantId, params), { wrapper: wrapper(client) });
     await waitFor(() => expect(vi.mocked(listMembers).mock.calls.length).toBe(1));
@@ -131,9 +153,26 @@ describe("queries", () => {
   it("useInvitationsQuery scopes to tenantId", async () => {
     vi.mocked(listInvitations).mockResolvedValueOnce([]);
     const client = makeClient();
+    seedActiveTenant(client, tenantId);
     renderHook(() => useInvitationsQuery(tenantId), { wrapper: wrapper(client) });
     await waitFor(() => expect(vi.mocked(listInvitations).mock.calls.length).toBe(1));
     expect(vi.mocked(listInvitations).mock.calls[0]).toEqual([tenantId]);
+  });
+
+  it("useMembersQuery stays disabled when tenantId does not match me.active_tenant", async () => {
+    vi.mocked(listMembers).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    const client = makeClient();
+    seedActiveTenant(client, "00000000-0000-0000-0000-0000000000bb");
+    const { result } = renderHook(() => useMembersQuery(tenantId), { wrapper: wrapper(client) });
+    // Yield a microtask. The query must remain disabled — no fetch fires.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(vi.mocked(listMembers)).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
   });
 });
 

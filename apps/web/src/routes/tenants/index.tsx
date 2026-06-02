@@ -11,11 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  useInvitationsQuery,
-  useMyTenantsQuery,
-  useSwitchTenantMutation,
-} from "@/features/tenants/api/hooks";
+import { useMyTenantsQuery, useSwitchTenantMutation } from "@/features/tenants/api/hooks";
 import { getRefreshToken } from "@/api/tokenStore";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { setPickerConfirmed } from "@/lib/route-guard";
@@ -34,21 +30,6 @@ function initialsOf(name: string): string {
     .slice(0, 2)
     .map((s) => s.charAt(0).toUpperCase())
     .join("");
-}
-
-function PendingInvitationsLine({ tenantId }: { tenantId: string }) {
-  // Each card fires its own invitations query — the backend gates on
-  // `members:read`, so for tenants where the operator lacks the
-  // permission the query 403s and the line stays hidden.
-  const inv = useInvitationsQuery(tenantId);
-  if (inv.isLoading || inv.data === undefined) return null;
-  const pending = inv.data.filter((i) => i.status === "pending").length;
-  if (pending === 0) return null;
-  return (
-    <p className="text-xs text-muted-foreground">
-      {pending === 1 ? "1 invitación pendiente" : `${pending} invitaciones pendientes`}
-    </p>
-  );
 }
 
 function MembershipCard({
@@ -93,7 +74,6 @@ function MembershipCard({
               {membership.role}
             </Badge>
           </div>
-          <PendingInvitationsLine tenantId={membership.tenant_id} />
         </div>
       </CardContent>
     </Card>

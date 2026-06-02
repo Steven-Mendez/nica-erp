@@ -126,7 +126,32 @@ All 4xx/5xx responses are RFC 7807 ([ADR-0015](adr/0015-rfc7807-errors.md), [08 
 | **Redirect** | `401` | Clear token, `navigate('/login')` |
 | **Silent log** | `403` with `type=missing-permission` | Log only — `<Can>` should have prevented the call; surfacing means a stale `/me` |
 
-TanStack Query's `onError` calls `mapProblemDetails(err)`. No `try/catch` inside components. One error boundary per route (`src/routes/__root.tsx`) catches render-time crashes.
+TanStack Query's `onError` calls `mapProblemDetails(err)`. No `try/catch` inside components.
+
+#### Route error fallbacks
+
+Render-time and loader failures are caught by TanStack Router boundaries and routed by `dispatchRouteError(error)` to one of four cards:
+
+| Category | Trigger | Card |
+|---|---|---|
+| **Forbidden** | `ApiError.status === 403` | `RouteForbiddenCard` |
+| **Not found** | `ApiError.status === 404`, or unmatched URL via `notFoundComponent` | `RouteNotFoundCard` |
+| **Schema mismatch** | `instanceof ZodError` | `RouteSchemaErrorCard` |
+| **Runtime** | anything else | `RouteRuntimeErrorCard` |
+
+There are two boundary layers:
+
+- **Root** (`src/routes/__root.tsx`) — `errorComponent` and `notFoundComponent` render the fallback inside the bare `BrandLayout` (no sidebar) so the chrome stays consistent with the `/login` shell when a failure escapes the shell.
+- **In-shell** — every AppShell-bearing route (`/dashboard`, `/sales`, `/inventory`, `/reports`, `/settings`, `/empresa`, `/empresa/users`, `/empresa/settings`) declares `errorComponent: InShellErrorBoundary` so a child loader failure renders the fallback inside the sidebar context. The operator keeps their nav anchor instead of getting bounced to a chromeless screen.
+
+The recovery button is auth-aware: `getAccessToken()` is read synchronously (never `useMeQuery`, which may itself be the source of the boundary) and links to `/dashboard` when present, `/login` otherwise. The link is a plain `<a>` — a hard navigation forces a fresh app boot, which is the correct recovery action from a broken state.
+
+#### Query-client lifecycle
+
+Two invariants keep cached data coherent across identity transitions:
+
+- **Logout** (`useLogoutMutation.onSettled` in `features/auth/api/hooks.ts`) runs `clear()` (token store), then `clearPickerConfirmed()`, then `qc.clear()` — in that order. The token store is cleared first so any retry queued by React Query before this point sees the empty store and aborts rather than refetching under the prior identity's bearer.
+- **Per-tenant queries** (`useTenantQuery`, `useMembersQuery`, `useInvitationsQuery`) gate `enabled` on `tenantId !== "" && tenantId === me.active_tenant`. The active id is read via the shared `useActiveTenantId()` hook (lives in `src/api/` so neither the auth nor tenants slice has to cross-import the other). The strict-equality gate blocks the `SwitchActiveTenant` race window — between the new JWT minting and the `/v1/me` refetch a stale id would otherwise fire a request to the previous empresa.
 
 ### 4. Forms
 

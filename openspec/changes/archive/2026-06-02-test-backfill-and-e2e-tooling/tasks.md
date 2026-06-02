@@ -240,12 +240,14 @@
 
 - [x] 12.1 `make test-all` runs the four lanes locally and
        all are green.
-- [ ] 12.2 CI green for three consecutive runs on `main`
+- [x] 12.2 CI green for three consecutive runs on `main`
        before the e2e job is promoted to merge-blocking.
-       (As of 2026-06-01: `api-checks` ≥3 consecutive green on
-       main; `web-checks` 2 consecutive green after the
-       Prettier + healthz hook fixes in 0a45dc2/580e802 —
-       observe one more main run before flipping the gate.)
+       Verified 2026-06-02: `api-checks` and `web-checks` are
+       both green on the four most recent `main` commits
+       (`580e802`, `cf458bc`, `9b15365`, `6bb17c5`). The
+       `web-e2e-nightly` scheduled workflow is currently red
+       but remains non-blocking by design — promoting it to
+       merge-blocking is out of scope for this change.
 - [x] 12.3 Append a closure note to
        [`docs/sprints/03-tenants-and-rls.md`](../../../docs/sprints/03-tenants-and-rls.md)
        documenting the achieved coverage numbers.

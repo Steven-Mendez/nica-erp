@@ -2,6 +2,15 @@
 // namespaced under ["tenant", <id>, ...] so the queryClient.clear() in
 // TenantSwitcher only invalidates caches once and survives a tenant swap
 // without colliding keys.
+//
+// Every per-tenant query (`useTenantQuery`, `useMembersQuery`,
+// `useInvitationsQuery`) additionally gates `enabled` on
+// `tenantId === me.active_tenant`. The narrower gate (truthy id only)
+// is not enough: between a `SwitchActiveTenant` and the in-flight
+// /v1/me refetch there is a window where the SPA holds a stale
+// tenantId — without this guard, that window can fire a request to
+// the previous empresa and either leak its data into the cache or
+// 403 noisily.
 
 import {
   keepPreviousData,
@@ -39,6 +48,7 @@ import {
 } from "./endpoints";
 import { setTokens } from "@/api/tokenStore";
 import { meQueryKey } from "@/api/queryKeys";
+import { useActiveTenantId } from "@/api/useActiveTenantId";
 import { setPickerConfirmed } from "@/lib/route-guard";
 
 export const myTenantsKey = ["tenants", "me"] as const;
@@ -54,16 +64,26 @@ export const invitationsKey = (id: string) => ["tenant", id, "invitations"] as c
 export const useMyTenantsQuery = (): UseQueryResult<MyTenants, Error> =>
   useQuery({ queryKey: myTenantsKey, queryFn: getMyTenants });
 
-// All per-tenant queries gate on a truthy tenantId. Callers commonly source
-// the id from `useMeQuery().data?.active_tenant`, which is `undefined` until
-// `/v1/me` resolves — without this gate the query would hit `/v1/tenants//…`
-// (note the double slash) and 404 every page refresh.
-export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> =>
-  useQuery({
+// All per-tenant queries gate on a truthy tenantId AND on `tenantId ===
+// me.active_tenant`. Callers commonly source the id from
+// `useMeQuery().data?.active_tenant`, which is `undefined` until
+// `/v1/me` resolves — without the truthy check the query would hit
+// `/v1/tenants//…` (note the double slash) and 404 every page refresh.
+// The stricter `=== activeTenant` check additionally blocks the
+// `SwitchActiveTenant` race: between the new JWT minting and the
+// /v1/me refetch the caller may still hold a stale tenantId; firing
+// `GET /v1/tenants/<stale>/members` against the new identity either
+// leaks the old empresa's rows into the cache or 403s. Gating on the
+// canonical active id is the simplest fix and falls back to "no
+// request" while /v1/me is in flight.
+export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> => {
+  const activeTenant = useActiveTenantId();
+  return useQuery({
     queryKey: tenantKey(tenantId),
     queryFn: () => getTenant(tenantId),
-    enabled: tenantId !== "",
+    enabled: tenantId !== "" && tenantId === activeTenant,
   });
+};
 
 // `placeholderData: keepPreviousData` keeps the table populated while a
 // refetch (e.g. switching pages, narrowing a filter) is in flight,
@@ -73,21 +93,25 @@ export const useTenantQuery = (tenantId: string): UseQueryResult<Tenant, Error> 
 export const useMembersQuery = (
   tenantId: string,
   params: ListMembersParams = {},
-): UseQueryResult<MembersPage, Error> =>
-  useQuery({
+): UseQueryResult<MembersPage, Error> => {
+  const activeTenant = useActiveTenantId();
+  return useQuery({
     queryKey: membersPageKey(tenantId, params),
     queryFn: () => listMembers(tenantId, params),
-    enabled: tenantId !== "",
+    enabled: tenantId !== "" && tenantId === activeTenant,
     placeholderData: keepPreviousData,
   });
+};
 
-export const useInvitationsQuery = (tenantId: string): UseQueryResult<Invitation[], Error> =>
-  useQuery({
+export const useInvitationsQuery = (tenantId: string): UseQueryResult<Invitation[], Error> => {
+  const activeTenant = useActiveTenantId();
+  return useQuery({
     queryKey: invitationsKey(tenantId),
     queryFn: () => listInvitations(tenantId),
-    enabled: tenantId !== "",
+    enabled: tenantId !== "" && tenantId === activeTenant,
     placeholderData: keepPreviousData,
   });
+};
 
 export const useCreateTenantMutation = (): UseMutationResult<Tenant, Error, CreateTenantInput> => {
   const qc = useQueryClient();

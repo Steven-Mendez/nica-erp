@@ -129,7 +129,7 @@ export const useLogoutMutation = () => {
     onSettled: () => {
       clear();
       clearPickerConfirmed();
-      qc.removeQueries({ queryKey: meQueryKey });
+      qc.clear();
     },
   });
 };

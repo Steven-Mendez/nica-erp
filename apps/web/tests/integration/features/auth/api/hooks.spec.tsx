@@ -188,16 +188,16 @@ describe("auth mutations — simple wrappers", () => {
 });
 
 describe("useLogoutMutation", () => {
-  it("clears the token store, the picker flag, and removes the me query", async () => {
+  it("clears the token store, the picker flag, and the entire query cache", async () => {
     vi.mocked(logout).mockResolvedValueOnce(undefined as never);
     window.sessionStorage.setItem(PICKER_FLAG_KEY, "1");
     const client = makeClient();
-    const removeSpy = vi.spyOn(client, "removeQueries");
+    const clearSpy = vi.spyOn(client, "clear");
     const { result } = renderHook(() => useLogoutMutation(), { wrapper: wrapper(client) });
     await result.current.mutateAsync();
     expect(clear).toHaveBeenCalled();
     expect(window.sessionStorage.getItem(PICKER_FLAG_KEY)).toBeNull();
-    expect(removeSpy).toHaveBeenCalledWith({ queryKey: meQueryKey });
+    expect(clearSpy).toHaveBeenCalled();
   });
 });
 

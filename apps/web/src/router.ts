@@ -24,6 +24,7 @@ import { rootRoute } from "@/routes/__root";
 import { getAccessToken } from "@/api/tokenStore";
 import { nextRouteForCurrentState } from "@/lib/route-guard";
 import { PENDING_INVITE_KEY } from "@/routes/invitations/accept";
+import { InShellErrorBoundary } from "@/components/error-fallback/in-shell";
 
 function popPendingInviteToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -201,6 +202,7 @@ const dashboardRoute = createRoute({
     await authenticatedGuard("/dashboard");
   },
   component: lazyRouteComponent(() => import("@/routes/dashboard"), "DashboardRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const salesRoute = createRoute({
@@ -210,6 +212,7 @@ const salesRoute = createRoute({
     await authenticatedGuard("/sales");
   },
   component: lazyRouteComponent(() => import("@/routes/sales"), "SalesRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const inventoryRoute = createRoute({
@@ -219,6 +222,7 @@ const inventoryRoute = createRoute({
     await authenticatedGuard("/inventory");
   },
   component: lazyRouteComponent(() => import("@/routes/inventory"), "InventoryRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const reportsRoute = createRoute({
@@ -228,6 +232,7 @@ const reportsRoute = createRoute({
     await authenticatedGuard("/reports");
   },
   component: lazyRouteComponent(() => import("@/routes/reports"), "ReportsRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const settingsRoute = createRoute({
@@ -237,6 +242,7 @@ const settingsRoute = createRoute({
     await authenticatedGuard("/settings");
   },
   component: lazyRouteComponent(() => import("@/routes/settings"), "SettingsRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const tenantsIndexRoute = createRoute({
@@ -272,6 +278,7 @@ const empresaIndexRoute = createRoute({
     await authenticatedGuard("/empresa");
   },
   component: lazyRouteComponent(() => import("@/routes/empresa/index"), "EmpresaIndexRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const empresaUsersRoute = createRoute({
@@ -282,6 +289,7 @@ const empresaUsersRoute = createRoute({
     await authenticatedGuard("/empresa/users");
   },
   component: lazyRouteComponent(() => import("@/routes/empresa/users"), "EmpresaUsuariosRoute"),
+  errorComponent: InShellErrorBoundary,
 });
 
 const empresaSettingsRoute = createRoute({
@@ -294,6 +302,7 @@ const empresaSettingsRoute = createRoute({
     () => import("@/routes/empresa/settings"),
     "EmpresaConfiguracionRoute",
   ),
+  errorComponent: InShellErrorBoundary,
 });
 
 // Legacy editor path — kept as a redirect so old banner links land
