@@ -29,7 +29,10 @@ class TestLocalDefaults:
 
         settings = Settings()
         assert settings.app_env == "local"
-        assert settings.cors_allowed_origins == ["http://localhost:5173"]
+        assert settings.cors_allowed_origins == [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
 
     def test_local_app_mounts_cors_middleware(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("APP_ENV", "local")
