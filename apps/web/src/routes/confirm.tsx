@@ -10,6 +10,7 @@ import { Controller, useForm } from "react-hook-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FormErrorAlert } from "@/components/form/form-error-alert";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useConfirmSignupMutation, useResendCodeMutation } from "@/features/auth/api/hooks";
@@ -115,13 +116,7 @@ export function ConfirmRoute() {
               </Field>
             )}
           />
-          {confirmMutation.isError ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                No se pudo confirmar. Verifica el código e intenta de nuevo.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+          <FormErrorAlert error={confirmMutation.error} />
           {resendMutation.isSuccess ? (
             <Alert variant="success">
               <AlertDescription>Te enviamos un nuevo código.</AlertDescription>

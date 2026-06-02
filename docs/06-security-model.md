@@ -68,6 +68,30 @@ Configurable via SSM in prod; defaults in `bootstrap/settings.py`.
 - `POST /v1/auth/logout` invokes `GlobalSignOut` (invalidates refresh tokens; local deletes `auth_local_refresh_tokens`). Access tokens remain valid until `exp` (≤ 1 hour).
 - **Tenant status check** on every authenticated request — the same dependency that loads the tenant context rejects `suspended` or `purged` tenants ([ADR-0026](adr/0026-tenant-lifecycle.md)). Best-effort session revocation.
 
+### Login throttle
+
+`POST /v1/auth/login` is wrapped in an application-level sliding-window throttle that runs **before** the password compare reaches the IdP. The contract lives at `contexts/identity/application/login_attempt_throttle.py` (the `LoginAttemptThrottle` Protocol + `LockoutState` value object) and has two adapters:
+
+- `InMemoryLoginAttemptThrottle` — used by local-dev, unit, and integration test profiles. Failures live in two `deque`s — one per identifier, one per source IP — guarded by a single coarse lock. Process-local.
+- `RedisLoginAttemptThrottle` — used in the AWS profile when `REDIS_URL` is set. Two Redis sorted sets per principal (`login_throttle:id:<email>`, `login_throttle:ip:<ip>`) with `ZADD` / `ZREMRANGEBYSCORE` / `ZCARD`. Process-shared, so a behind-the-ALB fleet sees one consistent counter.
+
+Default thresholds (overridable via the bootstrap settings of the same names):
+
+| Setting | Default | Scope |
+|---|---|---|
+| `LOGIN_THROTTLE_IDENTIFIER_LIMIT` | 5 failures | Per identifier (case-insensitive email) |
+| `LOGIN_THROTTLE_IDENTIFIER_WINDOW_SECONDS` | 900 (15 min) | Per identifier |
+| `LOGIN_THROTTLE_IP_LIMIT` | 20 failures | Per source IP |
+| `LOGIN_THROTTLE_IP_WINDOW_SECONDS` | 900 (15 min) | Per source IP |
+
+The two counters are independent. A clean authentication clears the **identifier** counter but **not** the IP counter — a credential-stuffing IP that happens to guess one valid identifier out of many is still suspicious.
+
+Source-IP attribution prefers the left-most entry of `X-Forwarded-For` (the canonical "real client" header when behind an ALB / Nginx / CloudFront) and falls back to the peer socket address. The dependency that constructs the use case reads the request and passes both the throttle and the IP in.
+
+**Fail-open**: the Redis adapter wraps every call in `try/except RedisError` and degrades to "no lockout" on connection failure — a sustained Redis outage temporarily disables the throttle rather than locking every operator out. The trade-off is documented at the adapter site; alerting on the warning logs is a future operations task.
+
+When the throttle reports `locked=True`, the `Authenticate` use case raises `AuthLockoutActiveError(retry_after_seconds, scope)` and the HTTP adapter maps it to `429 Too Many Requests` with `Content-Type: application/problem+json`, a `Retry-After: <seconds>` header, and a body that carries `code: "auth.lockout_active"` plus the `scope` (`"identifier"` or `"ip"`) so the SPA can pick the right Spanish copy.
+
 ### Frontend tokens
 - **Access and id tokens in memory only.** They live in a module-scoped closure (`apps/web/src/api/tokenStore.ts`), never in `localStorage` or any cookie. Both are short-lived (≤ 1 hour for access).
 - **Refresh token in `sessionStorage`.** Persisted under the key `nica-erp:refresh-token` so a page reload can recover the session via `POST /v1/auth/refresh`. `sessionStorage` is tab-scoped — closing the tab still forces a fresh login. Cleared on logout and on any refresh failure.

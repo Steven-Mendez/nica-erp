@@ -7,9 +7,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FormErrorAlert } from "@/components/form/form-error-alert";
 import { Input } from "@/components/ui/input";
 import { useLoginMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
@@ -93,13 +93,8 @@ export function LoginRoute() {
               </Field>
             )}
           />
-          {mutation.isError ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                No se pudo iniciar sesión. Revisa tus credenciales.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+          <FormErrorAlert error={mutation.error} />
+
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
             {mutation.isPending ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>

@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from contexts.identity.adapters.inbound.http.schemas import ProblemDetail
 from contexts.identity.application.errors import (
+    AuthLockoutActiveError,
     EmailSendError,
     InvalidCredentialsError,
     LockoutActiveError,
@@ -39,6 +40,24 @@ def to_problem_detail(exc: Exception) -> tuple[int, ProblemDetail]:
     Unmapped exceptions raise; callers should let FastAPI surface them as 500s.
     """
 
+    if isinstance(exc, AuthLockoutActiveError):
+        # Spanish copy per the auth-login-rate-limiting spec. The
+        # `scope` extension lets the SPA pick between identifier-level
+        # and IP-level message variants.
+        return (
+            429,
+            _problem(
+                429,
+                "auth.lockout_active",
+                "Cuenta temporalmente bloqueada",
+                detail=(
+                    "Demasiados intentos fallidos. "
+                    f"Inténtalo de nuevo en {exc.retry_after_seconds} segundos."
+                ),
+                retry_after_seconds=exc.retry_after_seconds,
+                scope=exc.scope,
+            ),
+        )
     if isinstance(exc, LockoutActiveError):
         return (
             401,
@@ -108,16 +127,31 @@ def to_problem_detail(exc: Exception) -> tuple[int, ProblemDetail]:
     raise exc  # pragma: no cover — defensive: caller should never reach here
 
 
-def _problem_response(status: int, problem: ProblemDetail) -> JSONResponse:
+def _problem_response(
+    status: int,
+    problem: ProblemDetail,
+    *,
+    extra_headers: dict[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         content=problem.model_dump(mode="json", exclude_none=True),
         status_code=status,
         media_type=PROBLEM_CONTENT_TYPE,
+        headers=extra_headers,
     )
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Wire the identity-context exceptions to RFC-7807 responses on ``app``."""
+
+    @app.exception_handler(AuthLockoutActiveError)
+    async def _auth_lockout(_request: Request, exc: AuthLockoutActiveError) -> JSONResponse:
+        status, problem = to_problem_detail(exc)
+        return _problem_response(
+            status,
+            problem,
+            extra_headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
 
     @app.exception_handler(InvalidCredentialsError)
     async def _invalid_credentials(_request: Request, exc: InvalidCredentialsError) -> JSONResponse:

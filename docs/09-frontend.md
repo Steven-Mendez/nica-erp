@@ -146,6 +146,20 @@ There are two boundary layers:
 
 The recovery button is auth-aware: `getAccessToken()` is read synchronously (never `useMeQuery`, which may itself be the source of the boundary) and links to `/dashboard` when present, `/login` otherwise. The link is a plain `<a>` — a hard navigation forces a fresh app boot, which is the correct recovery action from a broken state.
 
+#### Form errors
+
+Inline auth-error display lives in a single component — `apps/web/src/components/form/form-error-alert.tsx`:
+
+```tsx
+<FormErrorAlert error={mutation.error} />
+```
+
+The four auth routes (`/login`, `/confirm`, `/forgot-password`, `/reset-password`) render this above their submit button whenever the mutation's `error` is non-null. The component is intentionally thin: it reads `messageForProblem(error)` from `src/api/errors.ts` and renders the resulting Spanish string inside an alert block with `role="alert"` + `aria-live="assertive"`.
+
+The registry rule: every problem code the backend can emit on an auth route MUST have an entry in `SPANISH_BY_CODE`. Unknown codes fall through to the generic copy `"Ocurrió un error. Intenta de nuevo."` — the raw English `code` is never surfaced to the operator. `KNOWN_AUTH_PROBLEM_CODES` is the authoritative list; a unit test asserts the spec-mandated codes are present so a regression renaming a code without a registry update fails CI rather than the next operator's screen. The lockout code (`auth.lockout_active`) templates the `Retry-After` window into Spanish minutes via `formatLockoutMinutes`, which rounds up and clamps at 1 minute.
+
+Navigation in auth routes happens from `onSuccess` only — never from `onSettled` or `onError`. On a failed mutation the route stays put, the form fields remain enabled, and the alert renders. On a clean attempt the alert disappears on the next render because the mutation's `error` reverts to `null`.
+
 #### Query-client lifecycle
 
 Two invariants keep cached data coherent across identity transitions:

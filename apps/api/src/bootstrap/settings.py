@@ -79,6 +79,25 @@ class Settings(BaseSettings):
     invitation_token_ttl_seconds: int = Field(default=604_800)
     permission_cache_ttl_seconds: int = Field(default=60)
 
+    # Login-attempt throttle (sliding window). Identifier: 5 failures /
+    # 15 min before the operator's email is locked out. IP: 20 failures
+    # / 15 min before the source IP is locked out regardless of which
+    # identifiers it targeted. The two windows are independent and the
+    # IP counter is NOT cleared by a successful login (a credential-
+    # stuffing IP that lands one correct credential out of many is
+    # still suspicious).
+    login_throttle_identifier_limit: int = Field(default=5)
+    login_throttle_identifier_window_seconds: int = Field(default=900)
+    login_throttle_ip_limit: int = Field(default=20)
+    login_throttle_ip_window_seconds: int = Field(default=900)
+
+    # Redis URL for the production throttle adapter. Empty on local —
+    # the in-memory adapter is used instead (see container.py). When
+    # APP_ENV=aws this is wired to an ElastiCache endpoint; a missing
+    # value at AWS-time keeps the in-memory adapter, which fails open
+    # so logins continue to function while operators wire it up.
+    redis_url: str = Field(default="")
+
     @model_validator(mode="after")
     def _validate_app_env(self) -> Settings:
         if self.app_env == "":

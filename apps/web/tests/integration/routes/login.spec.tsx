@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const loginSpy = vi.fn();
 let isError = false;
 let isPending = false;
+let mutationError: unknown = null;
 
 vi.mock("@/features/auth/api/hooks", () => ({
   useLoginMutation: () => ({
@@ -17,6 +18,7 @@ vi.mock("@/features/auth/api/hooks", () => ({
     },
     isPending,
     isError,
+    error: mutationError,
   }),
 }));
 
@@ -44,6 +46,7 @@ afterEach(() => {
   loginSpy.mockReset();
   isError = false;
   isPending = false;
+  mutationError = null;
 });
 
 describe("LoginRoute", () => {
@@ -79,9 +82,29 @@ describe("LoginRoute", () => {
     });
   });
 
-  it("renders the destructive Alert when the mutation isError is true", () => {
+  it("renders the FormErrorAlert with Spanish copy when the mutation errors", () => {
     isError = true;
+    mutationError = {
+      name: "ApiError",
+      status: 401,
+      detail: { code: "auth.invalid_credentials" },
+    };
     renderLogin();
-    expect(screen.getByText(/No se pudo iniciar sesión/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /correo o contraseña incorrectos/i,
+    );
+  });
+
+  it("renders the lockout copy with the retry window for a 429 lockout", () => {
+    isError = true;
+    mutationError = {
+      name: "ApiError",
+      status: 429,
+      detail: { code: "auth.lockout_active", retry_after_seconds: 600 },
+    };
+    renderLogin();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /demasiados intentos\. intenta de nuevo en 10 minutos/i,
+    );
   });
 });

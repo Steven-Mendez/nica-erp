@@ -9,6 +9,11 @@
 // `user.not_found`. The mapper maps each to a user-facing message plus an
 // outcome (toast | form | redirect | silent) so the route only has to render
 // the message; the navigation / toast wiring is centralised here.
+//
+// `messageForProblem` is the inline-display sibling: it turns a parsed
+// `ProblemDetail` into the user-facing Spanish copy used by
+// `<FormErrorAlert>` and direct callers. It NEVER renders the raw
+// English code — unknown codes fall through to a generic copy.
 
 export interface ProblemDetail {
   type?: string;
@@ -17,6 +22,7 @@ export interface ProblemDetail {
   detail?: string;
   code?: string;
   retry_after_seconds?: number;
+  scope?: "identifier" | "ip" | "none";
   errors?: Array<{ pointer: string; message: string }>;
 }
 
@@ -98,3 +104,63 @@ const extractDetail = (input: unknown): unknown => {
   }
   return input;
 };
+
+// ---------------------------------------------------------------------
+// Inline-display registry (Spanish copy).
+// ---------------------------------------------------------------------
+
+const GENERIC_FALLBACK = "Ocurrió un error. Intenta de nuevo.";
+
+/**
+ * Render the lockout copy with the `Retry-After` window rounded up to
+ * the nearest minute (with a 1-minute floor). 600s → "10 minutos",
+ * 125s → "3 minutos", anything < 60s → "1 minuto".
+ */
+export const formatLockoutMinutes = (retryAfterSeconds: number | undefined): string => {
+  const seconds = retryAfterSeconds && retryAfterSeconds > 0 ? retryAfterSeconds : 60;
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  return minutes === 1 ? "1 minuto" : `${minutes} minutos`;
+};
+
+const SPANISH_BY_CODE: Record<string, (p: ProblemDetail) => string> = {
+  "auth.invalid_credentials": () => "Correo o contraseña incorrectos.",
+  "auth.lockout_active": (p) =>
+    `Demasiados intentos. Intenta de nuevo en ${formatLockoutMinutes(p.retry_after_seconds)}.`,
+  "auth.invalid_confirmation_code": () =>
+    "Código incorrecto o expirado. Solicita uno nuevo.",
+  "auth.signup_email_not_confirmed": () =>
+    "Confirma tu correo antes de iniciar sesión.",
+  "auth.token_expired": () => "Tu sesión expiró. Inicia sesión de nuevo.",
+  "auth.reset_token_used": () =>
+    "Este enlace ya fue utilizado. Solicita uno nuevo.",
+  "auth.reset_token_expired": () => "El enlace expiró. Solicita uno nuevo.",
+};
+
+/**
+ * Translate an `ApiError`'s parsed problem body (or anything shaped
+ * like a `ProblemDetail`) into the user-facing Spanish copy used by
+ * `<FormErrorAlert>`. Anything not recognised falls through to the
+ * generic copy; the raw backend code is never surfaced to the user.
+ */
+export const messageForProblem = (input: unknown): string => {
+  const detail = extractDetail(input);
+  if (!isProblemDetail(detail)) {
+    return GENERIC_FALLBACK;
+  }
+  if (detail.code !== undefined) {
+    const formatter = SPANISH_BY_CODE[detail.code];
+    if (formatter !== undefined) {
+      return formatter(detail);
+    }
+  }
+  return GENERIC_FALLBACK;
+};
+
+/**
+ * Identifies the codes ``messageForProblem`` knows about. Used by the
+ * unit test that asserts every code emitted by the auth router has a
+ * registry entry.
+ */
+export const KNOWN_AUTH_PROBLEM_CODES: readonly string[] = Object.freeze(
+  Object.keys(SPANISH_BY_CODE),
+);

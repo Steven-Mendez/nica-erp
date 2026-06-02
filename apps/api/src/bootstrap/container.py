@@ -37,7 +37,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +45,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bootstrap.db import get_session_factory
 from bootstrap.settings import get_settings
 from contexts.identity.application.ports.outbound import EmailSender, IdentityProvider
+
+if TYPE_CHECKING:
+    from contexts.identity.application.login_attempt_throttle import (
+        LoginAttemptThrottle,
+    )
 from contexts.tenants.application.ports.outbound import (
     InvitationRepository,
     InvitationTokenGenerator,
@@ -253,6 +258,63 @@ def build_invitation_token_generator() -> InvitationTokenGenerator:
     )
 
 
+@lru_cache(maxsize=1)
+def build_login_throttle() -> LoginAttemptThrottle:
+    """Process-wide singleton for the login-attempt throttle.
+
+    Local + test profiles get the in-memory adapter (the failure
+    counters live inside this single process — fine for development
+    and the test fixtures that synthesise time). The AWS profile
+    builds the Redis adapter against ``settings.redis_url``; if that
+    is empty (Redis not yet provisioned) we fall back to the
+    in-memory adapter and log a one-time warning. Both adapters
+    honour the same threshold settings.
+    """
+    from datetime import timedelta
+
+    from contexts.identity.adapters.outbound.login_attempt_throttle_memory import (
+        InMemoryLoginAttemptThrottle,
+    )
+
+    settings = get_settings()
+    identifier_window = timedelta(seconds=settings.login_throttle_identifier_window_seconds)
+    ip_window = timedelta(seconds=settings.login_throttle_ip_window_seconds)
+
+    if settings.app_env == "aws" and settings.redis_url:
+        try:
+            from redis import Redis  # imported lazily so the local
+
+            # profile does not require the redis package at runtime.
+            from contexts.identity.adapters.outbound.login_attempt_throttle_redis import (
+                RedisLoginAttemptThrottle,
+            )
+        except ImportError:  # pragma: no cover — defensive
+            pass
+        else:
+            client = Redis.from_url(settings.redis_url)
+            return RedisLoginAttemptThrottle(
+                client=client,
+                identifier_limit=settings.login_throttle_identifier_limit,
+                identifier_window=identifier_window,
+                ip_limit=settings.login_throttle_ip_limit,
+                ip_window=ip_window,
+            )
+
+    throttle: LoginAttemptThrottle = InMemoryLoginAttemptThrottle(
+        identifier_limit=settings.login_throttle_identifier_limit,
+        identifier_window=identifier_window,
+        ip_limit=settings.login_throttle_ip_limit,
+        ip_window=ip_window,
+    )
+    return throttle
+
+
+def get_login_throttle() -> LoginAttemptThrottle:
+    """FastAPI dependency-friendly wrapper around the singleton builder."""
+
+    return build_login_throttle()
+
+
 __all__ = [
     "build_email_sender",
     "build_identity_provider",
@@ -260,7 +322,9 @@ __all__ = [
     "build_identity_provider_for_request",
     "build_invitation_repository",
     "build_invitation_token_generator",
+    "build_login_throttle",
     "build_membership_repository",
     "build_request_uow",
     "build_tenant_repository",
+    "get_login_throttle",
 ]

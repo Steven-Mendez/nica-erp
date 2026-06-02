@@ -39,10 +39,16 @@ interface MutationOverrides {
   outcome?: "success" | "noop";
   isPending?: boolean;
   isError?: boolean;
+  error?: unknown;
 }
 
 function installResetMutation(overrides: MutationOverrides = {}) {
-  const { outcome = "success", isPending = false, isError = false } = overrides;
+  const {
+    outcome = "success",
+    isPending = false,
+    isError = false,
+    error = null,
+  } = overrides;
   useResetMock.mockReturnValue({
     mutate: (
       vars: { email: string; code: string; new_password: string },
@@ -53,6 +59,7 @@ function installResetMutation(overrides: MutationOverrides = {}) {
     },
     isPending,
     isError,
+    error,
   });
 }
 
@@ -118,10 +125,20 @@ describe("ResetPasswordRoute", () => {
     });
   });
 
-  it("renders the destructive Alert when the mutation isError is true (e.g. expired token)", () => {
-    installResetMutation({ isError: true, outcome: "noop" });
+  it("renders the FormErrorAlert with the documented copy for a used reset token", () => {
+    installResetMutation({
+      isError: true,
+      outcome: "noop",
+      error: {
+        name: "ApiError",
+        status: 400,
+        detail: { code: "auth.reset_token_used" },
+      },
+    });
     renderReset();
-    expect(screen.getByText(/No se pudo restablecer la contraseña/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /este enlace ya fue utilizado\. solicita uno nuevo\./i,
+    );
   });
 
   it("shows 'Restableciendo...' and disables the submit while the mutation is pending", () => {

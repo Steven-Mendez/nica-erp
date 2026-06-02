@@ -14,6 +14,7 @@ dependencies = [
   "pyjwt[crypto]>=2.9,<3.0",
   "pydantic>=2.7,<3.0",
   "pydantic-settings>=2.4,<3.0",
+  "redis>=5.0,<6.0",
   "sqlalchemy[asyncio]>=2.0,<3.0",
   "structlog>=24,<25",
   "uvicorn[standard]>=0.30,<1.0",
@@ -60,6 +61,7 @@ ignore = []
 "**/contexts/identity/adapters/inbound/http/router.py" = ["B008"]
 "**/contexts/tenants/adapters/inbound/http/dependencies.py" = ["B008"]
 "**/contexts/tenants/adapters/inbound/http/router.py" = ["B008"]
+"**/tests/integration/contexts/identity/http/test_login_throttle.py" = ["B008"]
 # Persistence adapters keep each ``text(...)`` call on a single line so
 # the per-call ``# nosemgrep`` suppressor is unambiguous; the trailing
 # comment naturally exceeds the 100-char line budget.

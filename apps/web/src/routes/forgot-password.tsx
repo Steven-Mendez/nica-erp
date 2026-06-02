@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Controller, useForm } from "react-hook-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FormErrorAlert } from "@/components/form/form-error-alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,7 @@ export function ForgotPasswordRoute() {
               </AlertDescription>
             </Alert>
           ) : null}
+          <FormErrorAlert error={mutation.error} />
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
             {mutation.isPending ? "Enviando..." : "Enviar código"}
           </Button>

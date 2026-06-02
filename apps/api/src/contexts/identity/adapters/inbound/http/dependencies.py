@@ -24,15 +24,19 @@ from __future__ import annotations
 
 from typing import cast
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 
-from bootstrap.container import build_identity_provider_for_request
+from bootstrap.container import (
+    build_identity_provider_for_request,
+    get_login_throttle,
+)
 from bootstrap.db import get_uow
 from bootstrap.dependencies import get_request_uow as _shared_request_uow
 from contexts.identity.adapters.outbound.persistence.sqlalchemy.user_repository import (
     UserRepositorySqlAlchemy,
 )
 from contexts.identity.application.errors import InvalidCredentialsError
+from contexts.identity.application.login_attempt_throttle import LoginAttemptThrottle
 from contexts.identity.application.ports.outbound import IdentityProvider
 from contexts.identity.application.use_cases import (
     Authenticate,
@@ -105,9 +109,23 @@ def get_resend_code(
 
 
 def get_authenticate(
+    request: Request,
     idp: IdentityProvider = Depends(get_identity_provider),
+    throttle: LoginAttemptThrottle = Depends(get_login_throttle),
 ) -> Authenticate:
-    return Authenticate(identity_provider=idp)
+    # FastAPI's `request.client.host` is the immediate peer (typically
+    # the in-cluster ALB / Nginx). When deployed behind a proxy we
+    # need the client-attributed IP from `X-Forwarded-For`'s leftmost
+    # entry to throttle per-end-user, not per-proxy. Fall back to the
+    # peer when no XFF header is present (local dev).
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        source_ip = forwarded.split(",", 1)[0].strip()
+    elif request.client is not None:
+        source_ip = request.client.host
+    else:
+        source_ip = "unknown"
+    return Authenticate(identity_provider=idp, throttle=throttle, source_ip=source_ip)
 
 
 def get_refresh_token(

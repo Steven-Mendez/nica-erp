@@ -6,7 +6,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FormErrorAlert } from "@/components/form/form-error-alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -107,13 +107,8 @@ export function ResetPasswordRoute() {
               </Field>
             )}
           />
-          {mutation.isError ? (
-            <Alert variant="destructive">
-              <AlertDescription>
-                No se pudo restablecer la contraseña. Verifica el código e intenta de nuevo.
-              </AlertDescription>
-            </Alert>
-          ) : null}
+          <FormErrorAlert error={mutation.error} />
+
           <Button type="submit" className="w-full" disabled={mutation.isPending}>
             {mutation.isPending ? "Restableciendo..." : "Restablecer contraseña"}
           </Button>
