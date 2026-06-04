@@ -1533,3 +1533,105 @@ infra change.
 - Sprint 02 §Endpoints — the `confirm-signup` endpoint owned by
   the `identity` context; this sprint extends its request body
   shape only.
+
+## Sprint follow-up — fix identity-context wrong-input statuses (2026-06-03)
+
+The 2026-06-03 audit found a second class of misclassified errors on
+the public auth endpoints. The signup-OTP path, the password-reset
+path, and the resend-cooldown path all surfaced the same response:
+`401 application/problem+json` with `code: "auth.invalid_credentials"`.
+That:
+
+- collapsed three semantically distinct failures into one
+  diagnostic — operators saw the same generic "credentials" copy
+  for an OTP typo as for a wrong login;
+- forced the SPA's 401 interceptor to carry a `__bearerAttached`
+  discriminator (sprint 3.x follow-up earlier in this document) just
+  so a wrong OTP on `/confirm` would not destroy the session and
+  redirect to `/login`;
+- left the `messageForProblem` registry entries that the frontend
+  *already* shipped for the documented codes
+  (`auth.invalid_confirmation_code`, `auth.reset_token_used`,
+  `auth.reset_token_expired`) as dead code, because the backend never
+  emitted them.
+
+### Root cause
+
+`InvalidCredentialsError` is the identity context's catch-all for
+"the input did not match what the IdP expected." It was raised in
+eight distinct call sites across `local.py` / `cognito.py` and every
+one mapped to 401 in
+`apps/api/src/contexts/identity/adapters/inbound/http/errors.py`. The
+adapter even acknowledged the mismatch on the resend-cooldown branch
+with a misleading comment claiming the HTTP adapter mapped it to 400
+(it did not — the mapper produced 401).
+
+### Scope
+
+- Split `InvalidCredentialsError` into four typed application
+  exceptions, one per wrong-input failure mode:
+  - `InvalidConfirmationCodeError` (wrong / expired OTP).
+  - `InvalidResetCodeError` (used / unknown / hash-mismatched reset
+    code) and `ExpiredResetCodeError` (its subclass for the explicit
+    TTL-elapsed case).
+  - `ResendThrottledError(retry_after_seconds: int)` for the
+    per-account resend cooldown.
+- Raise the new types from both the local and Cognito IdP adapters
+  at the relevant call sites. The Cognito adapter cannot read the
+  real `retry_after_seconds` for `LimitExceededException`, so it
+  uses a 60-second fallback that matches the AWS default; the local
+  adapter computes the actual remaining cooldown.
+- Translate each new type in the HTTP error mapper:
+  - `InvalidConfirmationCodeError` → `400 auth.invalid_confirmation_code`.
+  - `InvalidResetCodeError` → `410 auth.reset_token_used`.
+  - `ExpiredResetCodeError` → `410 auth.reset_token_expired`
+    (registered FIRST so the subclass wins).
+  - `ResendThrottledError` → `429 auth.resend_throttled` with a
+    `Retry-After: <seconds>` header and `retry_after_seconds` in the
+    body.
+- Login keeps its 401 surface for wrong credentials — the
+  `__bearerAttached` discriminator stays useful for that one
+  remaining case.
+- Add `auth.resend_throttled` to the frontend `messageForProblem`
+  registry (Spanish copy: "Espera unos segundos antes de pedir otro
+  código.") and to `KNOWN_AUTH_PROBLEM_CODES`. The other three
+  codes were already in the registry.
+- Extend the OpenAPI `responses=` hints on `/v1/auth/confirm-signup`,
+  `/v1/auth/password/reset`, and `/v1/auth/resend-code` so the
+  regenerated `apps/web/src/api/schema.d.ts` advertises the new
+  statuses.
+
+### Verifiable outcome
+
+- Backend e2e: `POST /v1/auth/confirm-signup` with a wrong OTP →
+  `400 application/problem+json` with `code:
+  "auth.invalid_confirmation_code"`. `POST /v1/auth/password/reset`
+  reused → `410 auth.reset_token_used`. A second `POST
+  /v1/auth/resend-code` within the cooldown window → `429
+  auth.resend_throttled` with `Retry-After` header and
+  `retry_after_seconds` body field.
+- Backend e2e regression: `POST /v1/auth/login` with a wrong
+  password still returns `401 auth.invalid_credentials`; `GET /v1/me`
+  with no bearer still returns `401 auth.invalid_credentials`.
+- Backend unit / integration tests for the local and Cognito
+  adapters assert the new exception types at the raise sites and the
+  new `(status, code, title)` triples at the mapping layer.
+- Frontend unit test asserts `messageForProblem({ code:
+  "auth.resend_throttled" })` returns the documented Spanish copy
+  and that `KNOWN_AUTH_PROBLEM_CODES` includes the new entry.
+
+### Non-goals
+
+- No change to login's 401 contract — the `__bearerAttached` flag in
+  the 401 interceptor still discriminates a "wrong login credentials"
+  401 from a bearer-attached session-lost 401.
+- No new `RateLimitedError` base class. The resend cooldown is the
+  only resend-throttle site today; login-throttle has its own typed
+  error already.
+- No new ADR. The HTTP statuses move within the documented 4xx
+  envelope, and the problem codes were already promised by the
+  `frontend-auth-error-feedback` capability. This is implementation
+  realignment, not an architectural decision.
+- No interceptor refactor. The `__bearerAttached` flag stays as the
+  safer default in case a future endpoint adds a 401 surface where
+  no bearer is attached.

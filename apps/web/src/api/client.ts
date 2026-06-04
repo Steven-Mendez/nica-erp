@@ -22,6 +22,11 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 export const api = createClient<paths>({
   baseUrl,
   fetch: fetchWithAuth,
+  // Audit F-005: send credentials on every call so the browser ships
+  // the httpOnly ``nica_erp_rt`` cookie back to /v1/auth/refresh and
+  // /v1/auth/logout. Other endpoints ignore the cookie (it is path-
+  // scoped to /v1/auth) so this is a no-op outside the auth surface.
+  credentials: "include",
 });
 
 export type Paths = paths;

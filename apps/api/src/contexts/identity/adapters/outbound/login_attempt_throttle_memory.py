@@ -6,6 +6,12 @@ server would be heavy-weight. Stores failure timestamps in two
 to the configured sliding window on every call. Thread-safe via a
 single coarse lock; the throughput cost is acceptable at the volumes
 this adapter sees (test suites, single-process dev server).
+
+Identifier-scope lockouts escalate exponentially per audit F-023:
+3 → 30 → 300 → 1800 seconds across consecutive lockout cycles. The
+counter resets on a successful login. IP-scope keeps a fixed 600-second
+``retry_after_seconds`` once 20 failures fall inside the 10-minute
+window.
 """
 
 from __future__ import annotations
@@ -18,6 +24,12 @@ from contexts.identity.application.login_attempt_throttle import (
     LockoutState,
     LoginAttemptThrottle,
 )
+
+# Backoff schedule (seconds) indexed by consecutive_lockouts - 1.
+# Beyond the last entry the lockout remains at the final tier until a
+# successful login resets the counter.
+_IDENTIFIER_BACKOFF_SCHEDULE: tuple[int, ...] = (3, 30, 300, 1800)
+_IP_LOCKOUT_SECONDS = 600
 
 
 class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
@@ -35,7 +47,7 @@ class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
         identifier_limit: int = 5,
         identifier_window: timedelta = timedelta(minutes=15),
         ip_limit: int = 20,
-        ip_window: timedelta = timedelta(minutes=15),
+        ip_window: timedelta = timedelta(minutes=10),
     ) -> None:
         if identifier_limit < 1 or ip_limit < 1:
             raise ValueError("limits must be >= 1")
@@ -45,6 +57,8 @@ class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
         self._ip_window = ip_window
         self._identifier_hits: dict[str, deque[datetime]] = defaultdict(deque)
         self._ip_hits: dict[str, deque[datetime]] = defaultdict(deque)
+        self._consecutive_lockouts: dict[str, int] = defaultdict(int)
+        self._lockout_until: dict[str, datetime] = {}
         self._lock = Lock()
 
     # ---- LoginAttemptThrottle Protocol --------------------------------
@@ -52,18 +66,50 @@ class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
     def check(self, *, identifier: str, source_ip: str, when: datetime) -> LockoutState:
         identifier_key = self._normalise_identifier(identifier)
         with self._lock:
+            # Honour any active identifier lockout from the previous
+            # threshold trip; the rolling window only counts the
+            # failures inside the *current* cycle, not the historical
+            # ones that already triggered a lock.
+            locked_until = self._lockout_until.get(identifier_key)
+            if locked_until is not None and locked_until > when:
+                seconds = max(int((locked_until - when).total_seconds()), 1)
+                return LockoutState(
+                    locked=True,
+                    retry_after_seconds=seconds,
+                    scope="identifier",
+                )
             self._prune_locked(identifier_key, source_ip, when)
             identifier_count = len(self._identifier_hits.get(identifier_key, ()))
             ip_count = len(self._ip_hits.get(source_ip, ()))
             # Identifier wins ties — it's the more specific signal.
             if identifier_count >= self._identifier_limit:
-                seconds = self._retry_after_locked(
-                    self._identifier_hits[identifier_key], self._identifier_window, when
+                # Escalate to the next backoff tier.
+                self._consecutive_lockouts[identifier_key] += 1
+                tier = min(
+                    self._consecutive_lockouts[identifier_key],
+                    len(_IDENTIFIER_BACKOFF_SCHEDULE),
                 )
-                return LockoutState(locked=True, retry_after_seconds=seconds, scope="identifier")
+                seconds = _IDENTIFIER_BACKOFF_SCHEDULE[tier - 1]
+                self._lockout_until[identifier_key] = when + timedelta(seconds=seconds)
+                # Reset the in-window failure counter so the next cycle
+                # starts fresh; the consecutive-lockouts counter
+                # remembers the escalation across cycles.
+                self._identifier_hits.pop(identifier_key, None)
+                return LockoutState(
+                    locked=True,
+                    retry_after_seconds=seconds,
+                    scope="identifier",
+                )
             if ip_count >= self._ip_limit:
-                seconds = self._retry_after_locked(self._ip_hits[source_ip], self._ip_window, when)
-                return LockoutState(locked=True, retry_after_seconds=seconds, scope="ip")
+                # IP-scope lockout: fixed 10-minute window per audit
+                # F-023, so the SPA / Spanish copy can show a stable
+                # 600-second wait regardless of when in the window
+                # the threshold was crossed.
+                return LockoutState(
+                    locked=True,
+                    retry_after_seconds=_IP_LOCKOUT_SECONDS,
+                    scope="ip",
+                )
             return LockoutState(locked=False, retry_after_seconds=0, scope="none")
 
     def record_failure(self, *, identifier: str, source_ip: str, when: datetime) -> None:
@@ -76,6 +122,8 @@ class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
         identifier_key = self._normalise_identifier(identifier)
         with self._lock:
             self._identifier_hits.pop(identifier_key, None)
+            self._consecutive_lockouts.pop(identifier_key, None)
+            self._lockout_until.pop(identifier_key, None)
 
     # ---- helpers ------------------------------------------------------
 
@@ -103,17 +151,6 @@ class InMemoryLoginAttemptThrottle(LoginAttemptThrottle):
                 ip_deque.popleft()
             if not ip_deque:
                 self._ip_hits.pop(source_ip, None)
-
-    @staticmethod
-    def _retry_after_locked(hits: deque[datetime], window: timedelta, when: datetime) -> int:
-        # Earliest hit + window = moment the count will drop below the
-        # threshold (sliding window). Clamp to >= 1 since the spec
-        # demands a meaningful Retry-After.
-        if not hits:
-            return 1
-        unlock_at = hits[0] + window
-        seconds = int((unlock_at - when).total_seconds())
-        return max(seconds, 1)
 
 
 __all__ = ["InMemoryLoginAttemptThrottle"]

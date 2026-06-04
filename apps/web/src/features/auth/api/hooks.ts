@@ -52,7 +52,6 @@ export const useMeQuery = (): UseQueryResult<Me, Error> => {
 const storeTokens = (bundle: TokenBundle): void => {
   setTokens({
     access: bundle.access_token,
-    refresh: bundle.refresh_token,
     id: bundle.id_token,
   });
 };

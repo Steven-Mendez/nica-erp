@@ -9,12 +9,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-_MIN_LENGTH = 8
+_MIN_LENGTH = 12
+_MAX_LENGTH = 128
 _SYMBOLS = "!@#$%^&*()_+-=[]{}|;:,.<>?/"
 
 
 class PasswordPolicyError(ValueError):
-    """Raised when a password fails the configured policy."""
+    """Raised when a password fails the configured policy.
+
+    ``failed_rules`` carries the structured list of rule names that
+    failed so the HTTP layer can surface each rule individually. Empty
+    by default for back-compat with callers that only need the message.
+    """
+
+    def __init__(self, message: str, *, failed_rules: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.failed_rules: list[str] = list(failed_rules or [])
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,8 +36,11 @@ class Password:
 
     def validate_policy(self) -> None:
         v = self.value
+        failed: list[str] = []
         if len(v) < _MIN_LENGTH:
-            raise PasswordPolicyError(f"Password must be at least {_MIN_LENGTH} characters long")
+            failed.append("min_length")
+        if len(v) > _MAX_LENGTH:
+            failed.append("max_length")
         has_upper = False
         has_lower = False
         has_digit = False
@@ -42,15 +55,15 @@ class Password:
             elif ch in _SYMBOLS:
                 has_symbol = True
         if not has_upper:
-            raise PasswordPolicyError("Password must contain at least one uppercase letter")
+            failed.append("uppercase_missing")
         if not has_lower:
-            raise PasswordPolicyError("Password must contain at least one lowercase letter")
+            failed.append("lowercase_missing")
         if not has_digit:
-            raise PasswordPolicyError("Password must contain at least one digit")
+            failed.append("digit_missing")
         if not has_symbol:
-            raise PasswordPolicyError(
-                f"Password must contain at least one symbol from {_SYMBOLS!r}"
-            )
+            failed.append("symbol_missing")
+        if failed:
+            raise PasswordPolicyError(f"Password fails policy: {failed}", failed_rules=failed)
 
 
 __all__ = ["Password", "PasswordPolicyError"]

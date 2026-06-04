@@ -52,7 +52,17 @@ async def test_invite_member_persists_invitation_and_emits_outbox(
 
     # Email is sent OUTSIDE the UoW; the recorder captures it.
     assert len(email_sender.sent) == 1
-    assert email_sender.sent[0]["to"] == "invitee@test.dev"
+    sent = email_sender.sent[0]
+    assert sent["to"] == "invitee@test.dev"
+    # Audit F-024: subject + body are bilingual with Spanish first.
+    assert sent["subject"].startswith("nica-erp: invitación a ")
+    assert "/ invitation to " in sent["subject"]
+    assert sent["text"].startswith("Invitación a ")
+    assert "Has sido invitado a unirte" in sent["text"]
+    assert "expira en 7 días" in sent["text"]
+    # English block follows as secondary copy.
+    assert "Invitation to " in sent["text"]
+    assert "expires in 7 days" in sent["text"]
 
 
 async def test_invite_member_rejects_owner_role(

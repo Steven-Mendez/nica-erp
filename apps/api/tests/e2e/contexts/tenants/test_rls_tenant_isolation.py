@@ -48,8 +48,8 @@ def _email_for(recorder: RecordingEmailSender, address: str) -> str:
 
 async def _signup_confirm_login(
     client: AsyncClient, recorder: RecordingEmailSender, email: str
-) -> dict[str, Any]:
-    """Register + confirm + log in one user; return the login token bundle."""
+) -> tuple[dict[str, Any], str]:
+    """Register + confirm + log in one user; return (tokens, refresh_cookie)."""
 
     register = await client.post(
         "/v1/auth/register", json={"email": email, "password": E2E_PASSWORD}
@@ -62,7 +62,9 @@ async def _signup_confirm_login(
 
     login = await client.post("/v1/auth/login", json={"email": email, "password": E2E_PASSWORD})
     assert login.status_code == 200, login.text
-    return login.json()
+    refresh_cookie = login.cookies.get("nica_erp_rt")
+    assert refresh_cookie is not None, "login MUST set the nica_erp_rt cookie"
+    return login.json(), refresh_cookie
 
 
 def _tenant_payload(name: str, ruc: str) -> dict[str, Any]:
@@ -84,6 +86,7 @@ def _tenant_payload(name: str, ruc: str) -> dict[str, Any]:
 async def _create_and_switch(
     client: AsyncClient,
     tokens: dict[str, Any],
+    refresh_cookie: str,
     *,
     name: str,
     ruc: str,
@@ -99,10 +102,15 @@ async def _create_and_switch(
     assert create.status_code == 201, create.text
     tenant_id = create.json()["id"]
 
+    # The refresh token rides in the `nica_erp_rt` httpOnly cookie. We
+    # extract it from the login response (httpx does NOT auto-store
+    # `Secure` cookies over plain http:// in tests) and re-attach it
+    # explicitly here.
     switch = await client.post(
         f"/v1/tenants/{tenant_id}/switch",
         headers={"Authorization": f"Bearer {access}"},
-        json={"refresh_token": tokens["refresh_token"]},
+        json={},
+        cookies={"nica_erp_rt": refresh_cookie},
     )
     assert switch.status_code == 200, switch.text
     return tenant_id, switch.json()["access_token"]
@@ -118,14 +126,14 @@ async def test_user_b_cannot_observe_tenant_a_invitations(
 
     client, recorder = wired_app
 
-    tokens_a = await _signup_confirm_login(client, recorder, "a@test.dev")
-    tokens_b = await _signup_confirm_login(client, recorder, "b@test.dev")
+    tokens_a, refresh_a = await _signup_confirm_login(client, recorder, "a@test.dev")
+    tokens_b, refresh_b = await _signup_confirm_login(client, recorder, "b@test.dev")
 
     tenant_a_id, access_a_in_a = await _create_and_switch(
-        client, tokens_a, name="Empresa A", ruc="0010101800010X"
+        client, tokens_a, refresh_a, name="Empresa A", ruc="0010101800010X"
     )
     tenant_b_id, access_b_in_b = await _create_and_switch(
-        client, tokens_b, name="Empresa B", ruc="0010101800020Y"
+        client, tokens_b, refresh_b, name="Empresa B", ruc="0010101800020Y"
     )
 
     # A invites a third party so tenant A has at least one invitation row
@@ -171,14 +179,14 @@ async def test_forged_jwt_is_rejected_by_tenant_middleware(
 
     client, recorder = wired_app
 
-    tokens_a = await _signup_confirm_login(client, recorder, "a2@test.dev")
-    tokens_b = await _signup_confirm_login(client, recorder, "b2@test.dev")
+    tokens_a, refresh_a = await _signup_confirm_login(client, recorder, "a2@test.dev")
+    tokens_b, refresh_b = await _signup_confirm_login(client, recorder, "b2@test.dev")
 
     tenant_a_id, _ = await _create_and_switch(
-        client, tokens_a, name="Empresa A2", ruc="0010101800030Z"
+        client, tokens_a, refresh_a, name="Empresa A2", ruc="0010101800030Z"
     )
     _tenant_b_id, _ = await _create_and_switch(
-        client, tokens_b, name="Empresa B2", ruc="0010101800040W"
+        client, tokens_b, refresh_b, name="Empresa B2", ruc="0010101800040W"
     )
 
     # Recover B's user id from a /v1/me call signed with B's real access.

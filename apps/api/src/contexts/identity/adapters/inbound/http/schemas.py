@@ -53,7 +53,23 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str = Field(examples=[_EXAMPLE_REFRESH])
+    # Optional: the canonical carrier is the `nica_erp_rt` httpOnly
+    # cookie. The body field stays for one transition cycle so older
+    # SPA builds still work; new builds POST `{}` and rely on the
+    # cookie. The endpoint surfaces a 401 when neither source carries
+    # a token.
+    refresh_token: str | None = Field(default=None, examples=[_EXAMPLE_REFRESH])
+
+
+class LogoutRequest(BaseModel):
+    """Optional logout body — carries the caller's refresh token so
+    the server can revoke its jti (audit F-016). The SPA still PUTs
+    this on the body for the transitional period before the httpOnly
+    cookie is rolled out; once the cookie ships the field becomes
+    advisory.
+    """
+
+    refresh_token: str | None = Field(default=None, examples=[_EXAMPLE_REFRESH])
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -115,12 +131,16 @@ class ForgotResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    # The refresh token is delivered exclusively via the
+    # `Set-Cookie: nica_erp_rt=…; HttpOnly; …; Path=/v1/auth` header
+    # set by the matching endpoints. The body carries only the access
+    # and id tokens so a successful XSS cannot exfiltrate the long-
+    # lived refresh credential.
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
                 {
                     "access_token": _EXAMPLE_TOKEN,
-                    "refresh_token": _EXAMPLE_REFRESH,
                     "id_token": _EXAMPLE_TOKEN,
                     "token_type": "Bearer",
                 }
@@ -129,7 +149,6 @@ class TokenResponse(BaseModel):
     )
 
     access_token: str = Field(examples=[_EXAMPLE_TOKEN])
-    refresh_token: str = Field(examples=[_EXAMPLE_REFRESH])
     id_token: str = Field(examples=[_EXAMPLE_TOKEN])
     token_type: Literal["Bearer"] = "Bearer"
 
@@ -199,6 +218,7 @@ __all__ = [
     "ForgotPasswordRequest",
     "ForgotResponse",
     "LoginRequest",
+    "LogoutRequest",
     "MeResponse",
     "ProblemDetail",
     "RefreshRequest",

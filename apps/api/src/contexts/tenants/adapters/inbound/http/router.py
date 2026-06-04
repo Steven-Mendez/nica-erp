@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from bootstrap.db import get_uow as get_request_uow
@@ -94,7 +94,7 @@ from contexts.tenants.application.use_cases.update_tenant import UpdateTenantCom
 from contexts.tenants.domain import AuthorizationDgi, Role, Tenant
 from shared_kernel.adapters.context import CurrentUser
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
-from shared_kernel.permissions import Actor
+from shared_kernel.permissions import Actor, ForbiddenError
 
 router = APIRouter()
 
@@ -222,6 +222,8 @@ async def get_tenant(
     _actor: Actor = Depends(require("tenant:read")),
     uc: GetTenant = Depends(get_get_tenant),
 ) -> TenantResponse:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     tenant = await uc.execute(tenant_id=tenant_id)
     return _tenant_to_response(tenant)
 
@@ -241,6 +243,8 @@ async def update_tenant(
     _actor: Actor = Depends(require("tenant:write")),
     uc: UpdateTenant = Depends(get_update_tenant),
 ) -> TenantResponse:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     tenant = await uc.execute(
         UpdateTenantCommand(
             tenant_id=tenant_id,
@@ -272,21 +276,45 @@ async def update_tenant(
 )
 async def switch_active_tenant(
     tenant_id: UUID,
+    response: Response,
     body: SwitchTenantRequest,
+    nica_erp_rt: str | None = Cookie(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     uc: SwitchActiveTenant = Depends(get_switch_active_tenant),
 ) -> SwitchTokenResponse:
+    # Prefer the httpOnly cookie. The body field is kept nullable for
+    # one transition cycle so older SPA builds keep working; new
+    # builds POST `{}` and rely on the cookie.
+    refresh = nica_erp_rt or body.refresh_token
+    if refresh is None:
+        from contexts.identity.application.errors import InvalidCredentialsError
+
+        raise InvalidCredentialsError("missing refresh token")
     identity = await uc.execute(
         SwitchActiveTenantCommand(
             actor_user_id=current_user.user_id,
             external_sub=current_user.external_sub,
             target_tenant_id=tenant_id,
-            refresh_token=body.refresh_token,
+            refresh_token=refresh,
         )
+    )
+    # Pin the rotated refresh token to the httpOnly cookie. The body
+    # carries only the access + id tokens; an XSS that scrapes the
+    # JSON response no longer leaks a 30-day refresh credential.
+    response.set_cookie(
+        key="nica_erp_rt",
+        value=identity.refresh_token,
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        # `Path=/v1` covers both `/v1/auth/*` (refresh, logout) and the
+        # tenants endpoints (`/v1/tenants/.../switch`,
+        # `/v1/invitations/accept`) that rotate the session.
+        path="/v1",
     )
     return SwitchTokenResponse(
         access_token=identity.access_token,
-        refresh_token=identity.refresh_token,
         id_token=identity.id_token,
     )
 
@@ -314,6 +342,8 @@ async def list_members(
     _actor: Actor = Depends(require("members:read")),
     uc: ListMembers = Depends(get_list_members),
 ) -> MembersPageResponse:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     query = ListMembersQuery(
         tenant_id=tenant_id,
         q=q,
@@ -358,6 +388,8 @@ async def update_member_role(
     _actor: Actor = Depends(require("members:update-role")),
     uc: UpdateMemberRole = Depends(get_update_member_role),
 ) -> None:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     await uc.execute(
         UpdateMemberRoleCommand(tenant_id=tenant_id, target_user_id=user_id, new_role=body.role)
     )
@@ -375,6 +407,8 @@ async def remove_member(
     _actor: Actor = Depends(require("members:remove")),
     uc: RemoveMember = Depends(get_remove_member),
 ) -> None:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     await uc.execute(RemoveMemberCommand(tenant_id=tenant_id, target_user_id=user_id))
 
 
@@ -392,6 +426,8 @@ async def list_invitations(
     _actor: Actor = Depends(require("members:read")),
     uc: ListInvitations = Depends(get_list_invitations),
 ) -> list[InvitationResponse]:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     invitations = await uc.execute(tenant_id=tenant_id)
     return [
         InvitationResponse(
@@ -421,6 +457,8 @@ async def invite_member(
     _actor: Actor = Depends(require("members:invite")),
     uc: InviteMember = Depends(get_invite_member),
 ) -> InvitationResponse:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     result = await uc.execute(
         InviteMemberCommand(
             tenant_id=tenant_id,
@@ -453,6 +491,8 @@ async def cancel_invitation(
     _actor: Actor = Depends(require("members:invite")),
     uc: CancelInvitation = Depends(get_cancel_invitation),
 ) -> None:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     await uc.execute(CancelInvitationCommand(tenant_id=tenant_id, invitation_id=invitation_id))
 
 
@@ -470,6 +510,8 @@ async def resend_invitation(
     uc: ResendInvitation = Depends(get_resend_invitation),
     invitation_repo: InvitationRepository = Depends(get_invitation_repository),
 ) -> InvitationResponse:
+    if tenant_id != _actor.tenant_id:
+        raise ForbiddenError(missing=[])
     result = await uc.execute(
         ResendInvitationCommand(
             tenant_id=tenant_id,
@@ -509,17 +551,26 @@ class AcceptInvitationByBodyRequest(BaseModel):
     rotates the caller's session so the new membership's tenant is
     immediately active without a follow-up
     ``POST /v1/tenants/{id}/switch`` round-trip.
+
+    ``confirmed_email`` is optional defense-in-depth (audit F-026): when
+    the SPA shows the preview to an unauthenticated visitor about to
+    sign up, it asks them to retype the invited email. The server then
+    asserts the retype matches the JWT sub before any state mutation.
     """
 
     model_config = ConfigDict(extra="forbid")
     token: str = Field(min_length=1)
     refresh_token: str | None = Field(default=None, min_length=1)
+    confirmed_email: str | None = Field(default=None, min_length=1)
 
 
 class InvitationPreviewResponse(BaseModel):
-    """Public metadata for the pre-signup screen."""
+    """Public metadata for the pre-signup screen.
 
-    email: str
+    Audit F-026: ``email`` is intentionally omitted — anyone who obtains
+    the link must NOT learn who was invited.
+    """
+
     organization_name: str
     role: str
 
@@ -532,26 +583,46 @@ class InvitationPreviewResponse(BaseModel):
 )
 async def accept_invitation_by_body(
     body: AcceptInvitationByBodyRequest,
+    response: Response,
+    nica_erp_rt: str | None = Cookie(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     uc: AcceptInvitation = Depends(get_accept_invitation),
 ) -> AcceptInvitationResponse:
     # The decision to rotate is taken from the validated
     # `CurrentUser.active_tenant` (sourced from the bearer token), not
     # from any field in the request body — see the use case for why.
+    # Refresh-token source preference: httpOnly cookie first, body
+    # second (transition fallback for older SPA builds).
+    refresh_for_rotation = nica_erp_rt or body.refresh_token
     result = await uc.execute(
         AcceptInvitationCommand(
             token=body.token,
             user_id=current_user.user_id,
+            user_email=current_user.email,
             external_sub=current_user.external_sub,
             prior_active_tenant=current_user.active_tenant,
-            refresh_token=body.refresh_token,
+            refresh_token=refresh_for_rotation,
+            confirmed_email=body.confirmed_email,
         )
     )
     tokens: AcceptInvitationTokenBundle | None = None
     if result.tokens is not None:
+        # Rotation happened: pin the new refresh token to the
+        # httpOnly cookie so the SPA never has to handle it.
+        response.set_cookie(
+            key="nica_erp_rt",
+            value=result.tokens.refresh_token,
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            # `Path=/v1` reaches every endpoint that needs the cookie
+            # (auth/refresh, auth/logout, tenants/{id}/switch,
+            # invitations/accept) without leaking to non-versioned routes.
+            path="/v1",
+        )
         tokens = AcceptInvitationTokenBundle(
             access_token=result.tokens.access_token,
-            refresh_token=result.tokens.refresh_token,
             id_token=result.tokens.id_token,
         )
     return AcceptInvitationResponse(tenant_id=result.tenant_id, role=result.role, tokens=tokens)
@@ -561,7 +632,7 @@ async def accept_invitation_by_body(
     "/v1/invitations/{token}/preview",
     response_model=InvitationPreviewResponse,
     tags=["tenants"],
-    summary="Preview an invitation (email + organization + role)",
+    summary="Preview an invitation (organization + role)",
 )
 async def preview_invitation(
     token: str,
@@ -592,7 +663,6 @@ async def preview_invitation(
         if tenant is None:  # pragma: no cover — defensive
             raise HTTPException(status_code=404, detail="Invitation not found")
         return InvitationPreviewResponse(
-            email=invitation.email,
             organization_name=tenant.name,
             role=invitation.proposed_role.value,
         )

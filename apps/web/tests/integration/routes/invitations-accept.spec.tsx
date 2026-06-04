@@ -16,17 +16,33 @@ const {
   navigateSpy,
   acceptInvitationMock,
   getAccessTokenMock,
-  getRefreshTokenMock,
   setTokensMock,
   previewInvitationMock,
-} = vi.hoisted(() => ({
-  navigateSpy: vi.fn(),
-  acceptInvitationMock: vi.fn(),
-  getAccessTokenMock: vi.fn(),
-  getRefreshTokenMock: vi.fn(),
-  setTokensMock: vi.fn(),
-  previewInvitationMock: vi.fn(),
-}));
+  logoutMutateMock,
+  logoutPendingState,
+  ApiErrorStub,
+} = vi.hoisted(() => {
+  class ApiErrorStub extends Error {
+    public readonly status: number;
+    public readonly detail: unknown;
+    constructor(label: string, status: number, detail: unknown) {
+      super(`${label} failed: ${status}`);
+      this.name = "ApiError";
+      this.status = status;
+      this.detail = detail;
+    }
+  }
+  return {
+    navigateSpy: vi.fn(),
+    acceptInvitationMock: vi.fn(),
+    getAccessTokenMock: vi.fn(),
+    setTokensMock: vi.fn(),
+    previewInvitationMock: vi.fn(),
+    logoutMutateMock: vi.fn(),
+    logoutPendingState: { value: false },
+    ApiErrorStub,
+  };
+});
 
 vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual<object>("@tanstack/react-router");
@@ -39,13 +55,20 @@ vi.mock("@tanstack/react-router", async () => {
 
 vi.mock("@/api/tokenStore", () => ({
   getAccessToken: getAccessTokenMock,
-  getRefreshToken: getRefreshTokenMock,
   setTokens: setTokensMock,
 }));
 
 vi.mock("@/features/tenants/api/endpoints", () => ({
   acceptInvitation: acceptInvitationMock,
   previewInvitation: previewInvitationMock,
+  ApiError: ApiErrorStub,
+}));
+
+vi.mock("@/features/auth/api/hooks", () => ({
+  useLogoutMutation: () => ({
+    mutate: logoutMutateMock,
+    isPending: logoutPendingState.value,
+  }),
 }));
 
 // setPickerConfirmed is a side-effect on sessionStorage; stub to avoid
@@ -83,12 +106,14 @@ beforeEach(() => {
   navigateSpy.mockReset();
   acceptInvitationMock.mockReset();
   getAccessTokenMock.mockReset();
-  getRefreshTokenMock.mockReset();
   setTokensMock.mockReset();
   previewInvitationMock.mockReset();
-  // Default: authenticated paste user without a hash token.
+  logoutMutateMock.mockReset();
+  logoutPendingState.value = false;
+  // Default: authenticated paste user without a hash token. The
+  // refresh token rides in the httpOnly cookie now, so the SPA does
+  // not pass it to acceptInvitation.
   getAccessTokenMock.mockReturnValue("access.jwt");
-  getRefreshTokenMock.mockReturnValue("refresh.jwt");
   window.location.hash = "";
 });
 
@@ -114,7 +139,7 @@ describe("AcceptInvitationRoute — paste branch (no hash, authenticated)", () =
     });
     fireEvent.click(screen.getByRole("button", { name: /Aceptar invitación/i }));
     await waitFor(() => {
-      expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste", "refresh.jwt");
+      expect(acceptInvitationMock).toHaveBeenCalledWith("inv-token-paste");
     });
     // Navigation does not fire until the promise resolves.
     expect(navigateSpy).not.toHaveBeenCalled();
@@ -180,5 +205,42 @@ describe("AcceptInvitationRoute — hash branch (unauthenticated, invalid token)
     await waitFor(() => {
       expect(screen.getByText("No se pudo cargar la invitación.")).toBeInTheDocument();
     });
+  });
+});
+
+describe("AcceptInvitationRoute — identity mismatch (F-015 fix)", () => {
+  beforeEach(() => {
+    window.location.hash = "#t=mismatch-token";
+    getAccessTokenMock.mockReturnValue("access.jwt");
+  });
+
+  it("renders the typed Spanish copy and offers a logout button on 403 identity_mismatch", async () => {
+    acceptInvitationMock.mockRejectedValueOnce(
+      new ApiErrorStub("POST /v1/invitations/accept", 403, {
+        code: "invitation.identity_mismatch",
+        title: "Esta invitación no es para ti",
+        status: 403,
+      }),
+    );
+    renderAccept();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Esta invitación es para otra persona\. Cierra sesión/i),
+      ).toBeInTheDocument();
+    });
+    const button = screen.getByRole("button", {
+      name: /Cerrar sesión y volver a esta invitación/i,
+    });
+    fireEvent.click(button);
+    expect(logoutMutateMock).toHaveBeenCalledTimes(1);
+    // The token is stashed so the user can resume after re-auth.
+    expect(window.sessionStorage.getItem("nica-erp:pending-invite")).toBe("mismatch-token");
+    // Simulate logout settling: the onSettled callback in the route
+    // navigates to /login.
+    const callArgs = logoutMutateMock.mock.calls[0];
+    expect(callArgs).toBeDefined();
+    const options = callArgs![1] as { onSettled?: () => void };
+    options.onSettled?.();
+    expect(navigateSpy).toHaveBeenCalledWith({ to: "/login" });
   });
 });

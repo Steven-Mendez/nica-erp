@@ -14,13 +14,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from sqlalchemy.exc import IntegrityError
+
 from contexts.identity.application.constants import SYSTEM_GLOBAL_TENANT_ID
 from contexts.identity.application.ports.outbound import (
     Identity,
     IdentityProvider,
     UserRepository,
 )
-from contexts.identity.domain import Email, User, UserRegistered
+from contexts.identity.domain import Email, Password, User, UserRegistered
 from contexts.identity.domain.events import (
     IDENTITY_USER_REGISTERED_EVENT_TYPE,
     IDENTITY_USER_REGISTERED_EVENT_VERSION,
@@ -44,27 +46,49 @@ class ConfirmSignup:
     async def execute(
         self, *, email: str, code: str, password: str | None = None
     ) -> Identity | None:
+        if password is not None:
+            Password(value=password).validate_policy()
         external_sub = await self.identity_provider.confirm_signup(email=email, code=code)
         email_vo = Email.parse(email)
         now = self.now()
         async with self.uow.begin():
-            user = User.register(external_sub=external_sub, email=email_vo, now=now)
-            await self.user_repository.add(user)
-            for event in user.pull_events():
-                assert isinstance(event, UserRegistered)  # narrow for mypy
-                await self.outbox_writer.append(
-                    event_id=event.event_id,
-                    event_type=IDENTITY_USER_REGISTERED_EVENT_TYPE,
-                    event_version=IDENTITY_USER_REGISTERED_EVENT_VERSION,
-                    aggregate_type="User",
-                    aggregate_id=user.id,
-                    tenant_id=SYSTEM_GLOBAL_TENANT_ID,
-                    payload={
-                        "user_id": str(event.user_id),
-                        "email": event.email,
-                        "registered_at": event.registered_at.isoformat(),
-                    },
-                )
+            # Idempotent retry path (audit F-002): if a User row already
+            # exists for this ``external_sub`` (the SPA replayed the
+            # confirm-signup POST after a transient error), skip the
+            # ``add`` so we neither raise ``IntegrityError`` nor emit a
+            # duplicate ``UserRegistered`` outbox row. A pre-flight read
+            # is safer than catching the integrity error inside the
+            # transaction, which leaves the SQLAlchemy session in a
+            # poisoned state.
+            existing = await self.user_repository.get_by_external_sub(external_sub)
+            if existing is not None:
+                pass  # ``existing`` already persisted; no outbox emit
+            else:
+                user = User.register(external_sub=external_sub, email=email_vo, now=now)
+                try:
+                    await self.user_repository.add(user)
+                except IntegrityError:
+                    # A concurrent confirm-signup landed between the
+                    # SELECT above and the INSERT here. Treat as
+                    # idempotent — the outbox event was already written
+                    # by the winning transaction.
+                    pass
+                else:
+                    for event in user.pull_events():
+                        assert isinstance(event, UserRegistered)  # narrow for mypy
+                        await self.outbox_writer.append(
+                            event_id=event.event_id,
+                            event_type=IDENTITY_USER_REGISTERED_EVENT_TYPE,
+                            event_version=IDENTITY_USER_REGISTERED_EVENT_VERSION,
+                            aggregate_type="User",
+                            aggregate_id=user.id,
+                            tenant_id=SYSTEM_GLOBAL_TENANT_ID,
+                            payload={
+                                "user_id": str(event.user_id),
+                                "email": event.email,
+                                "registered_at": event.registered_at.isoformat(),
+                            },
+                        )
         if password is None:
             return None
         # The aggregate + outbox event are committed before authenticating,

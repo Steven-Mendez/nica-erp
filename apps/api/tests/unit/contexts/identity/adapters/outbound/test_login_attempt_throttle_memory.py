@@ -40,7 +40,9 @@ def test_identifier_locks_after_five_failures() -> None:
     state = throttle.check(identifier="ada@b.io", source_ip=IP_A, when=BASE + timedelta(seconds=5))
     assert state.locked is True
     assert state.scope == "identifier"
-    assert state.retry_after_seconds >= 1
+    # First lockout cycle → 3-second floor per the exponential backoff
+    # schedule (audit F-023).
+    assert state.retry_after_seconds == 3
 
 
 def test_identifier_lock_clears_when_window_slides() -> None:
@@ -112,12 +114,72 @@ def test_identifier_email_normalisation() -> None:
     assert state.scope == "identifier"
 
 
-def test_retry_after_reflects_window_slide() -> None:
-    throttle = InMemoryLoginAttemptThrottle(identifier_window=timedelta(minutes=15))
-    # 5 failures at BASE; check 30s later → ~14 minutes and change remain.
-    for _ in range(5):
-        throttle.record_failure(identifier="ada@b.io", source_ip=IP_A, when=BASE)
-    state = throttle.check(identifier="ada@b.io", source_ip=IP_A, when=BASE + timedelta(seconds=30))
+def test_identifier_lockout_escalates_exponentially() -> None:
+    """Audit F-023: consecutive lockouts step up 3 → 30 → 300 → 1800 s."""
+    throttle = InMemoryLoginAttemptThrottle()
+
+    expected = [3, 30, 300, 1800]
+    cursor = BASE
+    for tier, want in enumerate(expected):
+        # 5 failures land inside the window.
+        for j in range(5):
+            throttle.record_failure(
+                identifier="eve@evil.test",
+                source_ip=IP_A,
+                when=cursor + timedelta(seconds=j),
+            )
+        state = throttle.check(
+            identifier="eve@evil.test",
+            source_ip=IP_A,
+            when=cursor + timedelta(seconds=5),
+        )
+        assert state.locked is True, f"tier {tier} expected lock"
+        assert state.scope == "identifier"
+        assert state.retry_after_seconds == want, (
+            f"tier {tier}: want {want}, got {state.retry_after_seconds}"
+        )
+        # Skip past the lockout so the next round of failures applies.
+        cursor = cursor + timedelta(seconds=5 + want + 1)
+
+
+def test_record_success_resets_consecutive_lockouts_counter() -> None:
+    """A clean login between cycles must restart the backoff at 3 s."""
+    throttle = InMemoryLoginAttemptThrottle()
+
+    for j in range(5):
+        throttle.record_failure(
+            identifier="ada@b.io", source_ip=IP_A, when=BASE + timedelta(seconds=j)
+        )
+    first = throttle.check(identifier="ada@b.io", source_ip=IP_A, when=BASE + timedelta(seconds=5))
+    assert first.retry_after_seconds == 3
+
+    # The operator waits out the lockout, then logs in successfully.
+    throttle.record_success(identifier="ada@b.io")
+
+    # Subsequent failed attempts start from a clean slate.
+    later = BASE + timedelta(seconds=30)
+    for j in range(5):
+        throttle.record_failure(
+            identifier="ada@b.io", source_ip=IP_A, when=later + timedelta(seconds=j)
+        )
+    second = throttle.check(
+        identifier="ada@b.io", source_ip=IP_A, when=later + timedelta(seconds=5)
+    )
+    assert second.retry_after_seconds == 3  # NOT 30
+
+
+def test_ip_scope_lockout_uses_fixed_600_second_retry() -> None:
+    """Audit F-023: IP-scope lockout returns the fixed 10-minute window."""
+    throttle = InMemoryLoginAttemptThrottle(ip_limit=20)
+    for i in range(20):
+        throttle.record_failure(
+            identifier=f"user{i}@x.io",
+            source_ip=IP_A,
+            when=BASE + timedelta(seconds=i),
+        )
+    state = throttle.check(
+        identifier="user99@x.io", source_ip=IP_A, when=BASE + timedelta(seconds=21)
+    )
     assert state.locked is True
-    # 15 minutes - 30 seconds = 14 minutes 30 seconds = 870 seconds.
-    assert 860 <= state.retry_after_seconds <= 870
+    assert state.scope == "ip"
+    assert state.retry_after_seconds == 600

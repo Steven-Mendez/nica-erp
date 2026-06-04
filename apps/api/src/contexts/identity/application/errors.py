@@ -15,7 +15,53 @@ class IdentityError(Exception):
 
 
 class InvalidCredentialsError(IdentityError):
-    """Wrong email/password (or a malformed/invalid token)."""
+    """Wrong email/password (or a malformed/invalid token).
+
+    Reserved for credential-rejection paths: login, refresh-token
+    validation, JWT verification, and change-password. Wrong-input
+    paths on the public auth endpoints raise the more specific
+    types below.
+    """
+
+
+class InvalidConfirmationCodeError(IdentityError):
+    """The OTP supplied to ``POST /v1/auth/confirm-signup`` did not match."""
+
+
+class InvalidResetCodeError(IdentityError):
+    """The reset code is invalid — unknown, already used, or hash mismatch."""
+
+
+class ExpiredResetCodeError(InvalidResetCodeError):
+    """The reset code was issued but its TTL has elapsed."""
+
+
+class RateLimitedError(IdentityError):
+    """A typed rate-limit decision raised by an identity adapter.
+
+    ``scope`` distinguishes the surface the rate limit fired on so the
+    SPA can pick the right copy. Audit F-003 introduced ``scope="resend"``
+    for the per-account resend cooldown; future scopes will reuse this
+    class.
+    """
+
+    def __init__(self, *, scope: str, retry_after_seconds: int) -> None:
+        super().__init__(f"Rate limited ({scope}) for {retry_after_seconds}s")
+        self.scope = scope
+        self.retry_after_seconds = max(retry_after_seconds, 1)
+
+
+class ResendThrottledError(RateLimitedError):
+    """Per-account resend cooldown specialisation of :class:`RateLimitedError`.
+
+    Retained as a subclass for backward compatibility with adapters and
+    tests that catch the typed name. The HTTP mapping is identical to
+    the parent class — both surface as ``code: "auth.rate_limited"``
+    with ``scope: "resend"``.
+    """
+
+    def __init__(self, *, retry_after_seconds: int) -> None:
+        super().__init__(scope="resend", retry_after_seconds=retry_after_seconds)
 
 
 class TokenExpiredError(IdentityError):
@@ -67,9 +113,14 @@ class UserNotFoundError(IdentityError):
 __all__ = [
     "AuthLockoutActiveError",
     "EmailSendError",
+    "ExpiredResetCodeError",
     "IdentityError",
+    "InvalidConfirmationCodeError",
     "InvalidCredentialsError",
+    "InvalidResetCodeError",
     "LockoutActiveError",
+    "RateLimitedError",
+    "ResendThrottledError",
     "SignupEmailNotConfirmedError",
     "TokenExpiredError",
     "UserNotFoundError",

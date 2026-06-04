@@ -29,15 +29,35 @@ def _utc_now() -> datetime:
 
 
 def _render_email(*, tenant_name: str, invite_url: str) -> tuple[str, str, str]:
-    subject = f"Invitation to {tenant_name} on nica-erp"
+    """Render the invitation email — Spanish primary, English secondary.
+
+    Audit F-024 + Spanish-UI rule: SMB recipients in Nicaragua are not
+    assumed to read English. The Spanish block opens both subject and
+    body; an English block follows so the project's existing bilingual
+    auth emails stay coherent.
+    """
+
+    subject = f"nica-erp: invitación a {tenant_name} / invitation to {tenant_name}"
     text = (
-        f"You have been invited to join {tenant_name} on nica-erp.\n\n"
-        f"Accept here: {invite_url}\n\n"
-        "This link expires in 7 days."
+        f"Invitación a {tenant_name} en nica-erp\n\n"
+        f"Has sido invitado a unirte a {tenant_name} en nica-erp.\n\n"
+        f"Acepta aquí (expira en 7 días):\n{invite_url}\n\n"
+        "Si no esperabas esta invitación, puedes ignorar este mensaje.\n\n"
+        "---\n"
+        f"Invitation to {tenant_name} on nica-erp\n"
+        f"You have been invited to join {tenant_name} on nica-erp.\n"
+        f"Accept here (expires in 7 days): {invite_url}\n"
+        "If you did not expect this invitation, you can ignore this email."
     )
     html = (
-        f"<p>You have been invited to join <strong>{tenant_name}</strong> on nica-erp.</p>"
-        f'<p><a href="{invite_url}">Accept the invitation</a> (expires in 7 days).</p>'
+        f"<h2>Invitación a {tenant_name} en nica-erp</h2>"
+        f"<p>Has sido invitado a unirte a <strong>{tenant_name}</strong> en nica-erp.</p>"
+        f'<p><a href="{invite_url}">Acepta la invitación</a> (expira en 7 días).</p>'
+        "<p>Si no esperabas esta invitación, puedes ignorar este mensaje.</p>"
+        "<hr/>"
+        f"<p><em>Invitation to {tenant_name} on nica-erp.</em></p>"
+        f'<p><em>You have been invited. <a href="{invite_url}">Accept here</a> '
+        "(expires in 7 days).</em></p>"
     )
     return subject, text, html
 

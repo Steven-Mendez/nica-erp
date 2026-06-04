@@ -43,7 +43,7 @@ describe("signupSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path[0] === "password");
-      expect(issue?.message).toContain("al menos 8 caracteres");
+      expect(issue?.message).toContain("al menos 12 caracteres");
     }
   });
 

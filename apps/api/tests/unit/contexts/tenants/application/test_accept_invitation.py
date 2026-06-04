@@ -12,6 +12,7 @@ from contexts.tenants.application.use_cases.accept_invitation import (
 )
 from contexts.tenants.domain import (
     Invitation,
+    InvitationIdentityMismatchError,
     InvitationInvalidError,
     InvitationNotFoundError,
     Role,
@@ -22,12 +23,14 @@ def _baseline_command(
     *,
     token: str,
     user_id: UUID,
+    user_email: str = "invitee@test.dev",
     prior_active_tenant: str | None = None,
     refresh_token: str | None = None,
 ) -> AcceptInvitationCommand:
     return AcceptInvitationCommand(
         token=token,
         user_id=user_id,
+        user_email=user_email,
         external_sub=f"sub-{user_id}",
         prior_active_tenant=prior_active_tenant,
         refresh_token=refresh_token,
@@ -284,3 +287,101 @@ async def test_first_membership_without_refresh_token_skips_rotation(
 
     assert result.tokens is None
     assert identity_provider.update_active_tenant_calls == []
+
+
+async def test_accept_invitation_identity_mismatch_is_noop(
+    fake_uow,
+    invitation_repo,
+    membership_repo,
+    token_generator,
+    outbox,
+    identity_provider,
+    seeded_tenant,
+    fixed_now,
+) -> None:
+    issued = token_generator.mint(
+        tenant_id=seeded_tenant.id,
+        email="invitee@test.dev",
+        proposed_role=Role.ACCOUNTANT,
+        now=fixed_now,
+    )
+    invitation = Invitation.issue(
+        tenant_id=seeded_tenant.id,
+        email="invitee@test.dev",
+        proposed_role=Role.ACCOUNTANT,
+        token_hash=issued.token_hash,
+        expires_at=issued.expires_at,
+        now=fixed_now,
+    )
+    await invitation_repo.add(invitation)
+
+    uc = AcceptInvitation(
+        uow=fake_uow,
+        invitation_repository=invitation_repo,
+        membership_repository=membership_repo,
+        token_generator=token_generator,
+        outbox=outbox,
+        identity_provider=identity_provider,
+        now=lambda: fixed_now,
+    )
+
+    with pytest.raises(InvitationIdentityMismatchError):
+        await uc.execute(
+            _baseline_command(
+                token=issued.token,
+                user_id=uuid4(),
+                user_email="someone-else@test.dev",
+            )
+        )
+
+    assert membership_repo.add_count == 0
+    assert invitation_repo.update_count == 0
+    assert outbox.rows == []
+
+
+async def test_accept_invitation_email_compare_is_case_insensitive(
+    fake_uow,
+    invitation_repo,
+    membership_repo,
+    token_generator,
+    outbox,
+    identity_provider,
+    seeded_tenant,
+    fixed_now,
+) -> None:
+    issued = token_generator.mint(
+        tenant_id=seeded_tenant.id,
+        email="invitee@test.dev",
+        proposed_role=Role.ACCOUNTANT,
+        now=fixed_now,
+    )
+    invitation = Invitation.issue(
+        tenant_id=seeded_tenant.id,
+        email="invitee@test.dev",
+        proposed_role=Role.ACCOUNTANT,
+        token_hash=issued.token_hash,
+        expires_at=issued.expires_at,
+        now=fixed_now,
+    )
+    await invitation_repo.add(invitation)
+
+    uc = AcceptInvitation(
+        uow=fake_uow,
+        invitation_repository=invitation_repo,
+        membership_repository=membership_repo,
+        token_generator=token_generator,
+        outbox=outbox,
+        identity_provider=identity_provider,
+        now=lambda: fixed_now,
+    )
+
+    result = await uc.execute(
+        _baseline_command(
+            token=issued.token,
+            user_id=uuid4(),
+            user_email="INVITEE@test.dev",
+        )
+    )
+
+    assert result.tenant_id == seeded_tenant.id
+    assert membership_repo.add_count == 1

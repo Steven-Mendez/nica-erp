@@ -1,6 +1,7 @@
 // Smoke test for AppShell — verifies sidebar + header are present and
 // `children` mount in the main column.
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/app-shell";
 
@@ -30,10 +31,14 @@ afterEach(() => {
 
 describe("AppShell", () => {
   it("renders the sidebar, the site header, and the children", () => {
+    // The shell renders EmpresaSection which uses useHasPermission →
+    // useQuery; wrap in QueryClientProvider so it doesn't throw.
     render(
-      <AppShell>
-        <div data-testid="shell-children">contenido</div>
-      </AppShell>,
+      <QueryClientProvider client={new QueryClient()}>
+        <AppShell>
+          <div data-testid="shell-children">contenido</div>
+        </AppShell>
+      </QueryClientProvider>,
     );
 
     // Sidebar is present (the workspace nav group label is in the sidebar).

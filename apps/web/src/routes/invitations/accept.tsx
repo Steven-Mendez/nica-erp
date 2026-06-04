@@ -33,9 +33,12 @@ import { myTenantsKey } from "@/features/tenants/api/hooks";
 import {
   acceptInvitation,
   previewInvitation,
+  ApiError,
   type AcceptInvitationResult,
 } from "@/features/tenants/api/endpoints";
-import { getAccessToken, getRefreshToken, setTokens } from "@/api/tokenStore";
+import { messageForProblem, type ProblemDetail } from "@/api/errors";
+import { useLogoutMutation } from "@/features/auth/api/hooks";
+import { getAccessToken, setTokens } from "@/api/tokenStore";
 import { setPickerConfirmed } from "@/lib/route-guard";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
@@ -63,8 +66,17 @@ interface InflightEntry {
 const inflight = new Map<string, InflightEntry>();
 
 function acceptErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return messageForProblem(error);
   if (error instanceof Error) return error.message;
   return "No se pudo aceptar la invitación.";
+}
+
+function getProblemCode(error: unknown): string | undefined {
+  if (error instanceof ApiError) {
+    const detail = error.detail as ProblemDetail | undefined;
+    return detail?.code;
+  }
+  return undefined;
 }
 
 function ensureAccept(token: string): InflightEntry {
@@ -79,12 +91,12 @@ function ensureAccept(token: string): InflightEntry {
     entry.status = next;
     for (const l of entry.listeners) l(next);
   };
-  // Snapshot the refresh token at request time so the backend can
-  // rotate the session if this is the user's first membership. The
-  // returned `tokens` field is non-null only in that case; veteran
-  // users get `tokens=null` and keep their current empresa.
-  const refresh = getRefreshToken();
-  void acceptInvitation(token, refresh).then(
+  // The server reads the refresh token from the `nica_erp_rt`
+  // httpOnly cookie (shipped via `credentials: include`) and rotates
+  // the session if this is the user's first membership. The returned
+  // `tokens` field is non-null only in that case; veteran users get
+  // `tokens=null` and keep their current empresa.
+  void acceptInvitation(token).then(
     (result) => fire({ kind: "success", result }),
     (error: unknown) => fire({ kind: "error", error }),
   );
@@ -114,6 +126,7 @@ export function AcceptInvitationRoute() {
   useDocumentTitle("Aceptar invitación");
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const logoutMutation = useLogoutMutation();
   const [mode, setMode] = useState<Mode>({ kind: "loading" });
   const [pasted, setPasted] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -163,10 +176,13 @@ export function AcceptInvitationRoute() {
         // not lose it.
         ensureAccept(token);
       } else {
-        // Unauthenticated hash flow: preview to get the email, stash
-        // the token, then route to /signup with the email pre-filled.
+        // Unauthenticated hash flow: validate the token via preview,
+        // stash it, then route to /signup. Audit F-026: the preview
+        // intentionally does NOT include the invitee email, so the
+        // user types their own email — the backend's identity binding
+        // catches typos before any membership row is created.
         previewInvitation(token).then(
-          (preview) => {
+          () => {
             try {
               window.sessionStorage.setItem(PENDING_INVITE_KEY, token);
             } catch {
@@ -174,7 +190,7 @@ export function AcceptInvitationRoute() {
               // signup flow will degrade to "no pre-filled token" but
               // the user can paste it back on /invitations/accept.
             }
-            void navigate({ to: "/signup", search: { email: preview.email } });
+            void navigate({ to: "/signup", search: {} });
           },
           (err: unknown) => {
             const message = err instanceof Error ? err.message : "No se pudo cargar la invitación.";
@@ -221,7 +237,6 @@ export function AcceptInvitationRoute() {
     if (tokens != null) {
       setTokens({
         access: tokens.access_token,
-        refresh: tokens.refresh_token,
         id: tokens.id_token,
       });
     }
@@ -257,9 +272,40 @@ export function AcceptInvitationRoute() {
           {mode.kind === "loading" ? <Skeleton className="h-10 w-full" /> : null}
 
           {mode.kind === "joining" && acceptStatus.kind === "error" ? (
-            <Alert variant="destructive">
-              <AlertDescription>{acceptErrorMessage(acceptStatus.error)}</AlertDescription>
-            </Alert>
+            <>
+              <Alert variant="destructive">
+                <AlertDescription>{acceptErrorMessage(acceptStatus.error)}</AlertDescription>
+              </Alert>
+              {getProblemCode(acceptStatus.error) === "invitation.identity_mismatch" &&
+              mode.kind === "joining" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={logoutMutation.isPending}
+                  onClick={() => {
+                    const token = mode.kind === "joining" ? mode.token : null;
+                    if (token !== null) {
+                      try {
+                        window.sessionStorage.setItem(PENDING_INVITE_KEY, token);
+                      } catch {
+                        // sessionStorage may be unavailable in private windows;
+                        // the user can paste the token after signing in.
+                      }
+                    }
+                    logoutMutation.mutate(undefined, {
+                      onSettled: () => {
+                        void navigate({ to: "/login" });
+                      },
+                    });
+                  }}
+                >
+                  {logoutMutation.isPending
+                    ? "Cerrando sesión..."
+                    : "Cerrar sesión y volver a esta invitación"}
+                </Button>
+              ) : null}
+            </>
           ) : null}
 
           {mode.kind === "joining" && acceptStatus.kind === "pending" ? (

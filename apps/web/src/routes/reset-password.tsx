@@ -12,6 +12,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { useResetPasswordMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
+import { PASSWORD_POLICY_TEXT } from "@/features/auth/lib/password-policy";
 import { resetSchema, type ResetValues } from "@/features/auth/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
@@ -100,9 +101,7 @@ export function ResetPasswordRoute() {
                 {fieldState.invalid ? (
                   <FieldError errors={[fieldState.error]} />
                 ) : (
-                  <FieldDescription>
-                    8+ caracteres con mayúscula, minúscula, dígito y símbolo.
-                  </FieldDescription>
+                  <FieldDescription>{PASSWORD_POLICY_TEXT}</FieldDescription>
                 )}
               </Field>
             )}

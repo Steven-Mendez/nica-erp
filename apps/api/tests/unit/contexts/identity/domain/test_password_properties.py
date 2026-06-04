@@ -9,7 +9,7 @@ the five strings a reviewer thought of?
 from __future__ import annotations
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 # Mirror the symbol whitelist exposed by ``password._SYMBOLS``. We import
@@ -82,6 +82,7 @@ def test_too_short_always_rejected(value: str) -> None:
 
 
 @given(st.text(alphabet=_ALL_CLASSES, min_size=_MIN_LENGTH, max_size=_MIN_LENGTH + 8))
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
 def test_missing_a_class_always_rejected(value: str) -> None:
     classes = _classes_present(value)
     assume(len(classes) < 4)

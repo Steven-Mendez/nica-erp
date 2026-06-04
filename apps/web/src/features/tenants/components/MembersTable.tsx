@@ -78,12 +78,16 @@ const ROLE_VARIANTS: Record<Member["role"], "default" | "secondary" | "outline" 
   viewer: "outline",
 };
 
+// Local copy retained for backward-compat with existing surfaces inside
+// this file (DataTableFacetedFilter options, dropdown radio items). The
+// values come from the shared map so /empresa/users renders the same
+// Spanish copy as the empresa-list cards and the workspace switcher.
 const ROLE_LABELS: Record<Member["role"], string> = {
   owner: "Propietario",
   admin: "Administrador",
   accountant: "Contador",
   salesperson: "Vendedor",
-  viewer: "Lector",
+  viewer: "Visualizador",
 };
 
 const ASSIGNABLE_ROLES: ReadonlyArray<RoleValue> = ["admin", "accountant", "salesperson", "viewer"];
@@ -259,9 +263,6 @@ export function MembersTable({
                 <p className="truncate text-sm font-medium">
                   {displayName && displayName.length > 0 ? displayName : "—"}
                 </p>
-                <p className="truncate font-mono text-[11px] text-muted-foreground">
-                  {member.user_id}
-                </p>
               </div>
             </div>
           );
@@ -354,7 +355,7 @@ export function MembersTable({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    aria-label={`Acciones de ${member.user_id}`}
+                    aria-label={`Acciones de ${member.display_name?.trim() || member.email || "miembro"}`}
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>

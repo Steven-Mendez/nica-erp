@@ -230,9 +230,12 @@ class FakeInvitationTokenGenerator:
         )
 
     def verify(self, *, token: str) -> InvitationTokenClaims:
+        # Match the email baked into ``mint`` output so the use case's
+        # identity-binding check resolves to the test's default user.
+        # Tests that need a mismatch override ``token_generator.verify``.
         return InvitationTokenClaims(
             tenant_id=uuid4(),
-            email="probe@test.dev",
+            email="invitee@test.dev",
             proposed_role=Role.VIEWER,
             expires_at=datetime.now(UTC) + self.ttl,
         )

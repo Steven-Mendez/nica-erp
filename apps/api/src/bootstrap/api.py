@@ -22,9 +22,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -135,10 +136,32 @@ def create_app() -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            # Audit F-005: expose Retry-After (already used by the
+            # lockout responses) and Set-Cookie (so the browser stores
+            # the httpOnly refresh-token cookie). The SPA itself cannot
+            # read Set-Cookie via JS — exposing it is necessary for
+            # the browser's cookie jar to accept it on cross-origin
+            # responses when credentials are enabled.
+            expose_headers=["set-cookie", "retry-after"],
         )
 
     register_exception_handlers(app)
     register_tenants_exception_handlers(app)
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception(_request: Request, exc: Exception) -> JSONResponse:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            content={
+                "type": "about:blank",
+                "title": "Internal Server Error",
+                "status": 500,
+                "detail": "An unexpected error occurred.",
+            },
+            status_code=500,
+            media_type="application/problem+json",
+        )
 
     router = APIRouter()
 

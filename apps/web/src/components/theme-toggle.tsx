@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTheme, type Theme } from "@/components/theme-provider";
+import { useOverlayMutex } from "@/components/overlay-mutex";
 import { cn } from "@/lib/utils";
 
 const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: typeof Sun }> = [
@@ -13,7 +13,9 @@ const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: typeof Sun }> = 
 
 export function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const [open, setOpen] = useState(false);
+  // Audit F-039: header overlays share a single open id so opening
+  // the theme picker auto-closes the account menu (and vice versa).
+  const { open, setOpen } = useOverlayMutex("theme");
   const ActiveIcon = theme === "system" ? Monitor : resolvedTheme === "dark" ? Moon : Sun;
   return (
     <Popover open={open} onOpenChange={setOpen}>

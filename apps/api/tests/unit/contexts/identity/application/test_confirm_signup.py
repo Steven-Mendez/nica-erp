@@ -29,6 +29,7 @@ async def test_confirm_signup_persists_user_and_emits_outbox_event(
     idp = AsyncMock()
     idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
     repo = AsyncMock()
+    repo.get_by_external_sub.return_value = None
     outbox = AsyncMock()
 
     use_case = ConfirmSignup(
@@ -71,6 +72,7 @@ async def test_confirm_signup_outbox_failure_rolls_back(fake_uow: FakeUow) -> No
     idp = AsyncMock()
     idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
     repo = AsyncMock()
+    repo.get_by_external_sub.return_value = None
     outbox = AsyncMock()
     outbox.append.side_effect = RuntimeError("kaboom")
 
@@ -93,10 +95,12 @@ async def test_confirm_signup_outbox_failure_rolls_back(fake_uow: FakeUow) -> No
 async def test_execute_without_password_returns_none(fake_uow: FakeUow) -> None:
     idp = AsyncMock()
     idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
+    repo = AsyncMock()
+    repo.get_by_external_sub.return_value = None
 
     use_case = ConfirmSignup(
         identity_provider=idp,
-        user_repository=AsyncMock(),
+        user_repository=repo,
         outbox_writer=AsyncMock(),
         uow=fake_uow,
         now=_fixed_now,
@@ -119,18 +123,86 @@ async def test_execute_with_password_returns_identity_bundle(fake_uow: FakeUow) 
         id_token="id",
     )
     idp.authenticate.return_value = bundle
+    repo = AsyncMock()
+    repo.get_by_external_sub.return_value = None
 
     use_case = ConfirmSignup(
         identity_provider=idp,
-        user_repository=AsyncMock(),
+        user_repository=repo,
         outbox_writer=AsyncMock(),
         uow=fake_uow,
         now=_fixed_now,
     )
 
-    result = await use_case.execute(email="a@b.io", code="123456", password="Demo1234!@")
+    result = await use_case.execute(email="a@b.io", code="123456", password="Demo12345!@ab")
 
     assert result is bundle
     idp.confirm_signup.assert_awaited_once_with(email="a@b.io", code="123456")
-    idp.authenticate.assert_awaited_once_with(email="a@b.io", password="Demo1234!@")
+    idp.authenticate.assert_awaited_once_with(email="a@b.io", password="Demo12345!@ab")
     assert fake_uow.committed is True
+
+
+async def test_confirm_signup_is_idempotent_when_user_already_exists(
+    fake_uow: FakeUow,
+) -> None:
+    """Audit F-002: a retry after a successful confirm-signup must NOT
+    raise ``IntegrityError`` and must NOT emit a duplicate outbox row.
+    """
+    external_sub = "11111111-1111-1111-1111-111111111111"
+    idp = AsyncMock()
+    idp.confirm_signup.return_value = external_sub
+
+    from contexts.identity.domain import Email
+
+    existing = User.register(
+        external_sub=external_sub,
+        email=Email.parse("a@b.io"),
+        now=_fixed_now(),
+    )
+    existing.pull_events()  # discard the event the seed aggregate "would" have emitted
+
+    repo = AsyncMock()
+    repo.get_by_external_sub.return_value = existing
+    outbox = AsyncMock()
+
+    use_case = ConfirmSignup(
+        identity_provider=idp,
+        user_repository=repo,
+        outbox_writer=outbox,
+        uow=fake_uow,
+        now=_fixed_now,
+    )
+
+    await use_case.execute(email="a@b.io", code="123456")
+
+    repo.add.assert_not_awaited()
+    outbox.append.assert_not_awaited()
+    assert fake_uow.committed is True
+
+
+async def test_confirm_signup_swallows_race_integrity_error(
+    fake_uow: FakeUow,
+) -> None:
+    """A concurrent insert between the pre-flight read and add() should
+    be treated as idempotent, not bubble up as 500."""
+    from sqlalchemy.exc import IntegrityError
+
+    idp = AsyncMock()
+    idp.confirm_signup.return_value = "11111111-1111-1111-1111-111111111111"
+    repo = AsyncMock()
+    repo.get_by_external_sub.return_value = None
+    repo.add.side_effect = IntegrityError("INSERT", {}, Exception("duplicate"))
+    outbox = AsyncMock()
+
+    use_case = ConfirmSignup(
+        identity_provider=idp,
+        user_repository=repo,
+        outbox_writer=outbox,
+        uow=fake_uow,
+        now=_fixed_now,
+    )
+
+    await use_case.execute(email="a@b.io", code="123456")
+
+    repo.add.assert_awaited_once()
+    outbox.append.assert_not_awaited()

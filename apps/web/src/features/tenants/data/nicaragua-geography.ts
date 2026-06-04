@@ -221,6 +221,38 @@ export const DEPARTAMENTOS: readonly Departamento[] = Object.freeze([
       "San Miguelito",
     ],
   },
+  // Two autonomous Caribbean regions (RACCN + RACCS, historically RAAN
+  // + RAAS). The DGI catalogue lists the cabeceras municipales below.
+  {
+    name: "RAAN",
+    municipios: [
+      "Bonanza",
+      "Mulukukú",
+      "Prinzapolka",
+      "Puerto Cabezas",
+      "Rosita",
+      "Siuna",
+      "Waslala",
+      "Waspán",
+    ],
+  },
+  {
+    name: "RAAS",
+    municipios: [
+      "Bluefields",
+      "Corn Island",
+      "Desembocadura de Río Grande",
+      "El Ayote",
+      "El Rama",
+      "El Tortuguero",
+      "Kukra Hill",
+      "La Cruz de Río Grande",
+      "Laguna de Perlas",
+      "Muelle de los Bueyes",
+      "Nueva Guinea",
+      "Paiwas",
+    ],
+  },
 ]);
 
 // O(1) lookup helper — used by the form to validate that a chosen

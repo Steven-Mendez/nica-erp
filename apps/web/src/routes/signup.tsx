@@ -18,6 +18,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { useRegisterMutation } from "@/features/auth/api/hooks";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
+import { PASSWORD_POLICY_TEXT } from "@/features/auth/lib/password-policy";
 import { signupSchema, type SignupValues } from "@/features/auth/schemas";
 import { stashSignupPassword } from "@/features/auth/signup-handoff";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
@@ -109,9 +110,7 @@ export function SignupRoute() {
                 {fieldState.invalid ? (
                   <FieldError errors={[fieldState.error]} />
                 ) : (
-                  <FieldDescription>
-                    12+ caracteres con mayúscula, minúscula, dígito y símbolo.
-                  </FieldDescription>
+                  <FieldDescription>{PASSWORD_POLICY_TEXT}</FieldDescription>
                 )}
               </Field>
             )}

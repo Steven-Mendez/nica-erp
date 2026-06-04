@@ -14,11 +14,13 @@ from contexts.tenants.domain import (
     InvitationCancelledError,
     InvitationDuplicatePendingError,
     InvitationExpiredError,
+    InvitationIdentityMismatchError,
     InvitationInvalidError,
     InvitationNotFoundError,
     NotAMemberError,
     OwnerAlreadyExistsError,
     OwnerRoleNotAllowedHereError,
+    RucCollisionError,
     TenantNotFoundError,
 )
 from shared_kernel.permissions import ForbiddenError
@@ -37,17 +39,19 @@ def register_tenants_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ForbiddenError)
     async def _forbidden(_request: Request, exc: ForbiddenError) -> JSONResponse:
+        # Audit F-030: detail is a generic Spanish copy; the missing
+        # permission list is emitted only when non-empty so an empty
+        # array does not appear in the body.
         problem = ProblemDetail(
             status=403,
             code="missing-permission",
-            title="Missing permission",
-            detail=str(exc) or None,
+            title="Acceso denegado",
+            detail="Acceso denegado: faltan permisos.",
         )
-        # Attach the missing-permission list as a top-level RFC-7807
-        # extension field so clients can render the exact codes the
-        # actor lacked.
         body = problem.model_dump(mode="json", exclude_none=True)
-        body["missing"] = list(exc.missing)
+        missing = list(exc.missing)
+        if missing:
+            body["missing"] = missing
         return JSONResponse(content=body, status_code=403, media_type=PROBLEM_CONTENT_TYPE)
 
     @app.exception_handler(TenantNotFoundError)
@@ -60,13 +64,27 @@ def register_tenants_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(NotAMemberError)
-    async def _not_a_member(_request: Request, exc: NotAMemberError) -> JSONResponse:
+    async def _not_a_member(_request: Request, _exc: NotAMemberError) -> JSONResponse:
+        # Audit F-030: detail SHALL NOT embed the tenant UUID or any
+        # internal identifier.
         return _problem_response(
             403,
             ProblemDetail(
                 status=403,
                 code="tenant.not_member",
-                title="Not a member of the requested tenant",
+                title="Acceso denegado",
+                detail="Acceso denegado.",
+            ),
+        )
+
+    @app.exception_handler(RucCollisionError)
+    async def _ruc_collision(_request: Request, exc: RucCollisionError) -> JSONResponse:
+        return _problem_response(
+            409,
+            ProblemDetail(
+                status=409,
+                code="tenants.ruc_collision",
+                title="RUC already in use",
                 detail=str(exc),
             ),
         )
@@ -172,6 +190,21 @@ def register_tenants_exception_handlers(app: FastAPI) -> None:
                 code="invitation.not_found",
                 title="Invitation not found",
                 detail=str(exc),
+            ),
+        )
+
+    @app.exception_handler(InvitationIdentityMismatchError)
+    async def _inv_identity_mismatch(
+        _request: Request, _exc: InvitationIdentityMismatchError
+    ) -> JSONResponse:
+        # Detail SHALL NOT leak the JWT sub to the requester.
+        return _problem_response(
+            403,
+            ProblemDetail(
+                status=403,
+                code="invitation.identity_mismatch",
+                title="Esta invitación no es para ti",
+                detail=None,
             ),
         )
 

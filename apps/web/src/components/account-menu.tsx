@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLogoutMutation, useMeQuery } from "@/features/auth/api/hooks";
+import { useOverlayMutex } from "@/components/overlay-mutex";
 import { cn } from "@/lib/utils";
 
 function initialsOf(name: string): string {
@@ -51,6 +52,9 @@ export function AccountMenu() {
   const me = useMeQuery();
   const logout = useLogoutMutation();
   const navigate = useNavigate();
+  // Audit F-039: share the open id with the theme picker so the two
+  // header overlays are mutually exclusive.
+  const { open, setOpen } = useOverlayMutex("account");
 
   if (me.isLoading) {
     return <Skeleton className="h-8 w-8 rounded-full" />;
@@ -64,7 +68,7 @@ export function AccountMenu() {
   const bgColor = avatarColor(me.data.email);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         aria-label="Menú de cuenta"
         className={cn(

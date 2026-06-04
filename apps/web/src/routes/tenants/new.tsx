@@ -60,10 +60,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/features/tenants/api/endpoints";
 import { useCreateTenantMutation, useSwitchTenantMutation } from "@/features/tenants/api/hooks";
-import { MUNICIPALITIES } from "@/features/tenants/municipalities";
+import { DEPARTAMENTOS } from "@/features/tenants/lib/departamentos";
+import { RUC_PLACEHOLDER, normalizeRuc } from "@/features/tenants/lib/ruc";
 import { createTenantSchema, type CreateTenantValues } from "@/features/tenants/schemas";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
-import { getRefreshToken } from "@/api/tokenStore";
 import { BrandLayout } from "@/components/brand-header";
 
 type StepKey = "identity" | "regime" | "dgi" | "address";
@@ -106,6 +106,7 @@ const FIELD_LABELS: Record<string, string> = {
   name: "Nombre",
   ruc: "RUC",
   regime: "Régimen",
+  departamento: "Departamento",
   municipality: "Municipio",
   "authorization_dgi.number": "Número DGI",
   "authorization_dgi.valid_from": "Vigencia desde",
@@ -163,6 +164,7 @@ type CreateTenantBody = {
   is_withholder: boolean;
   ruc?: string | null;
   regime?: "general" | "cuota_fija" | "pequeno_contribuyente" | null;
+  departamento?: string | null;
   municipality?: string | null;
   authorization_dgi?: { number: string; valid_from: string; valid_to: string } | null;
   fiscal_address?: string | null;
@@ -173,9 +175,18 @@ const buildPayload = (values: CreateTenantValues): CreateTenantBody => {
     name: values.name,
     is_withholder: values.is_withholder ?? false,
   };
-  if (values.ruc !== undefined && values.ruc !== "") out.ruc = values.ruc;
+  if (values.ruc !== undefined && values.ruc !== "") {
+    // Normalise away dashes / spaces so the persisted form is the
+    // canonical 13-digit + letter shape (audit F-006).
+    out.ruc = normalizeRuc(values.ruc);
+  }
   if (values.regime !== undefined) out.regime = values.regime;
-  if (values.municipality !== undefined) out.municipality = values.municipality;
+  if (values.departamento !== undefined) {
+    out.departamento = values.departamento;
+  }
+  if (values.municipality !== undefined && values.municipality !== "") {
+    out.municipality = values.municipality.trim();
+  }
   if (values.fiscal_address !== undefined && values.fiscal_address !== "") {
     out.fiscal_address = values.fiscal_address;
   }
@@ -335,7 +346,7 @@ export function TenantsNewRoute() {
     trigger,
     getValues,
     watch,
-    formState: { errors, touchedFields, isSubmitted },
+    formState: { errors, touchedFields, isSubmitted, isSubmitting },
   } = form;
 
   const step = STEPS[stepIndex] ?? STEPS[0]!;
@@ -363,39 +374,29 @@ export function TenantsNewRoute() {
     setStepIndex((i) => Math.max(i - 1, 0));
   };
 
-  const onSubmit = (values: CreateTenantValues): void => {
+  const onSubmit = async (values: CreateTenantValues): Promise<void> => {
     setErrorMsg(null);
-    createMut.mutate(buildPayload(values), {
-      onSuccess: (tenant) => {
-        const refresh = getRefreshToken();
-        if (refresh === null) {
-          void navigate({ to: "/" });
-          return;
-        }
-        switchMut.mutate(
-          { tenantId: tenant.id, input: { refresh_token: refresh } },
-          {
-            onSuccess: () => {
-              void navigate({ to: "/dashboard" });
-            },
-            onError: () => {
-              void navigate({ to: "/tenants" });
-            },
-          },
-        );
-      },
-      onError: (err) => {
-        setErrorMsg(formatApiError(err));
-      },
-    });
+    try {
+      const tenant = await createMut.mutateAsync(buildPayload(values));
+      // Switch via the httpOnly `nica_erp_rt` cookie (ships with
+      // `credentials: include` on the openapi-fetch client).
+      try {
+        await switchMut.mutateAsync({ tenantId: tenant.id, input: {} });
+        void navigate({ to: "/dashboard" });
+      } catch {
+        void navigate({ to: "/tenants" });
+      }
+    } catch (err) {
+      setErrorMsg(formatApiError(err as Error));
+    }
   };
 
-  const pending = createMut.isPending || switchMut.isPending;
+  const pending = createMut.isPending || switchMut.isPending || isSubmitting;
 
   const skipAndCreate = async (): Promise<void> => {
     const ok = await trigger("name");
     if (!ok) return;
-    onSubmit(getValues());
+    await onSubmit(getValues());
   };
 
   const skipTitle = canSkipAndCreate
@@ -500,7 +501,7 @@ export function TenantsNewRoute() {
                                 {...field}
                                 value={field.value ?? ""}
                                 id="ruc"
-                                placeholder="0010101800010X"
+                                placeholder={RUC_PLACEHOLDER}
                                 inputMode="text"
                                 autoCapitalize="characters"
                                 spellCheck={false}
@@ -545,26 +546,46 @@ export function TenantsNewRoute() {
                         )}
                       />
                       <Controller
-                        name="municipality"
+                        name="departamento"
                         control={control}
                         render={({ field }) => (
                           <Field>
-                            <FieldLabel htmlFor="municipality" className="gap-1.5">
-                              Municipio
-                              <InfoTip text="Municipio fiscal de la empresa; debe pertenecer al catálogo aceptado por la DGI." />
+                            <FieldLabel htmlFor="departamento" className="gap-1.5">
+                              Departamento
+                              <InfoTip text="Departamento fiscal de la empresa según la división administrativa de Nicaragua." />
                             </FieldLabel>
                             <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                              <SelectTrigger id="municipality" className="w-full">
-                                <SelectValue placeholder="Selecciona un municipio" />
+                              <SelectTrigger id="departamento" className="w-full">
+                                <SelectValue placeholder="Selecciona un departamento" />
                               </SelectTrigger>
                               <SelectContent>
-                                {MUNICIPALITIES.map((m) => (
-                                  <SelectItem key={m} value={m}>
-                                    {m}
+                                {DEPARTAMENTOS.map((d) => (
+                                  <SelectItem key={d} value={d}>
+                                    {d}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+                          </Field>
+                        )}
+                      />
+                      <Controller
+                        name="municipality"
+                        control={control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel htmlFor="municipality" className="gap-1.5">
+                              Municipio
+                              <InfoTip text="Municipio o distrito donde opera la empresa." />
+                            </FieldLabel>
+                            <Input
+                              {...field}
+                              id="municipality"
+                              value={field.value ?? ""}
+                              placeholder="Ej: Distrito V"
+                              aria-invalid={fieldState.invalid}
+                            />
+                            {fieldState.invalid ? <FieldError errors={[fieldState.error]} /> : null}
                           </Field>
                         )}
                       />
@@ -593,6 +614,9 @@ export function TenantsNewRoute() {
 
                   {step.key === "dgi" ? (
                     <FieldGroup>
+                      <p className="text-xs text-muted-foreground">
+                        Opcional. Si llenas uno de los campos, debes llenar los tres.
+                      </p>
                       <Controller
                         name="authorization_dgi.number"
                         control={control}
@@ -624,34 +648,50 @@ export function TenantsNewRoute() {
                         <Controller
                           name="authorization_dgi.valid_from"
                           control={control}
-                          render={({ field, fieldState }) => (
-                            <Field>
-                              <FieldLabel htmlFor="valid_from">Válido desde</FieldLabel>
-                              <DatePicker
-                                id="valid_from"
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                placeholder="Selecciona la fecha desde"
-                                aria-invalid={fieldState.invalid}
-                              />
-                            </Field>
-                          )}
+                          render={({ field, fieldState }) => {
+                            const invalid =
+                              showError(touchedFields.authorization_dgi?.valid_from) &&
+                              fieldState.invalid;
+                            return (
+                              <Field data-invalid={invalid}>
+                                <FieldLabel htmlFor="valid_from">Inicio de vigencia</FieldLabel>
+                                <DatePicker
+                                  id="valid_from"
+                                  value={field.value ?? ""}
+                                  onChange={field.onChange}
+                                  placeholder="Selecciona la fecha desde"
+                                  aria-invalid={invalid}
+                                />
+                                {invalid ? (
+                                  <FieldError errors={[errors.authorization_dgi?.valid_from]} />
+                                ) : null}
+                              </Field>
+                            );
+                          }}
                         />
                         <Controller
                           name="authorization_dgi.valid_to"
                           control={control}
-                          render={({ field, fieldState }) => (
-                            <Field>
-                              <FieldLabel htmlFor="valid_to">Válido hasta</FieldLabel>
-                              <DatePicker
-                                id="valid_to"
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                placeholder="Selecciona la fecha hasta"
-                                aria-invalid={fieldState.invalid}
-                              />
-                            </Field>
-                          )}
+                          render={({ field, fieldState }) => {
+                            const invalid =
+                              showError(touchedFields.authorization_dgi?.valid_to) &&
+                              fieldState.invalid;
+                            return (
+                              <Field data-invalid={invalid}>
+                                <FieldLabel htmlFor="valid_to">Vencimiento</FieldLabel>
+                                <DatePicker
+                                  id="valid_to"
+                                  value={field.value ?? ""}
+                                  onChange={field.onChange}
+                                  placeholder="Selecciona la fecha hasta"
+                                  aria-invalid={invalid}
+                                />
+                                {invalid ? (
+                                  <FieldError errors={[errors.authorization_dgi?.valid_to]} />
+                                ) : null}
+                              </Field>
+                            );
+                          }}
                         />
                       </div>
                     </FieldGroup>
@@ -685,6 +725,7 @@ export function TenantsNewRoute() {
                         name={getValues("name")}
                         ruc={getValues("ruc")}
                         regime={getValues("regime")}
+                        departamento={getValues("departamento")}
                         municipality={getValues("municipality")}
                         isWithholder={getValues("is_withholder") === true}
                         dgiNumber={getValues("authorization_dgi.number")}
@@ -719,7 +760,7 @@ export function TenantsNewRoute() {
                         disabled={!canSkipAndCreate || pending}
                         title={skipTitle}
                       >
-                        Saltar y crear
+                        {pending ? "Creando..." : "Saltar y crear"}
                       </Button>
                     )}
                     {isLast ? (
@@ -746,6 +787,7 @@ type ReviewSummaryProps = {
   name: string;
   ruc: string | undefined | null;
   regime: "general" | "cuota_fija" | "pequeno_contribuyente" | undefined | null;
+  departamento: string | undefined | null;
   municipality: string | undefined | null;
   isWithholder: boolean;
   dgiNumber: string | undefined | null;
@@ -789,6 +831,7 @@ function ReviewSummary(props: ReviewSummaryProps) {
         </FieldLegend>
         <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
           <ReviewRow label="Régimen" value={regimeLabel} />
+          <ReviewRow label="Departamento" value={props.departamento ?? "—"} />
           <ReviewRow label="Municipio" value={props.municipality ?? "—"} />
           <div className="space-y-0.5 sm:col-span-2">
             <dt className="text-xs text-muted-foreground">Retenedor</dt>

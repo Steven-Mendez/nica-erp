@@ -1,11 +1,11 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useHasPermission } from "@/api/useHasPermission";
 import { ChevronRight } from "lucide-react";
 import {
   Boxes,
   Building2,
   FileBarChart,
   LayoutDashboard,
-  Repeat,
   Settings,
   ShoppingCart,
 } from "lucide-react";
@@ -24,7 +24,6 @@ import {
   SidebarMenuSubItem,
 } from "./sidebar";
 import { useSidebar, useSidebarSection } from "./sidebar-context";
-import { clearPickerConfirmed } from "@/lib/route-guard";
 
 type NavItem = {
   label: string;
@@ -67,6 +66,9 @@ function EmpresaSection({ pathname }: { pathname: string }) {
   const parentActive = pathname === "/empresa" || pathname.startsWith("/empresa/");
   const section = useSidebarSection(EMPRESA_PARENT.sectionKey, parentActive);
   const Icon = EMPRESA_PARENT.icon;
+  const canReadMembers = useHasPermission("members:read");
+  const canWriteTenant = useHasPermission("tenant:write");
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -90,6 +92,9 @@ function EmpresaSection({ pathname }: { pathname: string }) {
       {state === "expanded" && section.open ? (
         <SidebarMenuSub id="sidebar-section-empresa">
           {EMPRESA_CHILDREN.map((child) => {
+            if (child.to === "/empresa/users" && !canReadMembers) return null;
+            if (child.to === "/empresa/settings" && !canWriteTenant) return null;
+
             const active =
               child.to === "/empresa"
                 ? pathname === "/empresa"
@@ -112,12 +117,6 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const routerState = useRouterState({ select: (s) => ({ pathname: s.location.pathname }) });
   const pathname = routerState.pathname;
-  const navigate = useNavigate();
-
-  const goToPicker = (): void => {
-    clearPickerConfirmed();
-    void navigate({ to: "/tenants" });
-  };
 
   return (
     <Sidebar>
@@ -125,18 +124,6 @@ export function AppSidebar() {
         <TenantSwitcher />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={goToPicker}
-                icon={<Repeat className="h-4 w-4" aria-hidden="true" />}
-                label="Cambiar empresa"
-                title="Cambiar empresa"
-              />
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Espacio de trabajo</SidebarGroupLabel>
           <SidebarMenu>

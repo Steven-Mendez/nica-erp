@@ -2,6 +2,7 @@
 // removal of the legacy Tenants entry, the Empresa parent with sub-menu,
 // active-state propagation, and section persistence key.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppSidebar } from "@/components/app-sidebar/app-sidebar";
 import {
@@ -32,12 +33,20 @@ vi.mock("@/features/auth/api/hooks", () => ({
       preferences: {},
       active_tenant: "00000000-0000-0000-0000-0000000000aa",
       role: "owner",
-      permissions: [],
+      permissions: ["members:read", "tenant:write"],
     },
     isLoading: false,
     isError: false,
   }),
   useLogoutMutation: () => ({ mutate: () => undefined, isPending: false }),
+}));
+
+// AppSidebar's EmpresaSection gates "Usuarios" / "Configuración" sub-
+// menu entries via `useHasPermission`. That hook uses `useQuery({
+// queryKey: meQueryKey })`; seed the cache with the same permissions
+// the useMeQuery mock returns so the gates pass in this test.
+vi.mock("@/api/useHasPermission", () => ({
+  useHasPermission: (code: string) => ["members:read", "tenant:write"].includes(code),
 }));
 
 vi.mock("@/features/tenants/api/hooks", () => ({
@@ -61,10 +70,14 @@ vi.mock("@/features/tenants/api/hooks", () => ({
 
 function renderSidebar(pathname: string) {
   mockPathname = pathname;
+  // AppSidebar's EmpresaSection uses useHasPermission → useQuery; wrap
+  // with a fresh QueryClientProvider so the hook doesn't throw.
   return render(
-    <SidebarProvider>
-      <AppSidebar />
-    </SidebarProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <SidebarProvider>
+        <AppSidebar />
+      </SidebarProvider>
+    </QueryClientProvider>,
   );
 }
 

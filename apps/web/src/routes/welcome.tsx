@@ -72,6 +72,20 @@ function detectBrowserTimezone(): string {
   }
 }
 
+// Audit F-007: surface a "Comunes (Centroamérica)" group at the top of
+// the picker so the typical Nicaraguan operator does not have to scroll
+// past 400+ alphabetical IANA names to find their timezone. Each entry
+// carries a Spanish-friendly label so the dropdown reads naturally.
+const CENTRAL_AMERICA_TZS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "America/Managua", label: "Managua (GMT-6)" },
+  { value: "America/Tegucigalpa", label: "Tegucigalpa (GMT-6)" },
+  { value: "America/El_Salvador", label: "San Salvador (GMT-6)" },
+  { value: "America/Guatemala", label: "Ciudad de Guatemala (GMT-6)" },
+  { value: "America/Mexico_City", label: "Ciudad de México (GMT-6)" },
+];
+
+const CA_TZ_VALUES = new Set(CENTRAL_AMERICA_TZS.map((e) => e.value));
+
 interface TimezoneComboboxProps {
   id: string;
   value: string;
@@ -120,22 +134,42 @@ function TimezoneCombobox({
           <CommandInput placeholder="Buscar zona horaria..." />
           <CommandList>
             <CommandEmpty>Sin resultados.</CommandEmpty>
-            <CommandGroup>
-              {options.map((tz) => (
+            <CommandGroup heading="Comunes (Centroamérica)">
+              {CENTRAL_AMERICA_TZS.map((tz) => (
                 <CommandItem
-                  key={tz}
-                  value={tz}
-                  onSelect={(selected) => {
-                    onChange(selected);
+                  key={tz.value}
+                  value={`${tz.label} ${tz.value}`}
+                  onSelect={() => {
+                    onChange(tz.value);
                     setOpen(false);
                   }}
                 >
                   <Check
-                    className={cn("mr-2 size-4", value === tz ? "opacity-100" : "opacity-0")}
+                    className={cn("mr-2 size-4", value === tz.value ? "opacity-100" : "opacity-0")}
                   />
-                  {tz}
+                  <span className="flex-1">{tz.label}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{tz.value}</span>
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandGroup heading="Todas las zonas">
+              {options
+                .filter((tz) => !CA_TZ_VALUES.has(tz))
+                .map((tz) => (
+                  <CommandItem
+                    key={tz}
+                    value={tz}
+                    onSelect={(selected) => {
+                      onChange(selected);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn("mr-2 size-4", value === tz ? "opacity-100" : "opacity-0")}
+                    />
+                    {tz}
+                  </CommandItem>
+                ))}
             </CommandGroup>
           </CommandList>
         </Command>
@@ -149,9 +183,24 @@ export function WelcomeRoute() {
   const navigate = useNavigate();
   const mutation = useUpdateMeMutation();
   const timezones = useMemo(() => listTimezones(), []);
+  // Audit F-007: pre-select America/Managua for Nicaraguan operators.
+  // The browser's IANA zone is used only as a fallback when the SPA
+  // is loaded outside the country (e.g. dev work from abroad).
+  const initialTimezone = useMemo(() => {
+    const browser = detectBrowserTimezone();
+    return browser.startsWith("America/") &&
+      [
+        "America/Managua",
+        "America/Tegucigalpa",
+        "America/Guatemala",
+        "America/El_Salvador",
+      ].includes(browser)
+      ? browser
+      : "America/Managua";
+  }, []);
   const form = useForm<WelcomeValues>({
     resolver: zodResolver(welcomeSchema),
-    defaultValues: { display_name: "", timezone: detectBrowserTimezone() },
+    defaultValues: { display_name: "", timezone: initialTimezone },
     mode: "onSubmit",
     reValidateMode: "onChange",
   });

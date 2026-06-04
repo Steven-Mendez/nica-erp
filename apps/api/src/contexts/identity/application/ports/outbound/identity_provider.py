@@ -59,6 +59,15 @@ class IdentityProvider(Protocol):
     async def refresh(self, *, refresh_token: str) -> Identity:
         """Exchange a refresh token for a fresh ``Identity`` bundle."""
 
+    async def revoke_refresh_token(self, *, refresh_token: str) -> None:
+        """Mark the supplied refresh token's ``jti`` as revoked.
+
+        Audit F-016: ``POST /v1/auth/logout`` calls this so a stolen
+        refresh token cannot mint new access tokens after the user
+        signs out. Adapters MUST treat unknown / already-revoked
+        tokens as a no-op for idempotency.
+        """
+
     async def confirm_signup(self, *, email: str, code: str) -> str:
         """Confirm the email-verification code; return the external sub."""
 

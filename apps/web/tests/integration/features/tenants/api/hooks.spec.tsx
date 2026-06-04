@@ -309,8 +309,8 @@ describe("mutations", () => {
   it("useSwitchTenantMutation sets tokens, flips the picker flag, and clears the cache", async () => {
     vi.mocked(switchTenant).mockResolvedValueOnce({
       access_token: "a",
-      refresh_token: "r",
       id_token: "i",
+      token_type: "Bearer",
     } as Awaited<ReturnType<typeof switchTenant>>);
     const client = makeClient();
     const clearSpy = vi.spyOn(client, "clear");
@@ -318,8 +318,8 @@ describe("mutations", () => {
     const { result } = renderHook(() => useSwitchTenantMutation(), {
       wrapper: wrapper(client),
     });
-    await result.current.mutateAsync({ tenantId, input: { refresh_token: "r-in" } });
-    expect(setTokens).toHaveBeenCalledWith({ access: "a", refresh: "r", id: "i" });
+    await result.current.mutateAsync({ tenantId, input: {} });
+    expect(setTokens).toHaveBeenCalledWith({ access: "a", id: "i" });
     expect(window.sessionStorage.getItem(PICKER_FLAG_KEY)).toBe("1");
     expect(clearSpy).toHaveBeenCalled();
   });

@@ -9,7 +9,7 @@ import { EmpresaUsuariosRoute } from "@/routes/empresa/users";
 const tenantId = "00000000-0000-0000-0000-0000000000aa";
 
 let permissions: string[] = [];
-let members: Array<{ user_id: string; role: string }> = [];
+let members: Array<{ user_id: string; role: string; display_name?: string; email?: string }> = [];
 let invitations: Array<{
   id: string;
   email: string;
@@ -142,15 +142,18 @@ describe("EmpresaUsuariosRoute", () => {
 
   it("with members:update-role true, exposes a row actions menu for non-owner rows", () => {
     permissions = ["members:update-role"];
+    // The actions menu's aria-label now reads from display_name (or
+    // email as fallback) — never the UUID (audit F-030: no UUIDs
+    // surfaced under names).
     members = [
-      { user_id: "u-owner", role: "owner" },
-      { user_id: "u-2", role: "viewer" },
+      { user_id: "u-owner", role: "owner", display_name: "Ada Owner" },
+      { user_id: "u-2", role: "viewer", display_name: "Bea Viewer" },
     ];
     renderRoute();
     // Row-level actions menu trigger appears for the non-owner row.
-    expect(screen.getByLabelText("Acciones de u-2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Acciones de Bea Viewer")).toBeInTheDocument();
     // Owner row never gets the actions menu.
-    expect(screen.queryByLabelText("Acciones de u-owner")).toBeNull();
+    expect(screen.queryByLabelText("Acciones de Ada Owner")).toBeNull();
   });
 
   it("without members:update-role and without members:remove, no actions menu is shown", () => {
@@ -162,7 +165,7 @@ describe("EmpresaUsuariosRoute", () => {
     // both a desktop <table> branch and a mobile <Card> branch
     // (CSS-toggled by viewport) so each Spanish role label appears
     // twice in the DOM under jsdom (where no media query applies).
-    expect(screen.getAllByText("Lector").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Visualizador").length).toBeGreaterThanOrEqual(1);
   });
 
   it("owner row renders the role badge but never the actions menu", () => {

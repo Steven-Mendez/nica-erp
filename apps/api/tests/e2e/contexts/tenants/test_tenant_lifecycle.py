@@ -90,7 +90,7 @@ def _find_invite_token(recorder: RecordingEmailSender, address: str) -> str:
 
 async def _signup_confirm_login(
     client: AsyncClient, recorder: RecordingEmailSender, email: str
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], str]:
     register = await client.post(
         "/v1/auth/register", json={"email": email, "password": E2E_PASSWORD}
     )
@@ -102,7 +102,9 @@ async def _signup_confirm_login(
 
     login = await client.post("/v1/auth/login", json={"email": email, "password": E2E_PASSWORD})
     assert login.status_code == 200, login.text
-    return login.json()
+    refresh_cookie = login.cookies.get("nica_erp_rt")
+    assert refresh_cookie is not None, "login MUST set the nica_erp_rt cookie"
+    return login.json(), refresh_cookie
 
 
 # --- the gate -------------------------------------------------------------
@@ -115,7 +117,7 @@ async def test_owner_walks_create_switch_invite_lifecycle(
 
     client, recorder = wired_app_recording_invites
 
-    owner_tokens = await _signup_confirm_login(client, recorder, "owner@test.dev")
+    owner_tokens, owner_refresh = await _signup_confirm_login(client, recorder, "owner@test.dev")
     # Second user exists so the recorder has a known invite recipient; the
     # accept leg is deferred (see module docstring).
     await _signup_confirm_login(client, recorder, "invitee@test.dev")
@@ -144,11 +146,14 @@ async def test_owner_walks_create_switch_invite_lifecycle(
     tenant_id = create.json()["id"]
 
     # Switch into the tenant — the access token now carries
-    # ``custom:active_tenant``.
+    # ``custom:active_tenant``. The refresh token rides in the
+    # `nica_erp_rt` httpOnly cookie; pass it explicitly because httpx
+    # doesn't auto-store Secure cookies over plain http://.
     switch = await client.post(
         f"/v1/tenants/{tenant_id}/switch",
         headers={"Authorization": f"Bearer {owner_access}"},
-        json={"refresh_token": owner_tokens["refresh_token"]},
+        json={},
+        cookies={"nica_erp_rt": owner_refresh},
     )
     assert switch.status_code == 200, switch.text
     owner_in_tenant = switch.json()["access_token"]

@@ -1,14 +1,15 @@
 // apps/web/tests/unit/api/tokenStore.test.ts
 //
-// Verifies the hybrid token store behaviour:
+// Verifies the in-memory token store behaviour:
 // - access AND id tokens live in memory only
-// - the refresh token is persisted in sessionStorage so a reload (module
-//   re-import) can still read it back
-// - clear() resets every accessor AND removes the persisted entry
+// - the refresh token is NOT held by the store at all — it rides in the
+//   `nica_erp_rt` httpOnly cookie set by the API; the SPA must never have
+//   a JS-readable copy of it (audit F-011)
+// - clear() resets every accessor and never touches sessionStorage
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const STORAGE_KEY = "nica-erp:refresh-token";
+const LEGACY_STORAGE_KEY = "nica-erp:refresh-token";
 
 describe("tokenStore", () => {
   beforeEach(() => {
@@ -24,56 +25,59 @@ describe("tokenStore", () => {
   it("returns null for every accessor before any token is set", async () => {
     const store = await import("@/api/tokenStore");
     expect(store.getAccessToken()).toBeNull();
-    expect(store.getRefreshToken()).toBeNull();
     expect(store.getIdToken()).toBeNull();
   });
 
-  it("round-trips tokens through setTokens / get*", async () => {
+  it("round-trips access + id tokens through setTokens / get*", async () => {
     const store = await import("@/api/tokenStore");
-    store.setTokens({ access: "a", refresh: "r", id: "i" });
+    store.setTokens({ access: "a", id: "i" });
     expect(store.getAccessToken()).toBe("a");
-    expect(store.getRefreshToken()).toBe("r");
     expect(store.getIdToken()).toBe("i");
   });
 
-  it("persists the refresh token to sessionStorage", async () => {
+  it("never writes the refresh token to sessionStorage (legacy key remains empty)", async () => {
     const store = await import("@/api/tokenStore");
-    store.setTokens({ access: "a", refresh: "r-persisted", id: "i" });
-    expect(window.sessionStorage.getItem(STORAGE_KEY)).toBe("r-persisted");
+    store.setTokens({ access: "a", id: "i" });
+    // The legacy `nica-erp:refresh-token` key must stay absent: the
+    // cookie carrier is now the only persistent surface.
+    expect(window.sessionStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+    // And no other key on sessionStorage should leak a JWT-shaped value.
+    const all = Object.values({ ...window.sessionStorage });
+    expect(all.some((v) => typeof v === "string" && v.startsWith("eyJ"))).toBe(false);
   });
 
   it("does NOT persist the access or id token", async () => {
     const store = await import("@/api/tokenStore");
-    store.setTokens({ access: "a", refresh: "r", id: "i" });
-    // Only the refresh key should exist; nothing carrying the access/id bytes.
+    store.setTokens({ access: "a", id: "i" });
     const all = Object.entries({ ...window.sessionStorage });
-    const containsAccess = all.some(([, v]) => v === "a");
-    const containsId = all.some(([, v]) => v === "i");
-    expect(containsAccess).toBe(false);
-    expect(containsId).toBe(false);
+    expect(all.some(([, v]) => v === "a")).toBe(false);
+    expect(all.some(([, v]) => v === "i")).toBe(false);
   });
 
-  it("clear() resets every accessor and removes the persisted refresh token", async () => {
+  it("clear() resets every accessor and leaves sessionStorage untouched", async () => {
     const store = await import("@/api/tokenStore");
-    store.setTokens({ access: "a", refresh: "r", id: "i" });
+    store.setTokens({ access: "a", id: "i" });
+    window.sessionStorage.setItem("unrelated", "keep-me");
     store.clear();
     expect(store.getAccessToken()).toBeNull();
-    expect(store.getRefreshToken()).toBeNull();
     expect(store.getIdToken()).toBeNull();
-    expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    // We must not blow away unrelated sessionStorage entries.
+    expect(window.sessionStorage.getItem("unrelated")).toBe("keep-me");
+    // And the legacy key must remain absent (we never wrote it).
+    expect(window.sessionStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
   });
 
-  it("after a simulated reload, access/id are lost but the refresh token is recovered from sessionStorage", async () => {
+  it("a simulated reload loses all in-memory tokens; recovery happens via the cookie + bootRefresh, not via storage", async () => {
     const first = await import("@/api/tokenStore");
-    first.setTokens({ access: "a", refresh: "r", id: "i" });
+    first.setTokens({ access: "a", id: "i" });
     expect(first.getAccessToken()).toBe("a");
 
     vi.resetModules();
 
     const second = await import("@/api/tokenStore");
+    // Module-scoped state is gone. Recovery now relies on the cookie
+    // ridden by `bootRefresh()` calling /v1/auth/refresh.
     expect(second.getAccessToken()).toBeNull();
     expect(second.getIdToken()).toBeNull();
-    // Refresh survives the reload — this is what powers boot-time silent refresh.
-    expect(second.getRefreshToken()).toBe("r");
   });
 });

@@ -11,7 +11,7 @@ import { useHasPermission } from "@/api/useHasPermission";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { FormErrorAlert } from "@/components/form/form-error-alert";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProblemDetail } from "@/api/errors";
 import { DEPARTAMENTOS, isValidMunicipio, municipiosOf } from "../data/nicaragua-geography";
+import { RUC_PLACEHOLDER } from "../lib/ruc";
 import {
   EMPRESA_FISCAL_REGIMEN_LABELS,
   empresaFiscalSettingsSchema,
@@ -115,7 +116,10 @@ function tenantToFormValues(tenant: Tenant): EmpresaFiscalSettingsValues {
         ? tenant.regime
         : "general",
     retenedor: tenant.is_withholder,
-    departamento: tenant.departamento ?? "",
+    // Audit F-037: alphabetical default (Boaco) was misleading for the
+    // typical Nicaraguan operator. Default to Managua when no value
+    // has been persisted yet.
+    departamento: tenant.departamento ?? "Managua",
     municipio: tenant.municipality ?? "",
     direccion: tenant.fiscal_address ?? "",
     resolucion_dgi: tenant.authorization_dgi?.number ?? "",
@@ -151,7 +155,7 @@ interface EmpresaFiscalSettingsFormProps {
 const RUC_COLLISION_CODE = "tenants.ruc_collision";
 
 export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormProps) {
-  const canEdit = useHasPermission("tenant.update");
+  const canEdit = useHasPermission("tenant:write");
   const mutation = useUpdateActiveTenantMutation();
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const initialValues = useMemo(() => tenantToFormValues(tenant), [tenant]);
@@ -246,7 +250,7 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
               <Input
                 {...field}
                 id="ruc"
-                placeholder="J03-100000-00010"
+                placeholder={RUC_PLACEHOLDER}
                 aria-invalid={fieldState.invalid}
                 onChange={(e) => field.onChange(maskRuc(e.target.value))}
               />
@@ -259,9 +263,15 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
           control={form.control}
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="regimen">Régimen fiscal</FieldLabel>
+              <FieldLabel id="label-regimen" htmlFor="regimen">
+                Régimen fiscal
+              </FieldLabel>
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id="regimen" aria-invalid={fieldState.invalid}>
+                <SelectTrigger
+                  id="regimen"
+                  aria-labelledby="label-regimen"
+                  aria-invalid={fieldState.invalid}
+                >
                   <SelectValue placeholder="Selecciona un régimen" />
                 </SelectTrigger>
                 <SelectContent>
@@ -305,9 +315,15 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
           control={form.control}
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="departamento">Departamento</FieldLabel>
+              <FieldLabel id="label-departamento" htmlFor="departamento">
+                Departamento
+              </FieldLabel>
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id="departamento" aria-invalid={fieldState.invalid}>
+                <SelectTrigger
+                  id="departamento"
+                  aria-labelledby="label-departamento"
+                  aria-invalid={fieldState.invalid}
+                >
                   <SelectValue placeholder="Selecciona un departamento" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,9 +345,15 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
             const options = departamento ? municipiosOf(departamento) : [];
             return (
               <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="municipio">Municipio</FieldLabel>
+                <FieldLabel id="label-municipio" htmlFor="municipio">
+                  Municipio
+                </FieldLabel>
                 <Select value={field.value} onValueChange={field.onChange} disabled={!departamento}>
-                  <SelectTrigger id="municipio" aria-invalid={fieldState.invalid}>
+                  <SelectTrigger
+                    id="municipio"
+                    aria-labelledby="label-municipio"
+                    aria-invalid={fieldState.invalid}
+                  >
                     <SelectValue
                       placeholder={
                         departamento ? "Selecciona un municipio" : "Primero elige un departamento"
@@ -346,6 +368,9 @@ export function EmpresaFiscalSettingsForm({ tenant }: EmpresaFiscalSettingsFormP
                     ))}
                   </SelectContent>
                 </Select>
+                {!departamento ? (
+                  <FieldDescription>Elige un departamento primero.</FieldDescription>
+                ) : null}
                 {fieldState.invalid ? <FieldError errors={[fieldState.error]} /> : null}
               </Field>
             );

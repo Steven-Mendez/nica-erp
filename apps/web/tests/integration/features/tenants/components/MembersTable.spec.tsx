@@ -91,29 +91,29 @@ describe("MembersTable", () => {
     // under jsdom (where no CSS media query is applied).
     expect(screen.getAllByText("Propietario").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Administrador").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Lector").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Visualizador").length).toBeGreaterThanOrEqual(1);
   });
 
   it("never renders an actions menu on the owner row", () => {
     renderTable({
       data: [
-        makeMember({ user_id: "u-owner", role: "owner" }),
-        makeMember({ user_id: "u-2", role: "viewer" }),
+        makeMember({ user_id: "u-owner", email: "owner@x.io", role: "owner" }),
+        makeMember({ user_id: "u-2", email: "viewer@x.io", role: "viewer" }),
       ],
       canUpdateRole: true,
       canRemove: true,
     });
-    expect(screen.queryByLabelText("Acciones de u-owner")).toBeNull();
-    expect(screen.getByLabelText("Acciones de u-2")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Acciones de owner@x.io")).toBeNull();
+    expect(screen.getByLabelText("Acciones de viewer@x.io")).toBeInTheDocument();
   });
 
   it("hides actions when both canUpdateRole and canRemove are false", () => {
     renderTable({
-      data: [makeMember({ user_id: "u-2", role: "viewer" })],
+      data: [makeMember({ user_id: "u-2", email: "viewer@x.io", role: "viewer" })],
       canUpdateRole: false,
       canRemove: false,
     });
-    expect(screen.queryByLabelText("Acciones de u-2")).toBeNull();
+    expect(screen.queryByLabelText("Acciones de viewer@x.io")).toBeNull();
   });
 
   it("debounces the search box and forwards the value via onViewStateChange", async () => {
@@ -172,7 +172,7 @@ describe("MembersTable", () => {
       data: [makeMember({ user_id: "u-2", role: "viewer", display_name: "Ada" })],
       canRemove: true,
     });
-    const trigger = screen.getByLabelText("Acciones de u-2");
+    const trigger = screen.getByLabelText("Acciones de Ada");
     await act(async () => {
       fireEvent.pointerDown(trigger, { button: 0 });
       fireEvent.click(trigger);

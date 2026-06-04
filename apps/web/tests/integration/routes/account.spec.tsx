@@ -87,7 +87,9 @@ describe("AccountRoute (IdentityLayout)", () => {
     expect(screen.getAllByText("Empresa activa").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Permisos")).toBeInTheDocument();
     expect(screen.getByText(me.id)).toBeInTheDocument();
-    expect(screen.getByText("Acme S.A.")).toBeInTheDocument();
+    // The empresa name appears in both the sidebar tenant-switcher
+    // and the identity card now that the sidebar renders globally.
+    expect(screen.getAllByText("Acme S.A.").length).toBeGreaterThanOrEqual(1);
     for (const perm of me.permissions) {
       expect(screen.getByText(perm)).toBeInTheDocument();
     }

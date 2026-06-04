@@ -16,6 +16,7 @@ from contexts.tenants.application.ports.outbound import (
     MembershipRepository,
 )
 from contexts.tenants.domain import (
+    InvitationIdentityMismatchError,
     InvitationInvalidError,
     InvitationNotFoundError,
     Membership,
@@ -33,9 +34,11 @@ def _utc_now() -> datetime:
 class AcceptInvitationCommand:
     token: str
     user_id: UUID  # taken from CurrentUserContext at the HTTP layer
+    user_email: str  # idem; used to bind invitee identity
     external_sub: str  # idem; required for IdP rotation calls
     prior_active_tenant: str | None  # validated from JWT, not request body
     refresh_token: str | None  # optional; rotation skipped when absent
+    confirmed_email: str | None = None  # optional retype; audit F-026 defense
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +64,17 @@ class AcceptInvitation:
             claims = self.token_generator.verify(token=command.token)
         except Exception as exc:
             raise InvitationInvalidError(str(exc)) from exc
+        # Bind the invitation to the authenticated identity BEFORE any
+        # state mutation: a failed attempt MUST be a complete no-op (no
+        # membership row, no invitation consumed). Comparison is
+        # case-insensitive; the issuer normalises emails to lowercase.
+        if (
+            command.confirmed_email is not None
+            and claims.email.casefold() != command.confirmed_email.casefold()
+        ):
+            raise InvitationIdentityMismatchError()
+        if claims.email.casefold() != command.user_email.casefold():
+            raise InvitationIdentityMismatchError()
         token_hash = self.token_generator.hash(token=command.token)
         async with self.uow.begin():
             # ``/v1/invitations/accept`` is on the no-tenant-required

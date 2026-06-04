@@ -5,7 +5,7 @@ import {
   updateMemberRoleSchema,
   updateTenantSchema,
 } from "@/features/tenants/schemas";
-import { MUNICIPALITIES } from "@/features/tenants/municipalities";
+import { DEPARTAMENTOS } from "@/features/tenants/lib/departamentos";
 
 const VALID_RUC = "0010101800010X";
 const VALID_DGI = { number: "DGI-1", valid_from: "2026-01-01", valid_to: "2026-12-31" };
@@ -29,7 +29,8 @@ describe("createTenantSchema (post-ADR-0034 soft creation)", () => {
       name: "Mi Empresa",
       ruc: VALID_RUC,
       regime: "general",
-      municipality: "Managua",
+      departamento: "Managua",
+      municipality: "Distrito V",
       authorization_dgi: VALID_DGI,
       fiscal_address: "Calle 1",
       is_withholder: true,
@@ -46,19 +47,28 @@ describe("createTenantSchema (post-ADR-0034 soft creation)", () => {
     }
   });
 
-  it("rejects a municipality outside the canonical catalog", () => {
+  it("rejects a departamento outside the canonical catalog", () => {
     const result = createTenantSchema.safeParse({
       name: "Mi Empresa",
-      municipality: "Atlántida",
+      departamento: "Atlántida",
     });
     expect(result.success).toBe(false);
   });
 
-  it("accepts every canonical municipality", () => {
-    for (const m of MUNICIPALITIES) {
-      const result = createTenantSchema.safeParse({ name: "Mi Empresa", municipality: m });
+  it("accepts every canonical departamento", () => {
+    for (const d of DEPARTAMENTOS) {
+      const result = createTenantSchema.safeParse({ name: "Mi Empresa", departamento: d });
       expect(result.success).toBe(true);
     }
+  });
+
+  it("accepts a free-text municipality", () => {
+    const result = createTenantSchema.safeParse({
+      name: "Mi Empresa",
+      departamento: "Managua",
+      municipality: "Distrito V",
+    });
+    expect(result.success).toBe(true);
   });
 
   it("rejects an unknown regime", () => {

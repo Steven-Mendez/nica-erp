@@ -288,14 +288,23 @@ async def test_patch_tenant_returns_200_with_permission() -> None:
 async def test_post_switch_tenant_returns_token_bundle() -> None:
     app = _build_app()
     async with _client(app) as c:
+        # Refresh token rides in the httpOnly `nica_erp_rt` cookie; the
+        # body is empty after the F-011 hardening.
         r = await c.post(
             f"/v1/tenants/{_TENANT_ID}/switch",
-            json={"refresh_token": "ref"},
+            json={},
+            cookies={"nica_erp_rt": "ref"},
         )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["access_token"] == "acc"
     assert body["token_type"] == "Bearer"
+    # JSON MUST NOT leak the rotated refresh token (audit F-011).
+    assert "refresh_token" not in body
+    # And the rotation SHALL pin the new refresh to the cookie.
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "nica_erp_rt=" in set_cookie
+    assert "HttpOnly" in set_cookie
 
 
 @pytest.mark.integration

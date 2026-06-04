@@ -146,11 +146,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             active_tenant = None
 
         if active_tenant is None and not self._is_no_tenant_required(method, path):
+            # Audit F-030: detail SHALL be a generic Spanish message;
+            # the internal claim path is not user-facing and pairs
+            # poorly with token-type confusion attacks.
             return _problem_response(
                 403,
                 "tenant.required",
-                "Active tenant required",
-                detail="JWT has no 'custom:active_tenant' claim",
+                "Acceso denegado",
+                detail="Acceso denegado: empresa no seleccionada.",
             )
 
         current_user = CurrentUser(

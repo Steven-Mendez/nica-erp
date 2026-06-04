@@ -21,8 +21,12 @@ from contexts.identity.adapters.outbound.identity_provider.local import (
     IdentityProviderLocal,
 )
 from contexts.identity.application.errors import (
+    ExpiredResetCodeError,
+    InvalidConfirmationCodeError,
     InvalidCredentialsError,
+    InvalidResetCodeError,
     LockoutActiveError,
+    RateLimitedError,
     SignupEmailNotConfirmedError,
 )
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
@@ -149,6 +153,86 @@ async def test_full_local_auth_loop(
 
 
 @pytest.mark.integration
+async def test_revoked_refresh_token_is_rejected_on_next_refresh(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    """Audit F-016: revoking the refresh JWT MUST cause the next
+    /refresh call to fail with InvalidCredentialsError even though
+    the JWT's signature still validates."""
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        await idp.register(email="revoke@example.com", password=_PASSWORD)
+    code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        await idp.confirm_signup(email="revoke@example.com", code=code)
+    async with isolated_uow.begin():
+        identity = await idp.authenticate(email="revoke@example.com", password=_PASSWORD)
+
+    async with isolated_uow.begin():
+        await idp.revoke_refresh_token(refresh_token=identity.refresh_token)
+
+    async with isolated_uow.begin():
+        with pytest.raises(InvalidCredentialsError):
+            await idp.refresh(refresh_token=identity.refresh_token)
+
+
+@pytest.mark.integration
+async def test_refresh_token_rejected_as_access_token(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    """Audit F-011: a refresh token presented as Bearer on any
+    protected endpoint MUST be rejected — typ:"refresh" tokens are
+    only valid on /v1/auth/refresh, never on bearer-auth paths."""
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        await idp.register(email="typ@example.com", password=_PASSWORD)
+    code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        await idp.confirm_signup(email="typ@example.com", code=code)
+    async with isolated_uow.begin():
+        identity = await idp.authenticate(email="typ@example.com", password=_PASSWORD)
+
+    # The access token still verifies as itself.
+    async with isolated_uow.begin():
+        claims = await idp.verify_token(token=identity.access_token)
+    assert claims["sub"] == identity.sub
+
+    # But the refresh token, which carries typ:"refresh", is refused.
+    async with isolated_uow.begin():
+        with pytest.raises(InvalidCredentialsError):
+            await idp.verify_token(token=identity.refresh_token)
+
+
+@pytest.mark.integration
+async def test_revoke_refresh_token_is_idempotent(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    """Revoking an already-revoked / unknown / malformed token MUST
+    resolve as a no-op so the logout endpoint stays idempotent."""
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        await idp.register(email="idem@example.com", password=_PASSWORD)
+    code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        await idp.confirm_signup(email="idem@example.com", code=code)
+    async with isolated_uow.begin():
+        identity = await idp.authenticate(email="idem@example.com", password=_PASSWORD)
+
+    async with isolated_uow.begin():
+        await idp.revoke_refresh_token(refresh_token=identity.refresh_token)
+    async with isolated_uow.begin():
+        await idp.revoke_refresh_token(refresh_token=identity.refresh_token)
+    async with isolated_uow.begin():
+        await idp.revoke_refresh_token(refresh_token="not-even-a-jwt")
+
+
+@pytest.mark.integration
 async def test_unverified_login_raises_signup_not_confirmed(
     isolated_uow: SqlAlchemyUnitOfWork,
     email_sender: RecordingEmailSender,
@@ -265,8 +349,10 @@ async def test_resend_confirmation_rate_limited_within_window(
     email_sender.sent.clear()
 
     async with isolated_uow.begin():
-        with pytest.raises(InvalidCredentialsError):
+        with pytest.raises(RateLimitedError) as exc_info:
             await idp.resend_confirmation(email="resend@example.com")
+    assert exc_info.value.scope == "resend"
+    assert exc_info.value.retry_after_seconds >= 1
     assert email_sender.sent == []
 
 
@@ -280,6 +366,132 @@ async def test_global_signout_is_always_a_no_op(
     async with isolated_uow.begin():
         result = await idp.global_signout(external_sub="00000000-0000-0000-0000-000000000000")
     assert result is None
+
+
+@pytest.mark.integration
+async def test_confirm_signup_is_idempotent_after_success(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    """Audit F-002: confirming the same email twice with a valid code
+    SHALL return the same external_sub instead of raising on the second
+    call (the hash is cleared by MARK_VERIFIED, so the second call
+    cannot reproduce the original verification)."""
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        sub = await idp.register(email="retry@example.com", password=_PASSWORD)
+    code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        first = await idp.confirm_signup(email="retry@example.com", code=code)
+    async with isolated_uow.begin():
+        second = await idp.confirm_signup(email="retry@example.com", code=code)
+    assert first == sub
+    assert second == sub
+
+
+@pytest.mark.integration
+async def test_confirm_signup_with_wrong_code_raises_invalid_confirmation_code(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        await idp.register(email="wrong-otp@example.com", password=_PASSWORD)
+
+    async with isolated_uow.begin():
+        with pytest.raises(InvalidConfirmationCodeError):
+            await idp.confirm_signup(email="wrong-otp@example.com", code="000000")
+
+
+@pytest.mark.integration
+async def test_confirm_signup_for_unknown_email_raises_invalid_confirmation_code(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        with pytest.raises(InvalidConfirmationCodeError):
+            await idp.confirm_signup(email="ghost@example.com", code="123456")
+
+
+@pytest.mark.integration
+async def test_confirm_forgot_password_with_wrong_code_raises_invalid_reset_code(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    idp = _make_idp(uow=isolated_uow, email_sender=email_sender, jwt_secret=jwt_secret)
+    async with isolated_uow.begin():
+        await idp.register(email="reset-bad@example.com", password=_PASSWORD)
+    code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        await idp.confirm_signup(email="reset-bad@example.com", code=code)
+    email_sender.sent.clear()
+    async with isolated_uow.begin():
+        await idp.forgot_password(email="reset-bad@example.com")
+    assert len(email_sender.sent) == 1
+
+    async with isolated_uow.begin():
+        with pytest.raises(InvalidResetCodeError) as exc_info:
+            await idp.confirm_forgot_password(
+                email="reset-bad@example.com",
+                code="000000",
+                new_password=_NEW_PASSWORD,
+            )
+    # The expired subclass must not match on a wrong-but-fresh code.
+    assert not isinstance(exc_info.value, ExpiredResetCodeError)
+
+
+@pytest.mark.integration
+async def test_confirm_forgot_password_after_ttl_raises_expired_reset_code(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    email_sender: RecordingEmailSender,
+    jwt_secret: str,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    fixed_now = datetime(2026, 6, 3, 12, 0, 0, tzinfo=UTC)
+    clock = {"value": fixed_now}
+
+    def now() -> datetime:
+        return clock["value"]
+
+    idp = IdentityProviderLocal(
+        uow=isolated_uow,
+        email_sender=email_sender,
+        jwt_secret=jwt_secret,
+        jwt_access_ttl_seconds=3600,
+        jwt_refresh_ttl_seconds=2_592_000,
+        signup_code_ttl_seconds=900,
+        password_reset_code_ttl_seconds=600,
+        verification_attempts_max=5,
+        verification_attempts_window_seconds=3600,
+        now=now,
+    )
+
+    async with isolated_uow.begin():
+        await idp.register(email="reset-ttl@example.com", password=_PASSWORD)
+    signup_code = _extract_code(email_sender.sent[-1].text)
+    async with isolated_uow.begin():
+        await idp.confirm_signup(email="reset-ttl@example.com", code=signup_code)
+    email_sender.sent.clear()
+    async with isolated_uow.begin():
+        await idp.forgot_password(email="reset-ttl@example.com")
+    reset_code = _extract_code(email_sender.sent[-1].text)
+
+    # Advance past the password_reset_code_ttl_seconds window.
+    clock["value"] = fixed_now + timedelta(seconds=601)
+
+    async with isolated_uow.begin():
+        with pytest.raises(ExpiredResetCodeError):
+            await idp.confirm_forgot_password(
+                email="reset-ttl@example.com",
+                code=reset_code,
+                new_password=_NEW_PASSWORD,
+            )
 
 
 @pytest.mark.integration

@@ -48,6 +48,7 @@ Spanish copy. The registry MUST include at minimum:
 - `auth.token_expired` → `"Tu sesión expiró. Inicia sesión de nuevo."`
 - `auth.reset_token_used` → `"Este enlace ya fue utilizado. Solicita uno nuevo."`
 - `auth.reset_token_expired` → `"El enlace expiró. Solicita uno nuevo."`
+- `auth.resend_throttled` → `"Espera unos segundos antes de pedir otro código."`
 
 Any problem code not in the registry SHALL fall through to the
 generic Spanish copy `"Ocurrió un error. Intenta de nuevo."` and
@@ -62,6 +63,11 @@ SHALL NOT render the raw English code.
 
 - **WHEN** `messageForProblem({ code: "auth.lockout_active", retry_after_seconds: 125 })` is called
 - **THEN** the returned string is `"Demasiados intentos. Intenta de nuevo en 3 minutos."` (125 seconds → ceil to 3 minutes)
+
+#### Scenario: resend_throttled copy is the documented Spanish string
+
+- **WHEN** `messageForProblem({ code: "auth.resend_throttled", status: 429, retry_after_seconds: 30 })` is called
+- **THEN** the returned string is `"Espera unos segundos antes de pedir otro código."`
 
 ### Requirement: FormErrorAlert is the only path for inline auth-error display
 

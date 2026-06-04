@@ -51,6 +51,9 @@ export function EmpresaIndexRoute() {
     }
   }, [me.isLoading, activeTenantId, navigate]);
 
+  if (me.isError) throw me.error;
+  if (tenant.isError) throw tenant.error;
+
   if (activeTenantId === null || tenant.isLoading || tenant.data === undefined) {
     return (
       <AppShell>

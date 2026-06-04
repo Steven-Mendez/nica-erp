@@ -180,8 +180,11 @@ async def test_full_auth_loop(
     tokens = login.json()
     assert tokens["token_type"] == "Bearer"
     assert tokens["access_token"]
-    assert tokens["refresh_token"]
     assert tokens["id_token"]
+    # The refresh token rides only in the `nica_erp_rt` httpOnly cookie
+    # — the JSON body MUST NOT carry it (audit F-011).
+    assert "refresh_token" not in tokens
+    assert "nica_erp_rt=" in login.headers.get("set-cookie", "")
 
     access = tokens["access_token"]
     me = await client.get("/v1/me", headers={"Authorization": f"Bearer {access}"})
@@ -191,6 +194,106 @@ async def test_full_auth_loop(
 
     logout = await client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {access}"})
     assert logout.status_code == 204
+
+
+@pytest.mark.e2e
+async def test_login_sets_refresh_cookie(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    """Audit F-005: every endpoint that mints a refresh token MUST
+    pin it as the httpOnly ``nica_erp_rt`` cookie so the SPA does not
+    need to stash it in sessionStorage."""
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "cookie@example.com", "password": _PASSWORD},
+    )
+    code = _extract_code(email.sent[-1].text)
+    await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "cookie@example.com", "code": code},
+    )
+
+    response = await client.post(
+        "/v1/auth/login",
+        json={"email": "cookie@example.com", "password": _PASSWORD},
+    )
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "nica_erp_rt=" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie.lower() or "samesite=lax" in set_cookie.lower()
+    assert "Path=/v1" in set_cookie
+
+
+@pytest.mark.e2e
+async def test_logout_revokes_refresh_token_and_blocks_subsequent_refresh(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    """Audit F-016: logout SHALL revoke the refresh token's jti and
+    the next /v1/auth/refresh with the same token MUST return 401."""
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "f016@example.com", "password": _PASSWORD},
+    )
+    code = _extract_code(email.sent[-1].text)
+    await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "f016@example.com", "code": code},
+    )
+    login = await client.post(
+        "/v1/auth/login",
+        json={"email": "f016@example.com", "password": _PASSWORD},
+    )
+    tokens = login.json()
+    access = tokens["access_token"]
+    # Refresh token lives in the cookie set by /v1/auth/login.
+    refresh_cookie = login.cookies.get("nica_erp_rt")
+    assert refresh_cookie is not None
+
+    logout = await client.post(
+        "/v1/auth/logout",
+        headers={"Authorization": f"Bearer {access}"},
+        cookies={"nica_erp_rt": refresh_cookie},
+    )
+    assert logout.status_code == 204
+
+    follow_up = await client.post(
+        "/v1/auth/refresh",
+        cookies={"nica_erp_rt": refresh_cookie},
+    )
+    assert follow_up.status_code == 401
+    assert follow_up.json()["code"] == "auth.invalid_credentials"
+
+
+@pytest.mark.e2e
+async def test_refresh_token_rejected_on_bearer_auth_path(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    """Audit F-011: a refresh JWT MUST NOT be accepted as a Bearer
+    access token on any protected endpoint."""
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "f011@example.com", "password": _PASSWORD},
+    )
+    code = _extract_code(email.sent[-1].text)
+    await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "f011@example.com", "code": code},
+    )
+    login = await client.post(
+        "/v1/auth/login",
+        json={"email": "f011@example.com", "password": _PASSWORD},
+    )
+    # The refresh token is delivered in the httpOnly cookie now;
+    # tests grab it from there to assert it gets rejected as a Bearer.
+    refresh_token = login.cookies.get("nica_erp_rt")
+    assert refresh_token is not None
+
+    me = await client.get("/v1/me", headers={"Authorization": f"Bearer {refresh_token}"})
+    assert me.status_code == 401
 
 
 @pytest.mark.e2e
@@ -278,6 +381,131 @@ async def test_confirm_signup_writes_user_registered_outbox_row(
     assert aggregate_type == "User"
     assert set(payload.keys()) == {"user_id", "email", "registered_at"}
     assert payload["email"] == "outbox-contract@example.com"
+
+
+@pytest.mark.e2e
+async def test_confirm_signup_with_wrong_otp_returns_400_invalid_confirmation_code(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "wrong-otp@example.com", "password": _PASSWORD},
+    )
+    # email captured but the test submits the wrong code on purpose
+    assert email.sent
+
+    response = await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "wrong-otp@example.com", "code": "000000"},
+    )
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "auth.invalid_confirmation_code"
+
+
+@pytest.mark.e2e
+async def test_confirm_signup_wrong_then_right_code_succeeds_idempotently(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    """Audit F-002 regression: a wrong OTP followed by the correct OTP
+    on the same email must succeed, not 500 / 503. Two successful
+    confirm-signup calls in a row must also be idempotent.
+    """
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "f002@example.com", "password": _PASSWORD},
+    )
+    code = _extract_code(email.sent[-1].text)
+
+    # First attempt: wrong code
+    wrong = await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "f002@example.com", "code": "000000"},
+    )
+    assert wrong.status_code == 400
+
+    # Retry with the right code: must succeed (204 when no auto-login).
+    right = await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "f002@example.com", "code": code},
+    )
+    assert right.status_code == 204, right.text
+
+    # A second confirm with the same code must ALSO succeed (idempotency).
+    again = await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "f002@example.com", "code": code},
+    )
+    assert again.status_code == 204, again.text
+
+
+@pytest.mark.e2e
+async def test_reset_password_with_used_code_returns_410_reset_token_used(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "reset-twice@example.com", "password": _PASSWORD},
+    )
+    signup_code = _extract_code(email.sent[-1].text)
+    await client.post(
+        "/v1/auth/confirm-signup",
+        json={"email": "reset-twice@example.com", "code": signup_code},
+    )
+    email.sent.clear()
+    await client.post(
+        "/v1/auth/password/forgot",
+        json={"email": "reset-twice@example.com"},
+    )
+    reset_code = _extract_code(email.sent[-1].text)
+    first = await client.post(
+        "/v1/auth/password/reset",
+        json={
+            "email": "reset-twice@example.com",
+            "code": reset_code,
+            "new_password": "NewPass5678!@ab",
+        },
+    )
+    assert first.status_code == 204
+
+    second = await client.post(
+        "/v1/auth/password/reset",
+        json={
+            "email": "reset-twice@example.com",
+            "code": reset_code,
+            "new_password": "OtherPass9012!@cd",
+        },
+    )
+    assert second.status_code == 410
+    assert second.headers["content-type"].startswith("application/problem+json")
+    assert second.json()["code"] == "auth.reset_token_used"
+
+
+@pytest.mark.e2e
+async def test_resend_code_within_cooldown_returns_429_resend_throttled(
+    _wire_app: tuple[AsyncClient, RecordingEmailSender],
+) -> None:
+    client, email = _wire_app
+    await client.post(
+        "/v1/auth/register",
+        json={"email": "resend-throttle@example.com", "password": _PASSWORD},
+    )
+    email.sent.clear()
+    response = await client.post(
+        "/v1/auth/resend-code",
+        json={"email": "resend-throttle@example.com"},
+    )
+    assert response.status_code == 429
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["retry-after"]
+    body = response.json()
+    assert body["code"] == "auth.rate_limited"
+    assert body["scope"] == "resend"
+    assert isinstance(body.get("retry_after_seconds"), int)
+    assert body["retry_after_seconds"] >= 1
 
 
 @pytest.mark.e2e

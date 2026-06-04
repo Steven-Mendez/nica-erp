@@ -6,7 +6,9 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from contexts.tenants.domain.departamento import KNOWN_DEPARTAMENTOS
 
 # --- shared ---------------------------------------------------------------
 
@@ -41,6 +43,26 @@ class CreateTenantRequest(BaseModel):
     fiscal_phone: str | None = Field(default=None, examples=["+505 8888-8888"], max_length=32)
     is_withholder: bool = Field(default=False)
 
+    @field_validator("name", "fiscal_address", "fiscal_email", "fiscal_phone", mode="before")
+    @classmethod
+    def reject_angle_brackets(cls, v: object) -> object:
+        # Audit F-019: silently stripping `<` and `>` corrupted the
+        # operator's input. Reject loudly with a Spanish copy instead.
+        if isinstance(v, str) and ("<" in v or ">" in v):
+            raise ValueError('El nombre no puede contener "<" o ">".')
+        return v
+
+    @field_validator("departamento", mode="after")
+    @classmethod
+    def validate_departamento(cls, v: str | None) -> str | None:
+        # Audit F-006: pin `departamento` to the 17-value catalog so the
+        # wizard / settings editor cannot persist a free-text typo.
+        if v is None or v == "":
+            return v
+        if v not in KNOWN_DEPARTAMENTOS:
+            raise ValueError("Departamento inválido")
+        return v
+
 
 class UpdateTenantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -55,6 +77,24 @@ class UpdateTenantRequest(BaseModel):
     fiscal_email: str | None = Field(default=None, max_length=320)
     fiscal_phone: str | None = Field(default=None, max_length=32)
     is_withholder: bool | None = None
+
+    @field_validator("name", "fiscal_address", "fiscal_email", "fiscal_phone", mode="before")
+    @classmethod
+    def reject_angle_brackets(cls, v: object) -> object:
+        # Audit F-019 — see CreateTenantRequest.reject_angle_brackets.
+        if isinstance(v, str) and ("<" in v or ">" in v):
+            raise ValueError('El nombre no puede contener "<" o ">".')
+        return v
+
+    @field_validator("departamento", mode="after")
+    @classmethod
+    def validate_departamento(cls, v: str | None) -> str | None:
+        # Audit F-006 — see CreateTenantRequest.validate_departamento.
+        if v is None or v == "":
+            return v
+        if v not in KNOWN_DEPARTAMENTOS:
+            raise ValueError("Departamento inválido")
+        return v
 
 
 class TenantResponse(BaseModel):
@@ -78,12 +118,17 @@ class TenantResponse(BaseModel):
 
 
 class SwitchTenantRequest(BaseModel):
-    refresh_token: str
+    # Optional: the use case prefers the `nica_erp_rt` cookie. The
+    # body field stays for one transition cycle so older SPA builds
+    # still work; new SPA builds POST `{}` with `credentials: include`.
+    refresh_token: str | None = None
 
 
 class SwitchTokenResponse(BaseModel):
+    # Refresh token rides exclusively in the `nica_erp_rt` cookie set
+    # by the switch endpoint (`response.set_cookie`); the body only
+    # carries the rotated access + id tokens.
     access_token: str
-    refresh_token: str
     id_token: str
     token_type: Literal["Bearer"] = "Bearer"
 
@@ -141,16 +186,24 @@ class CreateInvitationRequest(BaseModel):
         examples=["accountant"]
     )
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def reject_angle_brackets(cls, v: object) -> object:
+        if isinstance(v, str) and ("<" in v or ">" in v):
+            raise ValueError('El correo no puede contener "<" o ">".')
+        return v
+
 
 class AcceptInvitationTokenBundle(BaseModel):
     """Token bundle returned when the caller's session is rotated.
 
     Mirrors the identity context's ``TokenResponse`` shape so the SPA can
     pass either object to its ``storeTokens()`` helper without branching.
+    The refresh token rides exclusively in the ``nica_erp_rt`` cookie set
+    by the accept endpoint when a rotation occurs.
     """
 
     access_token: str
-    refresh_token: str
     id_token: str
     token_type: Literal["Bearer"] = "Bearer"
 

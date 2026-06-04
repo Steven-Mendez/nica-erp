@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Cookie, Depends, Response, status
 
 from bootstrap.dependencies import current_actor
 from contexts.identity.adapters.inbound.http.dependencies import (
@@ -40,6 +40,7 @@ from contexts.identity.adapters.inbound.http.schemas import (
     ForgotPasswordRequest,
     ForgotResponse,
     LoginRequest,
+    LogoutRequest,
     MeResponse,
     ProblemDetail,
     RefreshRequest,
@@ -65,6 +66,25 @@ from contexts.identity.application.use_cases import (
 )
 from shared_kernel.adapters.context import CurrentUser
 from shared_kernel.permissions import Actor
+
+_REFRESH_COOKIE_NAME = "nica_erp_rt"
+# Cookie path is /v1 so it ships on auth, tenant switch, and invitation
+# accept endpoints. HttpOnly + Secure + SameSite=Lax.
+_REFRESH_COOKIE_PATH = "/v1"
+_REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=_REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=_REFRESH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path=_REFRESH_COOKIE_PATH,
+    )
+
 
 # Reusable ``responses=`` entries so each operation advertises the RFC-7807
 # error envelope without each route restating the schema. Keys are the
@@ -130,6 +150,7 @@ async def register(
     responses={
         200: {"model": TokenResponse, "description": "Confirmed and authenticated"},
         204: {"description": "Confirmed without a session bundle"},
+        400: {**_PROBLEM, "description": "Invalid confirmation code"},
         **_UNAUTHENTICATED_RESPONSES,
     },
 )
@@ -149,9 +170,9 @@ async def confirm_signup(
     if identity is None:
         response.status_code = status.HTTP_204_NO_CONTENT
         return None
+    _set_refresh_cookie(response, identity.refresh_token)
     return TokenResponse(
         access_token=identity.access_token,
-        refresh_token=identity.refresh_token,
         id_token=identity.id_token,
     )
 
@@ -162,7 +183,10 @@ async def confirm_signup(
     tags=["auth"],
     summary="Resend the signup verification code",
     response_description="A fresh verification code was dispatched",
-    responses=_VALIDATION_422,
+    responses={
+        429: {**_PROBLEM, "description": "Resend rate-limited"},
+        **_VALIDATION_422,
+    },
 )
 async def resend_code(
     body: ResendCodeRequest,
@@ -178,19 +202,20 @@ async def resend_code(
     response_model=TokenResponse,
     tags=["auth"],
     summary="Exchange email + password for tokens",
-    response_description="Access, refresh, and id tokens",
+    response_description="Access + id tokens in the body; refresh token in the nica_erp_rt cookie",
     responses=_UNAUTHENTICATED_RESPONSES,
 )
 async def login(
     body: LoginRequest,
+    response: Response,
     uc: Authenticate = Depends(get_authenticate),
 ) -> TokenResponse:
     """Authenticate the caller and return a token bundle."""
 
     identity = await uc.execute(email=body.email, password=body.password)
+    _set_refresh_cookie(response, identity.refresh_token)
     return TokenResponse(
         access_token=identity.access_token,
-        refresh_token=identity.refresh_token,
         id_token=identity.id_token,
     )
 
@@ -200,19 +225,34 @@ async def login(
     response_model=TokenResponse,
     tags=["auth"],
     summary="Rotate the access token using a refresh token",
-    response_description="A fresh access/refresh/id-token bundle",
+    response_description=(
+        "A fresh access + id token pair in the body; "
+        "rotated refresh token in the nica_erp_rt cookie"
+    ),
     responses=_UNAUTHENTICATED_RESPONSES,
 )
 async def refresh(
-    body: RefreshRequest,
+    response: Response,
+    body: RefreshRequest | None = None,
+    nica_erp_rt: str | None = Cookie(default=None),
     uc: RefreshToken = Depends(get_refresh_token),
 ) -> TokenResponse:
-    """Issue a new token bundle from a still-valid refresh token."""
+    """Issue a new token bundle from a still-valid refresh token.
 
-    identity = await uc.execute(refresh_token=body.refresh_token)
+    Reads the refresh token from the ``nica_erp_rt`` cookie when
+    present, falling back to the JSON body for the transitional
+    period before the SPA stops sending it.
+    """
+
+    token = nica_erp_rt or (body.refresh_token if body is not None else None)
+    if token is None:
+        from contexts.identity.application.errors import InvalidCredentialsError
+
+        raise InvalidCredentialsError("missing refresh token")
+    identity = await uc.execute(refresh_token=token)
+    _set_refresh_cookie(response, identity.refresh_token)
     return TokenResponse(
         access_token=identity.access_token,
-        refresh_token=identity.refresh_token,
         id_token=identity.id_token,
     )
 
@@ -242,7 +282,10 @@ async def forgot_password(
     tags=["auth"],
     summary="Complete a password reset with the emailed code",
     response_description="Password rotated; the user can now log in",
-    responses=_UNAUTHENTICATED_RESPONSES,
+    responses={
+        410: {**_PROBLEM, "description": "Reset link no longer valid"},
+        **_UNAUTHENTICATED_RESPONSES,
+    },
 )
 async def reset_password(
     body: ResetPasswordRequest,
@@ -285,12 +328,30 @@ async def change_password(
     responses=_AUTHENTICATED_RESPONSES,
 )
 async def logout(
+    response: Response,
+    body: LogoutRequest | None = None,
+    nica_erp_rt: str | None = Cookie(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     uc: Logout = Depends(get_logout),
 ) -> None:
-    """Revoke the caller's refresh token; access tokens expire naturally."""
+    """Revoke the caller's refresh token; access tokens expire naturally.
 
-    await uc.execute(current_user=current_user)
+    Audit F-016: the refresh token is sourced from the httpOnly
+    ``nica_erp_rt`` cookie when present, falling back to the request
+    body for the transitional period before the SPA stops sending it.
+    Either way the endpoint clears the cookie so the browser will
+    not replay the now-revoked token.
+    """
+
+    refresh_token = nica_erp_rt or (body.refresh_token if body is not None else None)
+    await uc.execute(current_user=current_user, refresh_token=refresh_token)
+    response.delete_cookie(
+        key="nica_erp_rt",
+        path=_REFRESH_COOKIE_PATH,
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 # --- /v1/me ---------------------------------------------------------------

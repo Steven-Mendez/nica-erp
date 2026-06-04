@@ -26,8 +26,12 @@ import jwt
 from jwt.algorithms import RSAAlgorithm
 
 from contexts.identity.application.errors import (
+    ExpiredResetCodeError,
+    InvalidConfirmationCodeError,
     InvalidCredentialsError,
+    InvalidResetCodeError,
     LockoutActiveError,
+    ResendThrottledError,
     SignupEmailNotConfirmedError,
     TokenExpiredError,
 )
@@ -325,7 +329,9 @@ class IdentityProviderCognito:
         except ClientError as exc:
             err_code = _error_code(exc)
             if err_code in {"CodeMismatchException", "ExpiredCodeException"}:
-                raise InvalidCredentialsError("confirmation code is invalid or expired") from exc
+                raise InvalidConfirmationCodeError(
+                    "confirmation code is invalid or expired"
+                ) from exc
             if err_code == "NotAuthorizedException":
                 # Already confirmed — fall through to fetch the existing sub.
                 pass
@@ -370,6 +376,8 @@ class IdentityProviderCognito:
                         message = str(error.get("Message", ""))
                 if "already confirmed" in message.lower():
                     return
+            if code in {"LimitExceededException", "TooManyRequestsException"}:
+                raise ResendThrottledError(retry_after_seconds=60) from exc
             raise InvalidCredentialsError(f"resend_confirmation_code failed: {code}") from exc
 
     async def forgot_password(self, *, email: str) -> None:
@@ -399,8 +407,10 @@ class IdentityProviderCognito:
             )
         except ClientError as exc:
             err_code = _error_code(exc)
-            if err_code in {"CodeMismatchException", "ExpiredCodeException"}:
-                raise InvalidCredentialsError("reset code is invalid or expired") from exc
+            if err_code == "ExpiredCodeException":
+                raise ExpiredResetCodeError("reset code expired") from exc
+            if err_code == "CodeMismatchException":
+                raise InvalidResetCodeError("reset code is invalid or used") from exc
             raise InvalidCredentialsError(f"confirm_forgot_password failed: {err_code}") from exc
 
     async def change_password(
@@ -418,6 +428,20 @@ class IdentityProviderCognito:
             if code == "NotAuthorizedException":
                 raise InvalidCredentialsError("current password incorrect") from exc
             raise InvalidCredentialsError(f"change_password failed: {code}") from exc
+
+    async def revoke_refresh_token(self, *, refresh_token: str) -> None:
+        """Cognito-side per-token revocation.
+
+        ``admin_user_global_sign_out`` revokes ALL of a user's refresh
+        tokens; per-token revocation requires the ``revoke_token``
+        flow (configured via OAuth scopes on the user pool client).
+        Until that wiring lands the safest no-op here is to defer to
+        ``global_signout`` at the caller. We intentionally do nothing
+        so a logout in the SPA does NOT silently invalidate every
+        other session for the same user.
+        """
+
+        return None
 
     async def global_signout(self, *, external_sub: str) -> None:
         try:

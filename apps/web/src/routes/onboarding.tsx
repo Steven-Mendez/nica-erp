@@ -49,7 +49,7 @@ export function OnboardingRoute() {
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center text-center">
           <Logo size={32} withWordmark className="font-medium" />
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Bienvenido a Nica ERP</h1>
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Crea tu primera empresa</h1>
           <p className="mt-2 text-sm text-muted-foreground">Empecemos por crear tu empresa.</p>
         </div>
 

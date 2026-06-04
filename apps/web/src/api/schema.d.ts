@@ -125,6 +125,10 @@ export interface paths {
         /**
          * Rotate the access token using a refresh token
          * @description Issue a new token bundle from a still-valid refresh token.
+         *
+         *     Reads the refresh token from the ``nica_erp_rt`` cookie when
+         *     present, falling back to the JSON body for the transitional
+         *     period before the SPA stops sending it.
          */
         post: operations["refresh_v1_auth_refresh_post"];
         delete?: never;
@@ -205,6 +209,12 @@ export interface paths {
         /**
          * Invalidate the caller's refresh token
          * @description Revoke the caller's refresh token; access tokens expire naturally.
+         *
+         *     Audit F-016: the refresh token is sourced from the httpOnly
+         *     ``nica_erp_rt`` cookie when present, falling back to the request
+         *     body for the transitional period before the SPA stops sending it.
+         *     Either way the endpoint clears the cookie so the browser will
+         *     not replay the now-revoked token.
          */
         post: operations["logout_v1_auth_logout_post"];
         delete?: never;
@@ -376,6 +386,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/invitations/{invitation_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending invitation and issue a fresh one */
+        post: operations["resend_invitation_v1_tenants__tenant_id__invitations__invitation_id__resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/invitations/accept": {
         parameters: {
             query?: never;
@@ -401,7 +428,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Preview an invitation (email + organization + role)
+         * Preview an invitation (organization + role)
          * @description Return safe metadata for the pre-signup screen.
          *
          *     The response exposes only fields the recipient already has from
@@ -435,12 +462,19 @@ export interface components {
          *     rotates the caller's session so the new membership's tenant is
          *     immediately active without a follow-up
          *     ``POST /v1/tenants/{id}/switch`` round-trip.
+         *
+         *     ``confirmed_email`` is optional defense-in-depth (audit F-026): when
+         *     the SPA shows the preview to an unauthenticated visitor about to
+         *     sign up, it asks them to retype the invited email. The server then
+         *     asserts the retype matches the JWT sub before any state mutation.
          */
         AcceptInvitationByBodyRequest: {
             /** Token */
             token: string;
             /** Refresh Token */
             refresh_token?: string | null;
+            /** Confirmed Email */
+            confirmed_email?: string | null;
         };
         /** AcceptInvitationResponse */
         AcceptInvitationResponse: {
@@ -462,12 +496,12 @@ export interface components {
          *
          *     Mirrors the identity context's ``TokenResponse`` shape so the SPA can
          *     pass either object to its ``storeTokens()`` helper without branching.
+         *     The refresh token rides exclusively in the ``nica_erp_rt`` cookie set
+         *     by the accept endpoint when a rotation occurs.
          */
         AcceptInvitationTokenBundle: {
             /** Access Token */
             access_token: string;
-            /** Refresh Token */
-            refresh_token: string;
             /** Id Token */
             id_token: string;
             /**
@@ -644,10 +678,11 @@ export interface components {
         /**
          * InvitationPreviewResponse
          * @description Public metadata for the pre-signup screen.
+         *
+         *     Audit F-026: ``email`` is intentionally omitted — anyone who obtains
+         *     the link must NOT learn who was invited.
          */
         InvitationPreviewResponse: {
-            /** Email */
-            email: string;
             /** Organization Name */
             organization_name: string;
             /** Role */
@@ -702,6 +737,21 @@ export interface components {
              * @example S3cret-Passw0rd!
              */
             password: string;
+        };
+        /**
+         * LogoutRequest
+         * @description Optional logout body — carries the caller's refresh token so
+         *     the server can revoke its jti (audit F-016). The SPA still PUTs
+         *     this on the body for the transitional period before the httpOnly
+         *     cookie is rolled out; once the cookie ships the field becomes
+         *     advisory.
+         */
+        LogoutRequest: {
+            /**
+             * Refresh Token
+             * @example v1.MRSt...redacted
+             */
+            refresh_token?: string | null;
         };
         /**
          * MeResponse
@@ -907,7 +957,7 @@ export interface components {
              * Refresh Token
              * @example v1.MRSt...redacted
              */
-            refresh_token: string;
+            refresh_token?: string | null;
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -957,14 +1007,12 @@ export interface components {
         /** SwitchTenantRequest */
         SwitchTenantRequest: {
             /** Refresh Token */
-            refresh_token: string;
+            refresh_token?: string | null;
         };
         /** SwitchTokenResponse */
         SwitchTokenResponse: {
             /** Access Token */
             access_token: string;
-            /** Refresh Token */
-            refresh_token: string;
             /** Id Token */
             id_token: string;
             /**
@@ -1018,7 +1066,6 @@ export interface components {
          * @example {
          *       "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
          *       "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-         *       "refresh_token": "v1.MRSt...redacted",
          *       "token_type": "Bearer"
          *     }
          */
@@ -1028,11 +1075,6 @@ export interface components {
              * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
              */
             access_token: string;
-            /**
-             * Refresh Token
-             * @example v1.MRSt...redacted
-             */
-            refresh_token: string;
             /**
              * Id Token
              * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -1225,6 +1267,16 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Invalid confirmation code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description Invalid credentials, expired token, or lockout */
             401: {
                 headers: {
@@ -1277,6 +1329,16 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Resend rate-limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
         };
     };
     login_v1_auth_login_post: {
@@ -1292,7 +1354,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Access, refresh, and id tokens */
+            /** @description Access + id tokens in the body; refresh token in the nica_erp_rt cookie */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1328,15 +1390,17 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                nica_erp_rt?: string | null;
+            };
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["RefreshRequest"];
+                "application/json": components["schemas"]["RefreshRequest"] | null;
             };
         };
         responses: {
-            /** @description A fresh access/refresh/id-token bundle */
+            /** @description A fresh access + id token pair in the body; rotated refresh token in the nica_erp_rt cookie */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1431,6 +1495,16 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
+            /** @description Reset link no longer valid */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
             /** @description Request validation or password-policy failure */
             422: {
                 headers: {
@@ -1502,9 +1576,15 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                nica_erp_rt?: string | null;
+            };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"] | null;
+            };
+        };
         responses: {
             /** @description Refresh token revoked */
             204: {
@@ -1775,7 +1855,9 @@ export interface operations {
             path: {
                 tenant_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                nica_erp_rt?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -2002,12 +2084,46 @@ export interface operations {
             };
         };
     };
+    resend_invitation_v1_tenants__tenant_id__invitations__invitation_id__resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     accept_invitation_by_body_v1_invitations_accept_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                nica_erp_rt?: string | null;
+            };
         };
         requestBody: {
             content: {

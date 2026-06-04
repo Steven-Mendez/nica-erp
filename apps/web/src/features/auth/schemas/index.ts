@@ -4,23 +4,16 @@
 // `UpdateMeInput`) live in `@/features/auth/api/endpoints` — they describe
 // the server contract, not user input.
 //
-// Password rule mirrors the backend Identity-domain policy:
-//   - minimum 8 characters
-//   - at least one upper-case, one lower-case, one digit, one symbol
+// Password rule lives in `@/features/auth/lib/password-policy` so the
+// help text and schema are a single source of truth across every form.
 
 import { z } from "zod";
 
+import { passwordPolicySchema } from "../lib/password-policy";
+
 const emailSchema = z.string().trim().email({ message: "Ingresa un correo válido." });
 
-const passwordSchema = z
-  .string()
-  .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })
-  .regex(/[A-Z]/, { message: "La contraseña debe incluir una letra mayúscula." })
-  .regex(/[a-z]/, { message: "La contraseña debe incluir una letra minúscula." })
-  .regex(/\d/, { message: "La contraseña debe incluir un dígito." })
-  .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=]/, {
-    message: "La contraseña debe incluir un símbolo.",
-  });
+const passwordSchema = passwordPolicySchema;
 
 const confirmationCodeSchema = z
   .string()

@@ -78,6 +78,28 @@ describe("messageForProblem", () => {
     );
   });
 
+  it("renders auth.resend_throttled in Spanish", () => {
+    expect(
+      messageForProblem(
+        problem({ code: "auth.resend_throttled", status: 429, retry_after_seconds: 30 }),
+      ),
+    ).toBe("Espera unos segundos antes de pedir otro código.");
+  });
+
+  it("renders auth.rate_limited with the retry seconds interpolated", () => {
+    expect(
+      messageForProblem(
+        problem({ code: "auth.rate_limited", status: 429, retry_after_seconds: 12 }),
+      ),
+    ).toBe("Demasiados intentos. Intenta de nuevo en 12 segundos.");
+  });
+
+  it("falls back to a generic auth.rate_limited copy when retry_after_seconds is missing", () => {
+    expect(messageForProblem(problem({ code: "auth.rate_limited", status: 429 }))).toBe(
+      "Demasiados intentos. Espera unos segundos antes de reintentar.",
+    );
+  });
+
   it("formats auth.lockout_active with the retry window in minutos", () => {
     expect(
       messageForProblem(problem({ code: "auth.lockout_active", retry_after_seconds: 600 })),
@@ -124,6 +146,8 @@ describe("KNOWN_AUTH_PROBLEM_CODES", () => {
         "auth.token_expired",
         "auth.reset_token_used",
         "auth.reset_token_expired",
+        "auth.resend_throttled",
+        "auth.rate_limited",
       ]),
     );
   });

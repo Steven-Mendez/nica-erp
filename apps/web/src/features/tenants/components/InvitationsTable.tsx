@@ -27,6 +27,8 @@ import type { Invitation } from "../api/endpoints";
 import { useCancelInvitationMutation, useResendInvitationMutation } from "../api/hooks";
 import { DestructiveActionDialog } from "@/components/dialog/destructive-action-dialog";
 
+import { ROLE_LABELS } from "../lib/role-labels";
+
 export interface InvitationsTableProps {
   tenantId: string;
   data: Invitation[] | undefined;
@@ -69,7 +71,11 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
       {
         accessorKey: "proposed_role",
         header: "Rol propuesto",
-        cell: ({ row }) => <Badge variant="secondary">{row.original.proposed_role}</Badge>,
+        cell: ({ row }) => (
+          <Badge variant="secondary">
+            {ROLE_LABELS[row.original.proposed_role] ?? row.original.proposed_role}
+          </Badge>
+        ),
       },
       {
         accessorKey: "status",
@@ -119,9 +125,8 @@ export function InvitationsTable({ tenantId, data, isLoading, canCancel }: Invit
       const needle = String(value).toLowerCase();
       if (!needle) return true;
       const inv = row.original;
-      return (
-        inv.email.toLowerCase().includes(needle) || inv.proposed_role.toLowerCase().includes(needle)
-      );
+      const roleLabel = (ROLE_LABELS[inv.proposed_role] ?? inv.proposed_role).toLowerCase();
+      return inv.email.toLowerCase().includes(needle) || roleLabel.includes(needle);
     },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),

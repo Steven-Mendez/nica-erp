@@ -40,11 +40,18 @@ import jwt
 from sqlalchemy.exc import IntegrityError
 
 from contexts.identity.adapters.outbound.email.templates import render
+from contexts.identity.adapters.outbound.persistence.sqlalchemy import (
+    auth_local_refresh_tokens as refresh_sql,
+)
 from contexts.identity.adapters.outbound.persistence.sqlalchemy import auth_local_users as sql
 from contexts.identity.application.errors import (
     EmailSendError,
+    ExpiredResetCodeError,
+    InvalidConfirmationCodeError,
     InvalidCredentialsError,
+    InvalidResetCodeError,
     LockoutActiveError,
+    RateLimitedError,
     SignupEmailNotConfirmedError,
     TokenExpiredError,
 )
@@ -164,7 +171,7 @@ class IdentityProviderLocal:
             email_verified=True,
             active_tenant=active_tenant,
         )
-        refresh_token = self._make_refresh_token(sub=str(row["id"]))
+        refresh_token = await self._make_refresh_token(sub=str(row["id"]))
         return Identity(
             sub=str(row["id"]),
             email=row["email"],
@@ -188,6 +195,13 @@ class IdentityProviderLocal:
         except jwt.InvalidTokenError as exc:
             raise InvalidCredentialsError(f"invalid token: {exc}") from exc
         assert isinstance(decoded, dict)
+        # Audit F-011: the verifier MUST reject refresh tokens on the
+        # bearer-auth path. The token shape is identical aside from the
+        # ``typ`` claim, so without this check a stolen refresh token
+        # would be accepted as a session-bound access token by every
+        # protected endpoint.
+        if decoded.get("typ") == "refresh":
+            raise InvalidCredentialsError("not an access token")
         return decoded
 
     async def refresh(self, *, refresh_token: str) -> Identity:
@@ -206,6 +220,23 @@ class IdentityProviderLocal:
         if decoded.get("typ") != "refresh":
             raise InvalidCredentialsError("not a refresh token")
 
+        # Audit F-005 / F-016: the jti must still be live in the
+        # ledger. A logout revokes the row, after which any refresh
+        # attempt with the same JWT MUST fail even though its
+        # signature still validates.
+        jti_claim = decoded.get("jti")
+        if jti_claim is None:
+            raise InvalidCredentialsError("refresh token missing jti")
+        try:
+            jti = UUID(str(jti_claim))
+        except ValueError as exc:
+            raise InvalidCredentialsError("malformed jti") from exc
+        live_row = await self.uow.current_session.execute(
+            refresh_sql.FIND_LIVE_BY_JTI, {"jti": jti}
+        )
+        if live_row.first() is None:
+            raise InvalidCredentialsError("revoked or unknown refresh jti")
+
         sub = decoded["sub"]
         row = await self._select_by_id(UUID(sub))
         if row is None:
@@ -218,7 +249,13 @@ class IdentityProviderLocal:
             email_verified=row["email_verified"],
             active_tenant=active_tenant,
         )
-        new_refresh = self._make_refresh_token(sub=sub)
+        # Rotate the refresh token: revoke the just-used jti and mint a
+        # fresh one. This means a stolen refresh JWT cannot be re-used
+        # after a legitimate session has rotated past it.
+        await self.uow.current_session.execute(
+            refresh_sql.REVOKE_BY_JTI, {"jti": jti, "revoked_at": self.now()}
+        )
+        new_refresh = await self._make_refresh_token(sub=sub)
         return Identity(
             sub=sub,
             email=row["email"],
@@ -228,11 +265,50 @@ class IdentityProviderLocal:
             claims=claims,
         )
 
+    async def revoke_refresh_token(self, *, refresh_token: str) -> None:
+        """Revoke the supplied refresh token's jti (idempotent).
+
+        Audit F-016: ``POST /v1/auth/logout`` calls this so the same
+        refresh JWT cannot mint a new access token afterwards. Missing
+        or already-revoked rows resolve to a no-op so the endpoint
+        stays idempotent and leaks no information.
+        """
+
+        try:
+            decoded = jwt.decode(
+                refresh_token,
+                key=self.jwt_secret,
+                algorithms=["HS256"],
+                audience=self.aud,
+                issuer=self.iss,
+                options={"verify_exp": False},
+            )
+        except jwt.InvalidTokenError:
+            return  # malformed token → no-op, no info leak
+        jti_claim = decoded.get("jti")
+        if jti_claim is None:
+            return
+        try:
+            jti = UUID(str(jti_claim))
+        except ValueError:
+            return
+        await self.uow.current_session.execute(
+            refresh_sql.REVOKE_BY_JTI, {"jti": jti, "revoked_at": self.now()}
+        )
+
     async def confirm_signup(self, *, email: str, code: str) -> str:
         normalised = Email.parse(email).value
         row = await self._select_by_email(normalised)
         if row is None:
-            raise InvalidCredentialsError("invalid code")
+            raise InvalidConfirmationCodeError("invalid code")
+        # Idempotency: a second successful confirm for the same email
+        # short-circuits with the same external_sub. ``MARK_VERIFIED``
+        # clears the hash, so re-checking it on the retry would raise
+        # "invalid code" even though the verification already
+        # succeeded. The use case is then free to handle the duplicate
+        # User row separately.
+        if row["email_verified"]:
+            return str(row["id"])
         expires_at = row["verification_code_expires_at"]
         stored_hash = row["verification_code_hash"]
         if (
@@ -241,7 +317,7 @@ class IdentityProviderLocal:
             or expires_at < self.now()
             or _sha256(code) != stored_hash
         ):
-            raise InvalidCredentialsError("invalid code")
+            raise InvalidConfirmationCodeError("invalid code")
         await self.uow.current_session.execute(
             sql.MARK_VERIFIED,
             {"id": row["id"], "updated_at": self.now()},
@@ -259,10 +335,11 @@ class IdentityProviderLocal:
             last_resend_at is not None
             and (now - last_resend_at).total_seconds() < _RESEND_COOLDOWN_SECONDS
         ):
-            # The spec mandates rate-limiting; the typed error catalogue does
-            # not yet ship a dedicated RateLimitedError, so we surface
-            # InvalidCredentialsError. The HTTP adapter maps this to 400.
-            raise InvalidCredentialsError("resend rate-limited")
+            elapsed = int((now - last_resend_at).total_seconds())
+            raise RateLimitedError(
+                scope="resend",
+                retry_after_seconds=_RESEND_COOLDOWN_SECONDS - elapsed,
+            )
         code = _mint_code()
         await self.uow.current_session.execute(
             sql.UPDATE_VERIFICATION_CODE,
@@ -301,16 +378,13 @@ class IdentityProviderLocal:
         normalised = Email.parse(email).value
         row = await self._select_by_email(normalised)
         if row is None:
-            raise InvalidCredentialsError("invalid code")
+            raise InvalidResetCodeError("invalid or used reset code")
         stored_hash = row["verification_code_hash"]
         expires_at = row["verification_code_expires_at"]
-        if (
-            stored_hash is None
-            or expires_at is None
-            or expires_at < self.now()
-            or _sha256(code) != stored_hash
-        ):
-            raise InvalidCredentialsError("invalid code")
+        if expires_at is not None and expires_at < self.now():
+            raise ExpiredResetCodeError("reset code expired")
+        if stored_hash is None or expires_at is None or _sha256(code) != stored_hash:
+            raise InvalidResetCodeError("invalid or used reset code")
         new_hash = await asyncio.to_thread(_hash_password, new_password)
         await self.uow.current_session.execute(
             sql.UPDATE_PASSWORD,
@@ -403,7 +477,7 @@ class IdentityProviderLocal:
         try:
             await self.email_sender.send(
                 to=to,
-                subject="nica-erp: restablece tu contrasena / reset your password",
+                subject="nica-erp: restablece tu contraseña / reset your password",
                 html=html,
                 text=text,
             )
@@ -434,16 +508,37 @@ class IdentityProviderLocal:
         token = jwt.encode(claims, self.jwt_secret, algorithm="HS256")
         return token, claims
 
-    def _make_refresh_token(self, *, sub: str) -> str:
-        now_ts = int(self.now().timestamp())
+    async def _make_refresh_token(self, *, sub: str) -> str:
+        """Mint a refresh JWT and INSERT its jti into the ledger.
+
+        Audit F-005 / F-011 / F-016: the refresh token now carries a
+        unique ``jti`` that lives in ``auth_local_refresh_tokens``.
+        Logout sets ``revoked_at`` for that jti, and the next
+        ``/v1/auth/refresh`` call rejects revoked rows.
+        """
+
+        now = self.now()
+        now_ts = int(now.timestamp())
+        jti = uuid4()
         claims: dict[str, Any] = {
             "sub": sub,
+            "jti": str(jti),
             "typ": "refresh",
             "aud": self.aud,
             "iss": self.iss,
             "exp": now_ts + self.jwt_refresh_ttl_seconds,
             "iat": now_ts,
         }
+        await self.uow.current_session.execute(
+            refresh_sql.INSERT_TOKEN,
+            {
+                "jti": jti,
+                "user_id": UUID(sub),
+                "issued_at": now,
+                "user_agent": None,
+                "ip": None,
+            },
+        )
         return jwt.encode(claims, self.jwt_secret, algorithm="HS256")
 
 

@@ -17,6 +17,9 @@ export function EmpresaConfiguracionRoute() {
   const activeId = me.data?.active_tenant ?? "";
   const tenant = useTenantQuery(activeId);
 
+  if (me.isError) throw me.error;
+  if (tenant.isError) throw tenant.error;
+
   return (
     <AppShell>
       {tenant.isLoading || tenant.data === undefined ? (

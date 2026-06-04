@@ -70,7 +70,7 @@ function seedMe(client: QueryClient, permissions: string[]): void {
   });
 }
 
-function renderForm(tenant: Tenant, permissions: string[] = ["tenant.update"]) {
+function renderForm(tenant: Tenant, permissions: string[] = ["tenant:write"]) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 30_000 },

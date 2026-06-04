@@ -142,7 +142,6 @@ export const handlers = [
   ),
   http.get("/v1/invitations/{token}/preview", ({ response }) =>
     response(200).json({
-      email: "invitee@nica-erp.test",
       organization_name: "Empresa Demo",
       role: "admin",
     }),

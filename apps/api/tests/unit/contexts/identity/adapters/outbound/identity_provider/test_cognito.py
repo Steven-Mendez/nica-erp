@@ -21,8 +21,12 @@ from contexts.identity.adapters.outbound.identity_provider.cognito import (
     IdentityProviderCognito,
 )
 from contexts.identity.application.errors import (
+    ExpiredResetCodeError,
+    InvalidConfirmationCodeError,
     InvalidCredentialsError,
+    InvalidResetCodeError,
     LockoutActiveError,
+    ResendThrottledError,
     SignupEmailNotConfirmedError,
     TokenExpiredError,
 )
@@ -367,12 +371,21 @@ async def test_confirm_signup_happy_returns_sub(
     assert sub == "abc-123"
 
 
-async def test_confirm_signup_bad_code_raises_invalid_credentials(
+async def test_confirm_signup_bad_code_raises_invalid_confirmation_code(
     adapter: IdentityProviderCognito, cognito_client: MagicMock
 ) -> None:
     cognito_client.confirm_sign_up.side_effect = _client_error("CodeMismatchException")
 
-    with pytest.raises(InvalidCredentialsError):
+    with pytest.raises(InvalidConfirmationCodeError):
+        await adapter.confirm_signup(email="u@x.io", code="bad")
+
+
+async def test_confirm_signup_expired_code_raises_invalid_confirmation_code(
+    adapter: IdentityProviderCognito, cognito_client: MagicMock
+) -> None:
+    cognito_client.confirm_sign_up.side_effect = _client_error("ExpiredCodeException")
+
+    with pytest.raises(InvalidConfirmationCodeError):
         await adapter.confirm_signup(email="u@x.io", code="bad")
 
 
@@ -414,6 +427,25 @@ async def test_resend_confirmation_swallows_already_confirmed(
     assert result is None
 
 
+async def test_resend_confirmation_throttle_raises_resend_throttled(
+    adapter: IdentityProviderCognito, cognito_client: MagicMock
+) -> None:
+    cognito_client.resend_confirmation_code.side_effect = _client_error("LimitExceededException")
+
+    with pytest.raises(ResendThrottledError) as exc_info:
+        await adapter.resend_confirmation(email="u@x.io")
+    assert exc_info.value.retry_after_seconds >= 1
+
+
+async def test_resend_confirmation_too_many_requests_raises_resend_throttled(
+    adapter: IdentityProviderCognito, cognito_client: MagicMock
+) -> None:
+    cognito_client.resend_confirmation_code.side_effect = _client_error("TooManyRequestsException")
+
+    with pytest.raises(ResendThrottledError):
+        await adapter.resend_confirmation(email="u@x.io")
+
+
 # ---------------------------------------------------------------- forgot_password
 
 
@@ -441,15 +473,28 @@ async def test_forgot_password_propagates_invalid_parameter(
 # ---------------------------------------------------------------- confirm_forgot_password
 
 
-async def test_confirm_forgot_password_bad_code_raises_invalid_credentials(
+async def test_confirm_forgot_password_expired_raises_expired_reset_code(
     adapter: IdentityProviderCognito, cognito_client: MagicMock
 ) -> None:
     cognito_client.confirm_forgot_password.side_effect = _client_error("ExpiredCodeException")
 
-    with pytest.raises(InvalidCredentialsError):
+    with pytest.raises(ExpiredResetCodeError):
         await adapter.confirm_forgot_password(
             email="u@x.io", code="bad", new_password="StrongPass123!"
         )
+
+
+async def test_confirm_forgot_password_mismatch_raises_invalid_reset_code(
+    adapter: IdentityProviderCognito, cognito_client: MagicMock
+) -> None:
+    cognito_client.confirm_forgot_password.side_effect = _client_error("CodeMismatchException")
+
+    with pytest.raises(InvalidResetCodeError) as exc_info:
+        await adapter.confirm_forgot_password(
+            email="u@x.io", code="bad", new_password="StrongPass123!"
+        )
+    # Mismatch is not expiry, so the subclass must not match.
+    assert not isinstance(exc_info.value, ExpiredResetCodeError)
 
 
 # ---------------------------------------------------------------- change_password

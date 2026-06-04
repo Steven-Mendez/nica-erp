@@ -7,6 +7,7 @@ The ``domain-purity`` import-linter contract forbids ``sqlalchemy``,
 from __future__ import annotations
 
 from contexts.tenants.domain.authorization_dgi import AuthorizationDgi
+from contexts.tenants.domain.departamento import KNOWN_DEPARTAMENTOS, Departamento
 from contexts.tenants.domain.errors import (
     CannotDemoteOwnerError,
     CannotRemoveOwnerError,
@@ -14,11 +15,13 @@ from contexts.tenants.domain.errors import (
     InvitationCancelledError,
     InvitationDuplicatePendingError,
     InvitationExpiredError,
+    InvitationIdentityMismatchError,
     InvitationInvalidError,
     InvitationNotFoundError,
     NotAMemberError,
     OwnerAlreadyExistsError,
     OwnerRoleNotAllowedHereError,
+    RucCollisionError,
     TenantNotFoundError,
 )
 from contexts.tenants.domain.events import (
@@ -39,10 +42,12 @@ from contexts.tenants.domain.ruc import Ruc
 from contexts.tenants.domain.tenant import Tenant
 
 __all__ = [
+    "KNOWN_DEPARTAMENTOS",
     "KNOWN_MUNICIPALITIES",
     "AuthorizationDgi",
     "CannotDemoteOwnerError",
     "CannotRemoveOwnerError",
+    "Departamento",
     "FiscalEmail",
     "FiscalPhone",
     "Invitation",
@@ -51,6 +56,7 @@ __all__ = [
     "InvitationCancelledError",
     "InvitationDuplicatePendingError",
     "InvitationExpiredError",
+    "InvitationIdentityMismatchError",
     "InvitationInvalidError",
     "InvitationNotFoundError",
     "MemberInvited",
@@ -66,6 +72,7 @@ __all__ = [
     "Regime",
     "Role",
     "Ruc",
+    "RucCollisionError",
     "Tenant",
     "TenantCreated",
     "TenantNotFoundError",

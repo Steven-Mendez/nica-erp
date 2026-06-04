@@ -98,9 +98,10 @@ describe("auth mutations — token-bundle hooks", () => {
     vi.clearAllMocks();
   });
 
+  // The refresh token rides exclusively in the `nica_erp_rt` cookie;
+  // the JSON body carries only access + id tokens (audit F-011).
   const bundle = {
     access_token: "a",
-    refresh_token: "r",
     id_token: "i",
     token_type: "Bearer" as const,
   };
@@ -111,7 +112,7 @@ describe("auth mutations — token-bundle hooks", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useLoginMutation(), { wrapper: wrapper(client) });
     await result.current.mutateAsync({ email: "x@y.com", password: "secret" });
-    expect(setTokens).toHaveBeenCalledWith({ access: "a", refresh: "r", id: "i" });
+    expect(setTokens).toHaveBeenCalledWith({ access: "a", id: "i" });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: meQueryKey });
   });
 
@@ -119,8 +120,10 @@ describe("auth mutations — token-bundle hooks", () => {
     vi.mocked(refresh).mockResolvedValueOnce(bundle);
     const client = makeClient();
     const { result } = renderHook(() => useRefreshMutation(), { wrapper: wrapper(client) });
-    await result.current.mutateAsync({ refresh_token: "old" });
-    expect(setTokens).toHaveBeenCalledWith({ access: "a", refresh: "r", id: "i" });
+    // RefreshInput.refresh_token is optional after the F-011 hardening:
+    // the cookie is the canonical carrier, body is just a fallback.
+    await result.current.mutateAsync({});
+    expect(setTokens).toHaveBeenCalledWith({ access: "a", id: "i" });
   });
 });
 

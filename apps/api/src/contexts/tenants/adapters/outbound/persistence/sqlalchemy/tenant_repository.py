@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import RowMapping, text
+from sqlalchemy.exc import IntegrityError
 
 from contexts.tenants.domain import (
     AuthorizationDgi,
@@ -19,6 +20,7 @@ from contexts.tenants.domain import (
     Municipality,
     Regime,
     Ruc,
+    RucCollisionError,
     Tenant,
 )
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
@@ -100,10 +102,20 @@ class TenantRepositorySqlAlchemy:
         return self._hydrate(row) if row is not None else None
 
     async def add(self, tenant: Tenant) -> None:
-        await self._uow.current_session.execute(_INSERT, self._params(tenant))
+        try:
+            await self._uow.current_session.execute(_INSERT, self._params(tenant))
+        except IntegrityError as exc:
+            if "uq_tenants_ruc" in str(exc):
+                raise RucCollisionError() from exc
+            raise
 
     async def update(self, tenant: Tenant) -> None:
-        await self._uow.current_session.execute(_UPDATE, self._params(tenant))
+        try:
+            await self._uow.current_session.execute(_UPDATE, self._params(tenant))
+        except IntegrityError as exc:
+            if "uq_tenants_ruc" in str(exc):
+                raise RucCollisionError() from exc
+            raise
 
     async def list_for_user(self, user_id: UUID) -> list[Tenant]:
         result = await self._uow.current_session.execute(_SELECT_FOR_USER, {"user_id": user_id})

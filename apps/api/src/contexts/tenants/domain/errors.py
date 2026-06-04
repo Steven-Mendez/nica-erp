@@ -47,8 +47,20 @@ class InvitationNotFoundError(Exception):
     """No invitation found for the provided token hash."""
 
 
+class InvitationIdentityMismatchError(Exception):
+    """The invitation was issued to a different email than the authenticated user.
+
+    Raised before any state mutation so the accept attempt is a no-op:
+    no membership row is written and the invitation row is left untouched.
+    """
+
+
 class InvitationDuplicatePendingError(Exception):
     """A pending invitation already exists for the same tenant + email."""
+
+
+class RucCollisionError(Exception):
+    """Another tenant already uses the requested RUC."""
 
 
 __all__ = [
@@ -58,10 +70,12 @@ __all__ = [
     "InvitationCancelledError",
     "InvitationDuplicatePendingError",
     "InvitationExpiredError",
+    "InvitationIdentityMismatchError",
     "InvitationInvalidError",
     "InvitationNotFoundError",
     "NotAMemberError",
     "OwnerAlreadyExistsError",
     "OwnerRoleNotAllowedHereError",
+    "RucCollisionError",
     "TenantNotFoundError",
 ]

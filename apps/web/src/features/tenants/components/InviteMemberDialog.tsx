@@ -54,13 +54,13 @@ export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
     setOpenInternal(next);
   };
 
-  const onSubmit = (values: InviteMemberValues) => {
-    // Modal closes only on success — onError leaves the inline alert
-    // mounted with the Spanish copy from the registry so the
-    // operator can fix the email and resubmit without losing context.
-    mutation.mutate(values, {
-      onSuccess: () => setOpen(false),
-    });
+  const onSubmit = async (values: InviteMemberValues) => {
+    try {
+      await mutation.mutateAsync(values);
+      setOpen(false);
+    } catch {
+      // errors handled by FormErrorAlert via mutation.error
+    }
   };
 
   const emailInvalid = Boolean(formState.errors.email);
@@ -124,12 +124,12 @@ export function InviteMemberDialog({ tenantId }: { tenantId: string }) {
               type="button"
               variant="ghost"
               onClick={() => setOpen(false)}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || formState.isSubmitting}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Enviando…" : "Enviar invitación"}
+            <Button type="submit" disabled={mutation.isPending || formState.isSubmitting}>
+              {mutation.isPending || formState.isSubmitting ? "Enviando…" : "Enviar invitación"}
             </Button>
           </DialogFooter>
         </form>

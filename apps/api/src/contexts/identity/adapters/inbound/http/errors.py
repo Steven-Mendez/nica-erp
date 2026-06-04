@@ -19,8 +19,12 @@ from contexts.identity.adapters.inbound.http.schemas import ProblemDetail
 from contexts.identity.application.errors import (
     AuthLockoutActiveError,
     EmailSendError,
+    ExpiredResetCodeError,
+    InvalidConfirmationCodeError,
     InvalidCredentialsError,
+    InvalidResetCodeError,
     LockoutActiveError,
+    RateLimitedError,
     SignupEmailNotConfirmedError,
     TokenExpiredError,
     UserNotFoundError,
@@ -44,16 +48,25 @@ def to_problem_detail(exc: Exception) -> tuple[int, ProblemDetail]:
         # Spanish copy per the auth-login-rate-limiting spec. The
         # `scope` extension lets the SPA pick between identifier-level
         # and IP-level message variants.
+        if exc.scope == "ip":
+            title = "Demasiados intentos desde esta red"
+            detail = (
+                f"Demasiados intentos desde esta red. "
+                f"Espera {exc.retry_after_seconds} s antes de intentar de nuevo."
+            )
+        else:
+            title = "Cuenta temporalmente bloqueada"
+            detail = (
+                "Demasiados intentos fallidos. "
+                f"Inténtalo de nuevo en {exc.retry_after_seconds} segundos."
+            )
         return (
             429,
             _problem(
                 429,
                 "auth.lockout_active",
-                "Cuenta temporalmente bloqueada",
-                detail=(
-                    "Demasiados intentos fallidos. "
-                    f"Inténtalo de nuevo en {exc.retry_after_seconds} segundos."
-                ),
+                title,
+                detail=detail,
                 retry_after_seconds=exc.retry_after_seconds,
                 scope=exc.scope,
             ),
@@ -67,6 +80,50 @@ def to_problem_detail(exc: Exception) -> tuple[int, ProblemDetail]:
                 "Account temporarily locked",
                 detail=str(exc),
                 retry_after_seconds=exc.retry_after_seconds,
+            ),
+        )
+    if isinstance(exc, ExpiredResetCodeError):
+        return (
+            410,
+            _problem(
+                410,
+                "auth.reset_token_expired",
+                "Reset link expired",
+                detail=str(exc) or None,
+            ),
+        )
+    if isinstance(exc, InvalidResetCodeError):
+        return (
+            410,
+            _problem(
+                410,
+                "auth.reset_token_used",
+                "Reset link no longer valid",
+                detail=str(exc) or None,
+            ),
+        )
+    if isinstance(exc, InvalidConfirmationCodeError):
+        return (
+            400,
+            _problem(
+                400,
+                "auth.invalid_confirmation_code",
+                "Invalid confirmation code",
+                detail=str(exc) or None,
+            ),
+        )
+    if isinstance(exc, RateLimitedError):
+        # ``scope`` is an RFC-7807 extension. The SPA reads it to pick
+        # scope-specific copy (e.g. ``scope="resend"``).
+        return (
+            429,
+            _problem(
+                429,
+                "auth.rate_limited",
+                "Demasiados intentos",
+                detail=(f"Espera {exc.retry_after_seconds} s antes de intentar de nuevo."),
+                retry_after_seconds=exc.retry_after_seconds,
+                scope=exc.scope,
             ),
         )
     if isinstance(exc, TokenExpiredError):
@@ -105,13 +162,18 @@ def to_problem_detail(exc: Exception) -> tuple[int, ProblemDetail]:
             _problem(404, "user.not_found", "User not found", detail=str(exc) or None),
         )
     if isinstance(exc, PasswordPolicyError):
+        # ``auth.weak_password`` is the unified code per audit F-036;
+        # ``failed_rules`` is an RFC-7807 extension that carries the
+        # structured list of rule names that failed so the SPA can
+        # surface each rule individually.
         return (
             422,
             _problem(
                 422,
-                "validation.password_policy",
-                "Password policy violation",
-                detail=str(exc),
+                "auth.weak_password",
+                "La contraseña no cumple la política",
+                detail="La contraseña no cumple los requisitos mínimos.",
+                failed_rules=list(getattr(exc, "failed_rules", []) or []),
             ),
         )
     if isinstance(exc, ValueError):
@@ -157,6 +219,32 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _invalid_credentials(_request: Request, exc: InvalidCredentialsError) -> JSONResponse:
         status, problem = to_problem_detail(exc)
         return _problem_response(status, problem)
+
+    @app.exception_handler(ExpiredResetCodeError)
+    async def _expired_reset_code(_request: Request, exc: ExpiredResetCodeError) -> JSONResponse:
+        status, problem = to_problem_detail(exc)
+        return _problem_response(status, problem)
+
+    @app.exception_handler(InvalidResetCodeError)
+    async def _invalid_reset_code(_request: Request, exc: InvalidResetCodeError) -> JSONResponse:
+        status, problem = to_problem_detail(exc)
+        return _problem_response(status, problem)
+
+    @app.exception_handler(InvalidConfirmationCodeError)
+    async def _invalid_confirmation_code(
+        _request: Request, exc: InvalidConfirmationCodeError
+    ) -> JSONResponse:
+        status, problem = to_problem_detail(exc)
+        return _problem_response(status, problem)
+
+    @app.exception_handler(RateLimitedError)
+    async def _rate_limited(_request: Request, exc: RateLimitedError) -> JSONResponse:
+        status, problem = to_problem_detail(exc)
+        return _problem_response(
+            status,
+            problem,
+            extra_headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
 
     @app.exception_handler(TokenExpiredError)
     async def _token_expired(_request: Request, exc: TokenExpiredError) -> JSONResponse:

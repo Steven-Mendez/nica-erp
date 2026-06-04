@@ -15,10 +15,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Toaster } from "sonner";
 import { bootRefresh, setOnAuthLost } from "@/api/interceptor";
-import { getRefreshToken } from "@/api/tokenStore";
 import { router } from "@/router";
 import { ThemeProvider } from "@/components/theme-provider";
+import { OverlayMutexProvider } from "@/components/overlay-mutex";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 setOnAuthLost(() => {
@@ -44,7 +45,10 @@ export function App() {
         },
       }),
   );
-  const [bootReady, setBootReady] = useState(() => getRefreshToken() === null);
+  // Always attempt one cookie-backed refresh on mount: the SPA cannot
+  // inspect the httpOnly `nica_erp_rt` cookie from JS, so a fresh load
+  // calls /v1/auth/refresh once and lets the API decide.
+  const [bootReady, setBootReady] = useState(false);
 
   useEffect(() => {
     if (bootReady) return;
@@ -59,9 +63,19 @@ export function App() {
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="nica-erp-theme">
-      <QueryClientProvider client={client}>
-        <TooltipProvider>{bootReady ? <RouterProvider router={router} /> : null}</TooltipProvider>
-      </QueryClientProvider>
+      <OverlayMutexProvider>
+        <QueryClientProvider client={client}>
+          <TooltipProvider>{bootReady ? <RouterProvider router={router} /> : null}</TooltipProvider>
+          {/*
+           * Single Sonner Toaster mount for the whole app. `richColors` opts
+           * in to the green/red theming for success/error variants; the
+           * default `aria-live="polite"` semantics are already set by the
+           * library, so screen readers announce the toast without preempting
+           * the user's current task.
+           */}
+          <Toaster richColors position="top-right" />
+        </QueryClientProvider>
+      </OverlayMutexProvider>
     </ThemeProvider>
   );
 }

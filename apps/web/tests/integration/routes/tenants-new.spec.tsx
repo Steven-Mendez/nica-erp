@@ -9,21 +9,27 @@ import { TenantsNewRoute } from "@/routes/tenants/new";
 const createSpy = vi.fn();
 const switchSpy = vi.fn();
 
+// The route uses `mutateAsync` (Promise-returning). Mirror onto both
+// `mutate` (for legacy callers) and `mutateAsync` so the route's
+// `await` resolves with a synthetic tenant id.
 vi.mock("@/features/tenants/api/hooks", () => ({
   useCreateTenantMutation: () => ({
-    mutate: (
-      vars: unknown,
-      opts?: { onSuccess?: (t: { id: string }) => void; onError?: (e: Error) => void },
-    ) => {
+    mutate: (vars: unknown) => {
       createSpy(vars);
-      opts?.onSuccess?.({ id: "tenant-id" });
+    },
+    mutateAsync: (vars: unknown) => {
+      createSpy(vars);
+      return Promise.resolve({ id: "tenant-id" });
     },
     isPending: false,
   }),
   useSwitchTenantMutation: () => ({
-    mutate: (vars: unknown, opts?: { onSuccess?: () => void }) => {
+    mutate: (vars: unknown) => {
       switchSpy(vars);
-      opts?.onSuccess?.();
+    },
+    mutateAsync: (vars: unknown) => {
+      switchSpy(vars);
+      return Promise.resolve({ access_token: "a", id_token: "i", token_type: "Bearer" });
     },
     isPending: false,
   }),
@@ -39,7 +45,6 @@ vi.mock("@tanstack/react-router", async () => {
 });
 
 vi.mock("@/api/tokenStore", () => ({
-  getRefreshToken: () => "stub-refresh-token",
   getAccessToken: () => null,
 }));
 

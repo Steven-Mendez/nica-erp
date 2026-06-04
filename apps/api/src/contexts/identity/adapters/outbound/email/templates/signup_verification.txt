@@ -1,9 +1,11 @@
-nica-erp — confirmacion de cuenta / account confirmation
+nica-erp: confirmación de cuenta / account confirmation
 
-Tu codigo de verificacion es: {{code}}
+Tu código de verificación es: {{code}}
+
+Este código expira en 15 minutos. Si no creaste esta cuenta,
+ignora este mensaje.
+
+---
 Your verification code is: {{code}}
-
-Este codigo expira en 15 minutos. Si no creaste esta cuenta, ignora este
-mensaje.
-
-This code expires in 15 minutes. If you did not sign up, ignore this email.
+This code expires in 15 minutes. If you did not sign up,
+ignore this email.

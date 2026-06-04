@@ -25,6 +25,18 @@ vi.mock("@/features/tenants/api/hooks", () => ({
       mutateCalls.push(args);
       mutateImpl(args);
     },
+    // The component now uses `mutateAsync` (returns a Promise). Mirror
+    // it onto the same recording so existing assertions continue to
+    // work; errors are surfaced via promise rejection.
+    mutateAsync: (values: MutateArgs["values"], handlers: MutateArgs["handlers"] = {}) => {
+      const args = { values, handlers };
+      mutateCalls.push(args);
+      mutateImpl(args);
+      if (mutationError !== null) {
+        return Promise.reject(mutationError);
+      }
+      return Promise.resolve(undefined);
+    },
     isPending,
     error: mutationError,
     reset: () => {

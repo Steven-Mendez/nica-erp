@@ -8,6 +8,7 @@ import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 function FiscalDataBanner({ tenantId }: { tenantId: string }) {
   const tenant = useTenantQuery(tenantId);
+  if (tenant.isError) throw tenant.error;
   if (tenant.data === undefined) return null;
   const incomplete =
     tenant.data.ruc === null ||
@@ -32,6 +33,7 @@ function FiscalDataBanner({ tenantId }: { tenantId: string }) {
 export function DashboardRoute() {
   useDocumentTitle("Resumen");
   const me = useMeQuery();
+  if (me.isError) throw me.error;
   const activeTenantId = me.data?.active_tenant ?? null;
   return (
     <AppShell>

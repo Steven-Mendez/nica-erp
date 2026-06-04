@@ -47,7 +47,6 @@ vi.mock("@tanstack/react-router", async () => {
 });
 
 vi.mock("@/api/tokenStore", () => ({
-  getRefreshToken: () => "stub-refresh-token",
   getAccessToken: () => null,
 }));
 
@@ -110,7 +109,7 @@ describe("TenantsIndexRoute (picker)", () => {
     await waitFor(() => expect(switchSpy).toHaveBeenCalled());
     expect(switchSpy.mock.calls.at(-1)?.[0]).toEqual({
       tenantId: "t-1",
-      input: { refresh_token: "stub-refresh-token" },
+      input: {},
     });
     expect(window.sessionStorage.getItem(PICKER_FLAG_KEY)).toBe("1");
     expect(navigateSpy).toHaveBeenCalledWith({ to: "/dashboard" });

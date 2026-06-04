@@ -190,17 +190,15 @@ export const resendInvitation = async (
   return expectData(`POST ${path}`, result);
 };
 
-export const acceptInvitation = async (
-  token: string,
-  refresh_token?: string | null,
-): Promise<AcceptInvitationResult> => {
+export const acceptInvitation = async (token: string): Promise<AcceptInvitationResult> => {
   // The token travels in the request body so it never appears in
-  // access logs / Referer headers / browser history. The optional
-  // refresh_token lets the backend rotate the caller's session in
-  // the same call when this is their first membership — the response
-  // then carries `tokens`, otherwise `tokens` is null.
+  // access logs / Referer headers / browser history. The refresh
+  // token rides in the `nica_erp_rt` httpOnly cookie shipped via
+  // `credentials: include`; the server uses it to rotate the
+  // caller's session when this is their first membership and returns
+  // a non-null `tokens` field in that case.
   const result = await api.POST("/v1/invitations/accept", {
-    body: refresh_token != null ? { token, refresh_token } : { token },
+    body: { token },
   });
   return expectData("POST /v1/invitations/accept", result);
 };

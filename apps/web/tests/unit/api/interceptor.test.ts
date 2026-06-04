@@ -38,7 +38,7 @@ describe("fetchWithAuth interceptor", () => {
     const { setTokens, getAccessToken } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
 
-    setTokens({ access: "old-access", refresh: "old-refresh", id: "old-id" });
+    setTokens({ access: "old-access", id: "old-id" });
     const onAuthLost = vi.fn();
     setOnAuthLost(onAuthLost);
 
@@ -49,7 +49,6 @@ describe("fetchWithAuth interceptor", () => {
       if (url.endsWith("/v1/auth/refresh")) {
         return jsonResponse(200, {
           access_token: "new-access",
-          refresh_token: "new-refresh",
           id_token: "new-id",
           token_type: "Bearer",
         });
@@ -82,7 +81,7 @@ describe("fetchWithAuth interceptor", () => {
     const { setTokens, getAccessToken } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
 
-    setTokens({ access: "a", refresh: "r", id: "i" });
+    setTokens({ access: "a", id: "i" });
     const onAuthLost = vi.fn();
     setOnAuthLost(onAuthLost);
 
@@ -104,7 +103,7 @@ describe("fetchWithAuth interceptor", () => {
     const { setTokens } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
 
-    setTokens({ access: "a", refresh: "r", id: "i" });
+    setTokens({ access: "a", id: "i" });
     const onAuthLost = vi.fn();
     setOnAuthLost(onAuthLost);
 
@@ -118,7 +117,6 @@ describe("fetchWithAuth interceptor", () => {
         // another refresh on that second 401.
         return jsonResponse(200, {
           access_token: "new-access",
-          refresh_token: "new-refresh",
           id_token: "new-id",
           token_type: "Bearer",
         });
@@ -144,7 +142,7 @@ describe("fetchWithAuth interceptor", () => {
     const { setTokens } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
 
-    setTokens({ access: "abc", refresh: "r", id: "i" });
+    setTokens({ access: "abc", id: "i" });
     setOnAuthLost(vi.fn());
 
     const calls: FetchCall[] = [];
@@ -169,7 +167,7 @@ describe("fetchWithAuth interceptor", () => {
     const { setTokens } = await import("@/api/tokenStore");
     const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
 
-    setTokens({ access: "abc", refresh: "r", id: "i" });
+    setTokens({ access: "abc", id: "i" });
     setOnAuthLost(vi.fn());
 
     const calls: FetchCall[] = [];
@@ -192,38 +190,48 @@ describe("fetchWithAuth interceptor", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
   });
 
-  it("bootRefresh: returns false and does nothing when no refresh token is persisted", async () => {
+  it("bootRefresh: always issues one cookie-backed POST and returns false on 401", async () => {
+    // The SPA cannot see the httpOnly `nica_erp_rt` cookie from JS, so
+    // boot ALWAYS attempts one refresh. The API decides via the cookie
+    // header whether the call succeeds.
     const { clear, getAccessToken } = await import("@/api/tokenStore");
     const { bootRefresh } = await import("@/api/interceptor");
 
     clear();
-    const fetchMock = vi.fn(async () => okResponse());
+    const calls: FetchCall[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push({ url, init });
+      return unauthorizedResponse();
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const ok = await bootRefresh();
 
     expect(ok).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.url.endsWith("/v1/auth/refresh"))).toHaveLength(1);
+    // Cookie must be shipped via credentials:"include" and the body must
+    // be an empty object (no refresh_token leaking into JS-readable JSON).
+    const refreshCall = calls[0];
+    expect(refreshCall?.init?.credentials).toBe("include");
+    expect(refreshCall?.init?.body).toBe("{}");
     expect(getAccessToken()).toBeNull();
   });
 
-  it("bootRefresh: with a persisted refresh token, exchanges it for a fresh access token", async () => {
-    // Simulate a reload: refresh token survived in sessionStorage, but the
-    // in-memory access token is gone.
-    window.sessionStorage.setItem("nica-erp:refresh-token", "r-survived");
-
-    const { getAccessToken, getRefreshToken } = await import("@/api/tokenStore");
+  it("bootRefresh: cookie-backed refresh succeeds → access + id tokens are hydrated", async () => {
+    // Simulate a reload: in-memory state is gone. The browser still
+    // owns the `nica_erp_rt` cookie (invisible to JS); a 200 response
+    // proves the API accepted it.
+    const { getAccessToken } = await import("@/api/tokenStore");
     const { bootRefresh } = await import("@/api/interceptor");
 
     expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBe("r-survived");
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.endsWith("/v1/auth/refresh")) {
         return jsonResponse(200, {
           access_token: "boot-access",
-          refresh_token: "boot-refresh",
           id_token: "boot-id",
           token_type: "Bearer",
         });
@@ -236,17 +244,16 @@ describe("fetchWithAuth interceptor", () => {
 
     expect(ok).toBe(true);
     expect(getAccessToken()).toBe("boot-access");
-    expect(getRefreshToken()).toBe("boot-refresh");
-    expect(window.sessionStorage.getItem("nica-erp:refresh-token")).toBe("boot-refresh");
+    // Refresh credential must never land in any JS-readable surface.
+    expect(window.sessionStorage.getItem("nica-erp:refresh-token")).toBeNull();
   });
 
-  it("bootRefresh: on failure, clears the persisted refresh token", async () => {
-    window.sessionStorage.setItem("nica-erp:refresh-token", "r-stale");
-
-    const { getAccessToken, getRefreshToken } = await import("@/api/tokenStore");
+  it("bootRefresh: on 401 the in-memory store is cleared (cookie cleanup is the server's job)", async () => {
+    const { setTokens, getAccessToken } = await import("@/api/tokenStore");
     const { bootRefresh } = await import("@/api/interceptor");
 
-    expect(getRefreshToken()).toBe("r-stale");
+    // Pretend an earlier mount left a stale access token in memory.
+    setTokens({ access: "stale-access", id: "stale-id" });
 
     const fetchMock = vi.fn(async () => unauthorizedResponse());
     vi.stubGlobal("fetch", fetchMock);
@@ -255,8 +262,6 @@ describe("fetchWithAuth interceptor", () => {
 
     expect(ok).toBe(false);
     expect(getAccessToken()).toBeNull();
-    expect(getRefreshToken()).toBeNull();
-    expect(window.sessionStorage.getItem("nica-erp:refresh-token")).toBeNull();
   });
 
   it("omits Authorization when no token is in the store", async () => {
@@ -276,6 +281,45 @@ describe("fetchWithAuth interceptor", () => {
 
     await fetchWithAuth("http://api.test/v1/me");
 
+    const headers = new Headers(calls[0]?.init?.headers ?? {});
+    expect(headers.get("Authorization")).toBeNull();
+  });
+
+  it("401 without bearer is passthrough: no refresh, no onAuthLost, no redirect", async () => {
+    // Regression: wrong OTP on /confirm, wrong credentials on /login, used
+    // reset token on /reset-password all return 401 from public endpoints.
+    // The interceptor MUST surface that 401 to the caller (so FormErrorAlert
+    // can render) without firing the "session lost" branch, since there is
+    // no session to lose.
+    const { clear } = await import("@/api/tokenStore");
+    const { fetchWithAuth, setOnAuthLost } = await import("@/api/interceptor");
+
+    clear();
+    const onAuthLost = vi.fn();
+    setOnAuthLost(onAuthLost);
+
+    const calls: FetchCall[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push({ url, init });
+      return unauthorizedResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await fetchWithAuth("http://api.test/v1/auth/confirm-signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "a@b.test", code: "000000" }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(onAuthLost).not.toHaveBeenCalled();
+    // No refresh call should have fired.
+    const refreshCalls = calls.filter((c) => c.url.endsWith("/v1/auth/refresh"));
+    expect(refreshCalls).toHaveLength(0);
+    // Exactly one network call (the original) — no retry.
+    expect(calls).toHaveLength(1);
+    // The original request never carried an Authorization header.
     const headers = new Headers(calls[0]?.init?.headers ?? {});
     expect(headers.get("Authorization")).toBeNull();
   });

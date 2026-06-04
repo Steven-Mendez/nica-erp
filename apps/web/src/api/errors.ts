@@ -131,12 +131,24 @@ const SPANISH_BY_CODE: Record<string, (p: ProblemDetail) => string> = {
   "auth.token_expired": () => "Tu sesión expiró. Inicia sesión de nuevo.",
   "auth.reset_token_used": () => "Este enlace ya fue utilizado. Solicita uno nuevo.",
   "auth.reset_token_expired": () => "El enlace expiró. Solicita uno nuevo.",
+  "auth.resend_throttled": () => "Espera unos segundos antes de pedir otro código.",
+  "auth.rate_limited": (p) => {
+    const n = p.retry_after_seconds;
+    if (typeof n === "number" && n > 0) {
+      return `Demasiados intentos. Intenta de nuevo en ${n} segundos.`;
+    }
+    return "Demasiados intentos. Espera unos segundos antes de reintentar.";
+  },
+  "auth.weak_password": () =>
+    "La contraseña no cumple la política: 12+ caracteres con mayúscula, minúscula, dígito y símbolo.",
   // Tenants — invitation conflicts. The backend does not emit this
   // exact code today (the invite-member use case writes a new
   // invitation row on every call); the entry is forward-compatible
   // so an MSW-mocked 409 in the integration test, and an eventual
   // backend handler, both hit the same Spanish copy.
   "tenants.invitation_duplicate_pending": () => "Esta persona ya tiene una invitación pendiente.",
+  "invitation.identity_mismatch": () =>
+    "Esta invitación es para otra persona. Cierra sesión y entra con el correo invitado.",
 };
 
 /**
@@ -174,4 +186,6 @@ export const KNOWN_AUTH_PROBLEM_CODES: readonly string[] = Object.freeze([
   "auth.token_expired",
   "auth.reset_token_used",
   "auth.reset_token_expired",
+  "auth.resend_throttled",
+  "auth.rate_limited",
 ]);

@@ -12,10 +12,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMyTenantsQuery, useSwitchTenantMutation } from "@/features/tenants/api/hooks";
-import { getRefreshToken } from "@/api/tokenStore";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { setPickerConfirmed } from "@/lib/route-guard";
 import { BrandLayout } from "@/components/brand-header";
+import { roleLabel } from "@/features/tenants/lib/role-labels";
 
 type Membership = {
   tenant_id: string;
@@ -70,9 +70,7 @@ function MembershipCard({
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium truncate">{membership.name}</span>
-            <Badge variant="secondary" className="capitalize">
-              {membership.role}
-            </Badge>
+            <Badge variant="secondary">{roleLabel(membership.role)}</Badge>
           </div>
         </div>
       </CardContent>
@@ -95,13 +93,10 @@ export function TenantsIndexRoute() {
   }, [tenants.data, query]);
 
   const onActivate = (tenantId: string): void => {
-    const refresh = getRefreshToken();
-    if (refresh === null) {
-      void navigate({ to: "/login" });
-      return;
-    }
+    // The refresh token rides in the httpOnly `nica_erp_rt` cookie
+    // shipped via `credentials: include` on the openapi-fetch client.
     switchMut.mutate(
-      { tenantId, input: { refresh_token: refresh } },
+      { tenantId, input: {} },
       {
         onSuccess: () => {
           setPickerConfirmed();

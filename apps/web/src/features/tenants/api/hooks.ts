@@ -12,6 +12,7 @@
 // the previous empresa and either leak its data into the cache or
 // 403 noisily.
 
+import { toast } from "sonner";
 import {
   keepPreviousData,
   useMutation,
@@ -118,8 +119,9 @@ export const useCreateTenantMutation = (): UseMutationResult<Tenant, Error, Crea
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createTenant,
-    onSuccess: () => {
+    onSuccess: (tenant) => {
       void qc.invalidateQueries({ queryKey: myTenantsKey });
+      toast.success(`Empresa "${tenant.name}" creada.`);
     },
   });
 };
@@ -150,6 +152,7 @@ export const useUpdateActiveTenantMutation = (): UseMutationResult<
         qc.setQueryData(tenantKey(activeId), tenant);
       }
       void qc.invalidateQueries({ queryKey: myTenantsKey });
+      toast.success("Datos fiscales actualizados.");
     },
   });
 };
@@ -172,8 +175,9 @@ export const useInviteMemberMutation = (
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateInvitationInput) => inviteMember(tenantId, body),
-    onSuccess: () => {
+    onSuccess: (invitation) => {
       void qc.invalidateQueries({ queryKey: invitationsKey(tenantId) });
+      toast.success(`Invitación enviada a ${invitation.email}.`);
     },
   });
 };
@@ -186,6 +190,7 @@ export const useRemoveMemberMutation = (
     mutationFn: ({ userId }) => removeMember(tenantId, userId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: membersKey(tenantId) });
+      toast.success("Miembro removido.");
     },
   });
 };
@@ -207,8 +212,8 @@ export const useUpdateMemberRoleMutation = (
 // removes the cancelled row eagerly; `onError` rolls the snapshot
 // back; `onSettled` invalidates so the next refetch picks up any
 // server-side drift. The Spanish error copy renders as an inline
-// `<Alert>` in `InvitationsTable`; the shared `<Toaster />` is not
-// mounted yet so the inline path is the canonical surface today.
+// `<Alert>` in `InvitationsTable` and a success toast surfaces on
+// completion via the shared `<Toaster />`.
 export const useCancelInvitationMutation = (
   tenantId: string,
 ): UseMutationResult<
@@ -237,6 +242,9 @@ export const useCancelInvitationMutation = (
       if (context?.previous !== undefined) {
         qc.setQueryData(invitationsKey(tenantId), context.previous);
       }
+    },
+    onSuccess: () => {
+      toast.success("Invitación cancelada.");
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: invitationsKey(tenantId) });
@@ -284,7 +292,6 @@ export const useSwitchTenantMutation = (): UseMutationResult<
     onSuccess: (bundle) => {
       setTokens({
         access: bundle.access_token,
-        refresh: bundle.refresh_token,
         id: bundle.id_token,
       });
       // The successful switch is the canonical "operator picked an

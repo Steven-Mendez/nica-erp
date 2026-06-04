@@ -41,3 +41,24 @@ def test_repr_masks_value() -> None:
     p = Password(raw)
     assert raw not in repr(p)
     assert repr(p) == "Password(***)"
+
+
+def test_eight_char_password_rejected_for_audit_f036() -> None:
+    """Audit F-036: the SPA used to show two policies (8+ vs 12+).
+    The canonical policy is 12+, so an 8-char password is rejected
+    even when all 4 character classes are present.
+    """
+    with pytest.raises(PasswordPolicyError) as exc_info:
+        Password("Short1!a").validate_policy()
+    assert "min_length" in exc_info.value.failed_rules
+
+
+def test_failed_rules_lists_all_violations() -> None:
+    """Caller can read every rule that failed in one pass."""
+    with pytest.raises(PasswordPolicyError) as exc_info:
+        Password("short").validate_policy()
+    failed = exc_info.value.failed_rules
+    assert "min_length" in failed
+    assert "uppercase_missing" in failed
+    assert "digit_missing" in failed
+    assert "symbol_missing" in failed
