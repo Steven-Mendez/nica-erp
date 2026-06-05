@@ -93,20 +93,26 @@ for key in cloudfront_distribution_domain tf_state_bucket ecr_repository_url web
   printf '%s = %s\n' "${key}" "${value}"
 done
 
-# CI hand-off: the two role ARNs need to land in GitHub repository
-# variables so .github/workflows/deploy.yml and destroy.yml can
-# assume them. Print copy-pasteable commands rather than leaving the
-# administrator to look the ARNs up.
+# CI hand-off: the role ARNs and the demo-stack tfvars need to land in
+# GitHub repository variables so .github/workflows/deploy.yml and
+# destroy.yml can assume the roles and the deploy workflow can fill in
+# the three terraform variables that envs/demo requires.
 ci_deploy_arn="$(terraform -chdir="${TF_DIR}" output -raw ci_deploy_role_arn)"
 ci_destroy_arn="$(terraform -chdir="${TF_DIR}" output -raw ci_destroy_role_arn)"
+cf_dist_id="$(terraform -chdir="${TF_DIR}" output -raw cloudfront_distribution_id)"
 
 cat <<EOF
 
-==> Register the CI role ARNs with GitHub
-    Run these two commands once (requires \`gh auth login\` first):
+==> Register the CI inputs with GitHub
+    Run these once (requires \`gh auth login\` first). The first two are
+    role ARNs assumed by the workflows; the last three fill terraform
+    variables for envs/demo that have no default.
 
-    gh variable set AWS_DEPLOY_ROLE_ARN  --body "${ci_deploy_arn}"
-    gh variable set AWS_DESTROY_ROLE_ARN --body "${ci_destroy_arn}"
+    gh variable set AWS_DEPLOY_ROLE_ARN        --body "${ci_deploy_arn}"
+    gh variable set AWS_DESTROY_ROLE_ARN       --body "${ci_destroy_arn}"
+    gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "${cf_dist_id}"
+    gh variable set ALERT_EMAIL                --body "ops@example.com"   # SNS alerts inbox
+    gh variable set FROM_ADDRESS               --body "ops@example.com"   # SES sender (clic the verify link AWS sends here)
 
     Or paste them manually under
     Settings → Secrets and variables → Actions → Variables.

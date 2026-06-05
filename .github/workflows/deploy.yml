@@ -31,6 +31,9 @@ jobs:
     env:
       AWS_REGION: us-east-1
       DEPLOY_HEALTH_TIMEOUT: "300"
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+      TF_VAR_from_address: ${{ vars.FROM_ADDRESS }}
+      TF_VAR_cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
 
     steps:
       - name: Checkout

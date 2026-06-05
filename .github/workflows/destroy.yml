@@ -33,6 +33,11 @@ jobs:
     env:
       AWS_REGION: us-east-1
       DESTROY_WEB_ASSETS: ${{ inputs.clean_web_assets && '1' || '0' }}
+      # envs/demo declares these as required (no default); terraform destroy
+      # still reads variables.tf, so they must be present even when destroying.
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+      TF_VAR_from_address: ${{ vars.FROM_ADDRESS }}
+      TF_VAR_cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
       # Mirror untrusted user inputs into env vars before any `run:` step
       # interpolates them — protects against shell injection if someone
       # types backticks or `$(...)` into the workflow_dispatch form.
