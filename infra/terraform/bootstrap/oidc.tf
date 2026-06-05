@@ -82,9 +82,10 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
   }
 
   # ECR push + read, scoped to the nica-erp repository ARN. The read
-  # actions (DescribeImages, ListImages) are needed by terraform's
-  # `data "aws_ecr_repository"` lookup in envs/demo: recent AWS
-  # provider versions also fetch the most-recent-image metadata.
+  # actions (DescribeImages, ListImages, ListTagsForResource) are needed
+  # by terraform's `data "aws_ecr_repository"` lookup in envs/demo:
+  # recent AWS provider versions also fetch the most-recent-image
+  # metadata and the repo's tag list.
   statement {
     sid    = "EcrPushNicaErp"
     effect = "Allow"
@@ -96,6 +97,7 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
       "ecr:DescribeRepositories",
       "ecr:InitiateLayerUpload",
       "ecr:ListImages",
+      "ecr:ListTagsForResource",
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
@@ -161,18 +163,19 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
   }
 
   # CloudFront read + invalidation for the bootstrap distribution.
-  # GetDistribution + GetDistributionConfig are required by the
-  # `data "aws_cloudfront_distribution"` lookup in envs/demo.
-  # UpdateDistribution is reserved for the future origin-swap path
-  # documented in envs/demo/cloudfront_swap.tf.
+  # GetDistribution + GetDistributionConfig + ListTagsForResource are
+  # required by the `data "aws_cloudfront_distribution"` lookup in
+  # envs/demo. UpdateDistribution is reserved for the future origin-swap
+  # path documented in envs/demo/cloudfront_swap.tf.
   statement {
     sid    = "CloudFrontReadAndInvalidate"
     effect = "Allow"
     actions = [
       "cloudfront:CreateInvalidation",
-      "cloudfront:GetInvalidation",
       "cloudfront:GetDistribution",
       "cloudfront:GetDistributionConfig",
+      "cloudfront:GetInvalidation",
+      "cloudfront:ListTagsForResource",
       "cloudfront:UpdateDistribution",
     ]
     resources = [aws_cloudfront_distribution.web.arn]
@@ -371,6 +374,7 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
       "ecr:DescribeImages",
       "ecr:DescribeRepositories",
       "ecr:ListImages",
+      "ecr:ListTagsForResource",
     ]
     resources = [aws_ecr_repository.api.arn]
   }
@@ -381,6 +385,7 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
     actions = [
       "cloudfront:GetDistribution",
       "cloudfront:GetDistributionConfig",
+      "cloudfront:ListTagsForResource",
     ]
     resources = [aws_cloudfront_distribution.web.arn]
   }
