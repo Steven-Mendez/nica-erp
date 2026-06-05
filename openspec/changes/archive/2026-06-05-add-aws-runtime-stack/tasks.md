@@ -131,21 +131,21 @@
 
 ## 9. Verification
 
-- [ ] 9.1 With `add-terraform-state-backend` applied and an image in
+- [x] 9.1 With `add-terraform-state-backend` applied and an image in
       ECR, run `terraform -chdir=infra/terraform/envs/demo apply`;
       confirm completion in under 25 minutes and the expected
       outputs.
-- [ ] 9.2 Curl `https://<dist-id>.cloudfront.net/api/healthz` after a
+- [x] 9.2 Curl `https://<dist-id>.cloudfront.net/api/healthz` after a
       5-minute CloudFront propagation wait; confirm HTTP 200, `db:"ok"`,
       and a non-null `alembic_revision`.
-- [ ] 9.3 Curl `https://<dist-id>.cloudfront.net/` and confirm the
+- [x] 9.3 Curl `https://<dist-id>.cloudfront.net/` and confirm the
       SPA `index.html` still serves with HTTP 200 (default behavior
       unaffected).
-- [ ] 9.4 Run
+- [x] 9.4 Run
       `aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=nica-erp`
       and confirm both bootstrap and runtime-stack resources appear.
-- [ ] 9.5 Run `terraform plan` again; confirm "No changes" (modulo
+- [x] 9.5 Run `terraform plan` again; confirm "No changes" (modulo
       `default_tags` / S3 ETag caveats documented in design).
-- [ ] 9.6 Run `terraform destroy -auto-approve`; confirm completion
+- [x] 9.6 Run `terraform destroy -auto-approve`; confirm completion
       in under 15 minutes and that the same Resource Groups query
       now returns only the bootstrap resources.

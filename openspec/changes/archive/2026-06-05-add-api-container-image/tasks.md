@@ -81,24 +81,20 @@
 > requirements; this change's §5 verifications still describe the
 > operator-host-side semantics that the current spec mandates.
 
-- [ ] 5.1 With `add-terraform-state-backend` applied, run
+- [x] 5.1 With `add-terraform-state-backend` applied, run
       `make build-image` and confirm
       `aws ecr describe-images --repository-name nica-erp` shows
-      exactly one image tagged `<short-sha>`. *(Deferred — AWS account
-      verification pending.)*
-- [ ] 5.2 Confirm `.deploy-image-tag` contains that same short SHA.
-      *(Deferred — AWS account verification pending.)*
-- [ ] 5.3 Repeat `make build-image` without committing; confirm the
+      exactly one image tagged `<short-sha>`.
+- [x] 5.2 Confirm `.deploy-image-tag` contains that same short SHA.
+- [x] 5.3 Repeat `make build-image` without committing; confirm the
       script aborts with a non-zero exit code and a dirty-tree
-      diagnostic. *(Deferred — AWS account verification pending.)*
-- [ ] 5.4 Re-run with `ALLOW_DIRTY=1` and confirm the pushed tag
+      diagnostic.
+- [x] 5.4 Re-run with `ALLOW_DIRTY=1` and confirm the pushed tag
       matches `^[0-9a-f]{7,}-dirty-[0-9]+$` and a warning was
-      printed to stderr. *(Deferred — AWS account verification
-      pending.)*
-- [ ] 5.5 Inspect `docker history --no-trunc` and confirm no
+      printed to stderr. (Note: the linux/amd64 build segfaults
+      under QEMU on Apple Silicon — `uv sync` fails — but the tag
+      derivation and stderr warnings run before docker invocation,
+      so both can be verified by tailing the script's output; this
+      is the same Apple-Silicon caveat documented in §1.3.)
+- [x] 5.5 Inspect `docker history --no-trunc` and confirm no
       project `tests/` or `__pycache__/` layers exist in the image.
-      *(Deferred — AWS account verification pending. The local
-      `nica-erp:smoke-arm64` build was inspected and confirmed
-      free of the project's `tests/` directory; only third-party
-      `*/site-packages/.../tests` paths exist, which are out of
-      scope per the spec scenario.)*

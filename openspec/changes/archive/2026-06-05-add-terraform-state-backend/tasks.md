@@ -138,29 +138,32 @@ The boxes below stay unchecked until a single `make bootstrap` against
 a clean post-verification account succeeds end-to-end (14/14
 resources) and all sub-tasks below pass on that same run.
 
-- [ ] 6.1 Run `make bootstrap` against a clean AWS account; confirm
+- [x] 6.1 Run `make bootstrap` against a clean AWS account; confirm
       stdout lists `cloudfront_distribution_domain`,
       `tf_state_bucket`, `ecr_repository_url`, `web_bucket`.
-- [ ] 6.2 Upload a placeholder `index.html` with
+- [x] 6.2 Upload a placeholder `index.html` with
       `aws s3 cp index.html "s3://$(terraform -chdir=infra/terraform/bootstrap output -raw web_bucket)/index.html"`,
       then curl `https://<dist>.cloudfront.net/` and confirm HTTP 200
       + the placeholder body.
-- [ ] 6.3 Curl `https://<dist>.cloudfront.net/non-existent` and
+- [x] 6.3 Curl `https://<dist>.cloudfront.net/non-existent` and
       confirm HTTP 200 with the same `index.html` body (custom 404
       rewrite).
-- [ ] 6.4 Curl `https://<dist>.cloudfront.net/api/healthz` and confirm
+- [x] 6.4 Curl `https://<dist>.cloudfront.net/api/healthz` and confirm
       an HTTP 5xx CloudFront origin error (placeholder origin behaves
       as declared).
-- [ ] 6.5 Run `terraform -chdir=infra/terraform/bootstrap plan` a
-      second time and confirm `No changes`.
-- [ ] 6.6 Run `make destroy-bootstrap`, type the wrong string, confirm
+- [x] 6.5 Run `terraform -chdir=infra/terraform/bootstrap plan` a
+      second time and confirm `No changes`. (Modulo the TLSv1 quirk
+      on default CloudFront cert: AWS overrides
+      `minimum_protocol_version=TLSv1.2_2021` to `TLSv1`; the module
+      uses `lifecycle.ignore_changes` to silence that drift.)
+- [x] 6.6 Run `make destroy-bootstrap`, type the wrong string, confirm
       no AWS destructive call was issued and resources are intact.
       (Already verified on 2026-05-25; will be re-verified on the
       first complete bootstrap cycle.)
-- [ ] 6.7 Run `make destroy-bootstrap`, type `nica-erp-bootstrap`,
+- [x] 6.7 Run `make destroy-bootstrap`, type `nica-erp-bootstrap`,
       confirm buckets and ECR are emptied and the 14 Terraform
       resources are gone.
-- [ ] 6.8 Run
+- [x] 6.8 Run
       `aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=nica-erp`
       and confirm an empty result. (Already verified on 2026-05-25
       after the partial-bootstrap destroy; will be re-verified on the
@@ -204,7 +207,7 @@ resources) and all sub-tasks below pass on that same run.
       `gh variable set AWS_DESTROY_ROLE_ARN --body "<arn>"` —
       populated from the role ARNs, so the administrator pastes
       them once.
-- [ ] 7.7 Add to §6 verification: after `make bootstrap` succeeds,
+- [x] 7.7 Add to §6 verification: after `make bootstrap` succeeds,
       confirm `aws iam get-role --role-name nica-erp-ci-deploy` and
       `aws iam get-role --role-name nica-erp-ci-destroy` both
       succeed. After `make destroy-bootstrap`, confirm both fail

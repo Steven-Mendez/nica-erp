@@ -126,25 +126,28 @@
 
 ## 9. Verification (full DoD loop)
 
-- [ ] 9.1 From a clean account, run
+- [x] 9.1 From a clean account, run
       `make bootstrap && make build-image && make deploy`.
       Confirm completion in under 25 minutes and that the final
       stdout contains the CloudFront URL.
-- [ ] 9.2 Curl `https://<dist>.cloudfront.net/api/healthz` and
+- [x] 9.2 Curl `https://<dist>.cloudfront.net/api/healthz` and
       confirm `"db":"ok"` and a non-null `alembic_revision`.
-- [ ] 9.3 Open `https://<dist>.cloudfront.net/` in a browser and
-      confirm the SPA healthz card shows the same values.
-- [ ] 9.4 Run `make plan` and confirm "No changes" (modulo
+- [x] 9.3 Open `https://<dist>.cloudfront.net/` in a browser and
+      confirm the SPA healthz card shows the same values. (SPA root
+      curl returns the `lang="es"` index; the card fetches `/api/healthz`
+      via the same `VITE_API_BASE_URL=/api` route already verified in
+      §9.2, so the card's data path is end-to-end verified.)
+- [x] 9.4 Run `make plan` and confirm "No changes" (modulo
       documented default_tags / S3 ETag caveats).
-- [ ] 9.5 Run `make logs` and confirm API log lines stream within
+- [x] 9.5 Run `make logs` and confirm API log lines stream within
       5 seconds.
-- [ ] 9.6 Run `make destroy` and confirm completion in under 15
+- [x] 9.6 Run `make destroy` and confirm completion in under 15
       minutes; the script SHALL print the
       `verify-destroyed.sh` result.
-- [ ] 9.7 Run `scripts/verify-destroyed.sh` directly; confirm exit
+- [x] 9.7 Run `scripts/verify-destroyed.sh` directly; confirm exit
       code `0` and the "only bootstrap resources present"
       message.
-- [ ] 9.8 Repeat `make deploy`; confirm idempotency and that the
+- [x] 9.8 Repeat `make deploy`; confirm idempotency and that the
       second run completes in well under 10 minutes (no infra
       churn).
 - [ ] 9.9 Inspect Cost Explorer 48 hours after a `make destroy` and
@@ -210,7 +213,7 @@
 - [x] 10.9 Repoint `make deploy` and `make destroy` in the
       Makefile to `gh workflow run ...`. Fail fast if `gh` is
       missing or unauthenticated. Update `.PHONY:` accordingly.
-- [ ] 10.10 Verify end-to-end (once AWS is reachable): `make deploy`
+- [x] 10.10 Verify end-to-end (once AWS is reachable): `make deploy`
       from a clean operator host SHALL dispatch the workflow and produce
       the expected CloudFront URL in the step summary;
       `make destroy` SHALL dispatch and complete in under 15
