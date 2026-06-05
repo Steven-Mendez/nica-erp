@@ -68,6 +68,46 @@ echo "==> aws s3 cp (no-cache for index.html)"
 aws s3 cp "${WEB_DIR}/dist/index.html" "s3://${web_bucket}/index.html" \
   --cache-control "public, max-age=0, must-revalidate"
 
+echo "==> cloudfront origin swap (/api/* → ALB)"
+# The bootstrap distribution declares an `api-placeholder` origin pointing
+# at `placeholder.invalid`. After the ephemeral stack is up, we patch
+# that origin's DomainName to the ALB DNS so `/api/*` reaches ECS. The
+# bootstrap is intentionally left as the owner of the distribution
+# shape; we only update the one mutable origin attribute.
+env_tf_dir="${ROOT_DIR}/infra/terraform/envs/demo"
+alb_dns="${ALB_DNS_NAME:-}"
+if [[ -z "${alb_dns}" ]] && [[ -d "${env_tf_dir}/.terraform" ]]; then
+  alb_dns="$(terraform -chdir="${env_tf_dir}" output -raw alb_dns_name 2>/dev/null || true)"
+fi
+if [[ -z "${alb_dns}" ]]; then
+  echo "ERROR: could not resolve ALB DNS name (no ALB_DNS_NAME env and no terraform output)." >&2
+  exit 1
+fi
+
+dist_cfg_dir="$(mktemp -d)"
+trap 'rm -rf "${dist_cfg_dir}"' EXIT
+
+aws cloudfront get-distribution-config --id "${distribution_id}" \
+  > "${dist_cfg_dir}/full.json"
+etag="$(jq -r '.ETag' "${dist_cfg_dir}/full.json")"
+jq '.DistributionConfig' "${dist_cfg_dir}/full.json" \
+  > "${dist_cfg_dir}/config.json"
+
+current_origin="$(jq -r '.Origins.Items[] | select(.Id=="api-placeholder") | .DomainName' "${dist_cfg_dir}/config.json")"
+if [[ "${current_origin}" == "${alb_dns}" ]]; then
+  echo "    already pointing at ${alb_dns} — skipping update"
+else
+  echo "    ${current_origin} → ${alb_dns}"
+  jq --arg dns "${alb_dns}" \
+    '(.Origins.Items[] | select(.Id=="api-placeholder") | .DomainName) = $dns' \
+    "${dist_cfg_dir}/config.json" > "${dist_cfg_dir}/patched.json"
+  aws cloudfront update-distribution \
+    --id "${distribution_id}" \
+    --distribution-config "file://${dist_cfg_dir}/patched.json" \
+    --if-match "${etag}" \
+    --query 'Distribution.Status' --output text >/dev/null
+fi
+
 echo "==> cloudfront create-invalidation"
 inv_id="$(aws cloudfront create-invalidation \
   --distribution-id "${distribution_id}" \
