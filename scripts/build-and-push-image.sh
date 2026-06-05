@@ -68,14 +68,24 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Resolving ECR repository URL from terraform output"
-if ! ECR_REPO_URL="$(terraform -chdir="${TF_DIR}" output -raw ecr_repository_url 2>/dev/null)"; then
-  echo "ERROR: terraform output 'ecr_repository_url' not available in ${TF_DIR}." >&2
-  echo "Run 'make bootstrap' first." >&2
-  exit 1
+echo "==> Resolving ECR repository URL"
+ECR_REPO_URL=""
+# Operator host: prefer the bootstrap terraform output if it's initialized.
+if [[ -d "${TF_DIR}/.terraform" ]]; then
+  ECR_REPO_URL="$(terraform -chdir="${TF_DIR}" output -raw ecr_repository_url 2>/dev/null || true)"
 fi
+# CI (and operator-host fallback): resolve via AWS CLI. The bootstrap
+# uses LOCAL state, so a fresh GHA checkout has no .terraform/ to read.
 if [[ -z "${ECR_REPO_URL}" ]]; then
-  echo "ERROR: terraform output 'ecr_repository_url' is empty." >&2
+  ECR_REPO_URL="$(aws ecr describe-repositories \
+    --repository-names nica-erp \
+    --query 'repositories[0].repositoryUri' \
+    --output text 2>/dev/null || true)"
+fi
+if [[ -z "${ECR_REPO_URL}" ]] || [[ "${ECR_REPO_URL}" == "None" ]]; then
+  echo "ERROR: could not resolve ECR repository URL." >&2
+  echo "       Tried terraform output (operator host) and 'aws ecr describe-repositories' (CI)." >&2
+  echo "       Run 'make bootstrap' first." >&2
   exit 1
 fi
 echo "    ECR repo: ${ECR_REPO_URL}"
