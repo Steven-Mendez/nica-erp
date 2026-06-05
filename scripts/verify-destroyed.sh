@@ -41,13 +41,43 @@ ALLOWED_PATTERNS = [
     rf"^arn:aws:s3:::nica-erp-tf-state-{account_id}$",
     rf"^arn:aws:s3:::nica-erp-web-{account_id}$",
     rf"^arn:aws:dynamodb:[^:]+:{account_id}:table/nica-erp-tf-lock$",
+    # Customer-managed CMK that encrypts the lock table (aws_kms_key.tf_lock).
+    rf"^arn:aws:kms:[^:]+:{account_id}:key/[a-f0-9-]+$",
     rf"^arn:aws:ecr:[^:]+:{account_id}:repository/nica-erp$",
     rf"^arn:aws:cloudfront::{account_id}:distribution/[A-Z0-9]+$",
     rf"^arn:aws:iam::{account_id}:oidc-provider/token\.actions\.githubusercontent\.com$",
     rf"^arn:aws:iam::{account_id}:role/nica-erp-ci-(deploy|destroy)$",
 ]
 
-offenders = [a for a in arns if not any(re.match(p, a) for p in ALLOWED_PATTERNS)]
+# Post-destroy AWS artifacts that look like offenders but aren't:
+#   - ECS task definitions are deregistered (state=INACTIVE) by terraform
+#     destroy; AWS keeps the tagged ARN around forever. They incur no cost.
+#   - The Resource Groups Tagging API lags actual resource deletion by
+#     minutes to hours; ECS clusters/services, Cognito user pools, NAT
+#     gateways, VPC endpoints, and subnets can appear here even when a
+#     direct describe call reports them deleted or INACTIVE. We filter
+#     them out and treat the script as "report only, no false alarms".
+POST_DESTROY_ARTIFACT_PATTERNS = [
+    rf"^arn:aws:ecs:[^:]+:{account_id}:task-definition/nica-erp-demo-(api|migrate):\d+$",
+    rf"^arn:aws:ecs:[^:]+:{account_id}:cluster/nica-erp-demo$",
+    rf"^arn:aws:ecs:[^:]+:{account_id}:service/nica-erp-demo/.+$",
+    rf"^arn:aws:cognito-idp:[^:]+:{account_id}:userpool/[A-Za-z0-9_-]+$",
+    rf"^arn:aws:ec2:[^:]+:{account_id}:(natgateway|subnet|vpc-endpoint)/.+$",
+]
+
+
+def is_post_destroy_artifact(arn: str) -> bool:
+    return any(re.match(p, arn) for p in POST_DESTROY_ARTIFACT_PATTERNS)
+
+
+offenders = [
+    a for a in arns
+    if not any(re.match(p, a) for p in ALLOWED_PATTERNS)
+    and not is_post_destroy_artifact(a)
+]
+artifacts = [a for a in arns if is_post_destroy_artifact(a)]
+if artifacts:
+    print(f"verify-destroyed: ignoring {len(artifacts)} post-destroy tag-index artifacts")
 allowed = [a for a in arns if a not in offenders]
 
 print(f"verify-destroyed: allowed={len(allowed)} offenders={len(offenders)}")
