@@ -34,7 +34,11 @@ terraform -chdir="${ENV_TF_DIR}" init -input=false -reconfigure \
   -backend-config="bucket=${state_bucket}"
 
 echo "==> terraform destroy (env: demo)"
-terraform -chdir="${ENV_TF_DIR}" destroy -auto-approve -input=false
+# image_tag is a required variable (no default) but is irrelevant for
+# destroy — pass a placeholder so terraform stops complaining about the
+# missing root input.
+terraform -chdir="${ENV_TF_DIR}" destroy -auto-approve -input=false \
+  -var "image_tag=destroy"
 
 if [[ "${DESTROY_WEB_ASSETS:-0}" == "1" ]]; then
   web_bucket="nica-erp-web-${account_id}"
