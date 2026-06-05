@@ -233,7 +233,9 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
         "ecs.amazonaws.com",
         "elasticloadbalancing.amazonaws.com",
         "rds.amazonaws.com",
-        "application-autoscaling.amazonaws.com",
+        # ECS auto-scaling uses the per-service variant, not the plain
+        # application-autoscaling.amazonaws.com.
+        "ecs.application-autoscaling.amazonaws.com",
         "ses.amazonaws.com",
       ]
     }
