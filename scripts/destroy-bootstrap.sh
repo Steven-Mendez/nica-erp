@@ -47,7 +47,7 @@ echo "==> Checking for ephemeral nica-erp resources"
 # Bootstrap allow-list: any ARN that matches one of these patterns is part
 # of the persistent set this script owns. Anything else means add-aws-runtime-stack
 # is still alive and must be torn down first.
-allow_grep="(:s3:::nica-erp-tf-state-${ACCOUNT_ID}\$|:s3:::nica-erp-web-${ACCOUNT_ID}\$|:dynamodb:[^:]+:[0-9]+:table/nica-erp-tf-lock\$|:kms:[^:]+:[0-9]+:key/[a-f0-9-]+\$|:ecr:[^:]+:[0-9]+:repository/nica-erp\$|:cloudfront::[0-9]+:distribution/)"
+allow_grep="(:s3:::nica-erp-tf-state-${ACCOUNT_ID}\$|:s3:::nica-erp-web-${ACCOUNT_ID}\$|:dynamodb:[^:]+:[0-9]+:table/nica-erp-tf-lock\$|:kms:[^:]+:[0-9]+:key/[a-f0-9-]+\$|:ecr:[^:]+:[0-9]+:repository/nica-erp\$|:cloudfront::[0-9]+:distribution/|:iam::[0-9]+:oidc-provider/token\.actions\.githubusercontent\.com\$|:iam::[0-9]+:role/nica-erp-ci-(deploy|destroy)\$)"
 
 # Post-destroy artifacts: the Resource Groups Tagging API lags real
 # resource deletion by minutes to hours, and ECS task definitions stay
