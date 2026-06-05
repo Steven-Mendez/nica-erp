@@ -44,10 +44,17 @@ WEB_BUCKET="nica-erp-web-${ACCOUNT_ID}"
 "${ROOT_DIR}/scripts/confirm-destroy.sh" "${CONFIRM_TOKEN}"
 
 echo "==> Checking for ephemeral nica-erp resources"
-# Bootstrap allow-list: any ARN that contains one of these substrings is part
+# Bootstrap allow-list: any ARN that matches one of these patterns is part
 # of the persistent set this script owns. Anything else means add-aws-runtime-stack
 # is still alive and must be torn down first.
-allow_grep="(:s3:::nica-erp-tf-state-${ACCOUNT_ID}\$|:s3:::nica-erp-web-${ACCOUNT_ID}\$|:dynamodb:[^:]+:[0-9]+:table/nica-erp-tf-lock\$|:ecr:[^:]+:[0-9]+:repository/nica-erp\$|:cloudfront::[0-9]+:distribution/)"
+allow_grep="(:s3:::nica-erp-tf-state-${ACCOUNT_ID}\$|:s3:::nica-erp-web-${ACCOUNT_ID}\$|:dynamodb:[^:]+:[0-9]+:table/nica-erp-tf-lock\$|:kms:[^:]+:[0-9]+:key/[a-f0-9-]+\$|:ecr:[^:]+:[0-9]+:repository/nica-erp\$|:cloudfront::[0-9]+:distribution/)"
+
+# Post-destroy artifacts: the Resource Groups Tagging API lags real
+# resource deletion by minutes to hours, and ECS task definitions stay
+# tagged forever after a `terraform destroy` deregisters them. Filter
+# these out so the script doesn't refuse to run for half a day after a
+# clean `make destroy`. Mirror of verify-destroyed.sh's policy.
+artifact_grep="(:ecs:[^:]+:[0-9]+:task-definition/nica-erp-demo-(api|migrate):[0-9]+\$|:ecs:[^:]+:[0-9]+:cluster/nica-erp-demo\$|:ecs:[^:]+:[0-9]+:service/nica-erp-demo/.+\$|:cognito-idp:[^:]+:[0-9]+:userpool/[A-Za-z0-9_-]+\$|:ec2:[^:]+:[0-9]+:(natgateway|subnet|vpc-endpoint)/.+\$)"
 
 tagged_arns="$(
   aws resourcegroupstaggingapi get-resources \
@@ -61,9 +68,9 @@ tagged_arns="$(
 offenders=""
 while IFS= read -r arn; do
   [ -z "${arn}" ] && continue
-  if ! [[ "${arn}" =~ ${allow_grep} ]]; then
-    offenders="${offenders}${arn}"$'\n'
-  fi
+  [[ "${arn}" =~ ${allow_grep} ]] && continue
+  [[ "${arn}" =~ ${artifact_grep} ]] && continue
+  offenders="${offenders}${arn}"$'\n'
 done <<<"${tagged_arns}"
 
 if [[ -n "${offenders}" ]]; then
