@@ -81,7 +81,10 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
     resources = ["*"]
   }
 
-  # ECR push, scoped to the nica-erp repository ARN.
+  # ECR push + read, scoped to the nica-erp repository ARN. The read
+  # actions (DescribeImages, ListImages) are needed by terraform's
+  # `data "aws_ecr_repository"` lookup in envs/demo: recent AWS
+  # provider versions also fetch the most-recent-image metadata.
   statement {
     sid    = "EcrPushNicaErp"
     effect = "Allow"
@@ -89,8 +92,10 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
       "ecr:DescribeRepositories",
       "ecr:InitiateLayerUpload",
+      "ecr:ListImages",
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
@@ -155,11 +160,21 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
     ]
   }
 
-  # CloudFront invalidation for the bootstrap distribution.
+  # CloudFront read + invalidation for the bootstrap distribution.
+  # GetDistribution + GetDistributionConfig are required by the
+  # `data "aws_cloudfront_distribution"` lookup in envs/demo.
+  # UpdateDistribution is reserved for the future origin-swap path
+  # documented in envs/demo/cloudfront_swap.tf.
   statement {
-    sid       = "CloudFrontInvalidate"
-    effect    = "Allow"
-    actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+    sid    = "CloudFrontReadAndInvalidate"
+    effect = "Allow"
+    actions = [
+      "cloudfront:CreateInvalidation",
+      "cloudfront:GetInvalidation",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:UpdateDistribution",
+    ]
     resources = [aws_cloudfront_distribution.web.arn]
   }
 
@@ -343,6 +358,31 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
       aws_s3_bucket.web.arn,
       "${aws_s3_bucket.web.arn}/*",
     ]
+  }
+
+  # Read-only access to the bootstrap ECR repo + CloudFront distribution.
+  # terraform destroy still refreshes data sources before tearing the
+  # ephemeral stack down, so these reads must succeed even though the
+  # destroy role never pushes images or modifies the distribution.
+  statement {
+    sid    = "EcrReadNicaErp"
+    effect = "Allow"
+    actions = [
+      "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
+      "ecr:ListImages",
+    ]
+    resources = [aws_ecr_repository.api.arn]
+  }
+
+  statement {
+    sid    = "CloudFrontRead"
+    effect = "Allow"
+    actions = [
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+    ]
+    resources = [aws_cloudfront_distribution.web.arn]
   }
 
   # Ephemeral-stack destroy surface. Same scope as ci-deploy because
