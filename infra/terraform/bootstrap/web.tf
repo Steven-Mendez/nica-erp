@@ -106,6 +106,14 @@ resource "aws_cloudfront_distribution" "web" {
   tags = {
     Project = "nica-erp"
   }
+
+  lifecycle {
+    # AWS forces minimum_protocol_version=TLSv1 when cloudfront_default_certificate=true,
+    # regardless of what the config requests. Raising the floor requires a custom ACM
+    # cert (out of scope for the demo CloudFront). Ignoring the attribute prevents the
+    # perpetual TLSv1 → TLSv1.2_2021 drift on every plan.
+    ignore_changes = [viewer_certificate[0].minimum_protocol_version]
+  }
 }
 
 data "aws_iam_policy_document" "web_oac_read" {

@@ -122,6 +122,24 @@ echo "==> Target image: ${IMAGE_REF}"
 echo "    GIT_SHA      = ${GIT_SHA}"
 
 # ----------------------------------------------------------------------------
+# Skip-if-exists check
+# ----------------------------------------------------------------------------
+# The bootstrap ECR repo is immutable; pushing an existing tag fails. When a
+# deploy is re-run for the same commit (idempotency check, retry after a
+# transient failure), the image already exists and we can short-circuit
+# straight to writing .deploy-image-tag. Skipped only for the clean-SHA case;
+# dirty tags include a unix timestamp so they can't collide.
+if [[ ${dirty} -eq 0 ]] \
+   && aws ecr describe-images --repository-name nica-erp \
+        --image-ids imageTag="${TAG}" >/dev/null 2>&1; then
+  echo "==> Image ${IMAGE_REF} already exists in ECR — skipping build and push"
+  DEPLOY_TAG_FILE="${ROOT_DIR}/.deploy-image-tag"
+  printf '%s\n' "${TAG}" > "${DEPLOY_TAG_FILE}"
+  echo "==> Wrote ${DEPLOY_TAG_FILE} (tag=${TAG})"
+  exit 0
+fi
+
+# ----------------------------------------------------------------------------
 # ECR login
 # ----------------------------------------------------------------------------
 
