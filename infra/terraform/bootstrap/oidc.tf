@@ -196,6 +196,7 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
       "cloudwatch:*",
       "ssm:*",
       "cognito-idp:*",
+      "ses:*",
       "iam:PassRole",
       "iam:GetRole",
       "iam:CreateRole",
@@ -211,8 +212,31 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
       "iam:UntagRole",
       "sns:*",
       "application-autoscaling:*",
+      "kms:Decrypt",
+      "kms:DescribeKey",
     ]
     resources = ["*"]
+  }
+
+  # Service-linked-role creation for the AWS-managed services the
+  # ephemeral stack uses. First-time use in a fresh account triggers
+  # `iam:CreateServiceLinkedRole`; subsequent applies are no-ops.
+  statement {
+    sid       = "ServiceLinkedRoles"
+    effect    = "Allow"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["arn:aws:iam::*:role/aws-service-role/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values = [
+        "ecs.amazonaws.com",
+        "elasticloadbalancing.amazonaws.com",
+        "rds.amazonaws.com",
+        "application-autoscaling.amazonaws.com",
+        "ses.amazonaws.com",
+      ]
+    }
   }
 
   # Explicit Deny: bootstrap-surface destructive actions are out of
@@ -404,6 +428,7 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
       "cloudwatch:*",
       "ssm:*",
       "cognito-idp:*",
+      "ses:*",
       "iam:PassRole",
       "iam:GetRole",
       "iam:CreateRole",
@@ -419,6 +444,8 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
       "iam:UntagRole",
       "sns:*",
       "application-autoscaling:*",
+      "kms:Decrypt",
+      "kms:DescribeKey",
     ]
     resources = ["*"]
   }
