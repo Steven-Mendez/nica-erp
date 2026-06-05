@@ -124,6 +124,21 @@ data "aws_iam_policy_document" "ci_deploy_permissions" {
     resources = [aws_dynamodb_table.tf_lock.arn]
   }
 
+  # The lock table is SSE-encrypted with a customer-managed CMK, so
+  # any GetItem/PutItem also touches KMS. Without these grants the
+  # backend lock acquisition fails with AccessDeniedException.
+  statement {
+    sid    = "TerraformLockCmk"
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:Encrypt",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey",
+    ]
+    resources = [aws_kms_key.tf_lock.arn]
+  }
+
   # SPA bucket put/delete (objects only, never the bucket itself).
   statement {
     sid    = "SpaBucketObjects"
@@ -299,6 +314,19 @@ data "aws_iam_policy_document" "ci_destroy_permissions" {
       "dynamodb:DescribeTable",
     ]
     resources = [aws_dynamodb_table.tf_lock.arn]
+  }
+
+  # Same CMK grant as ci-deploy; destroy must lock the state too.
+  statement {
+    sid    = "TerraformLockCmk"
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:Encrypt",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey",
+    ]
+    resources = [aws_kms_key.tf_lock.arn]
   }
 
   # SPA bucket OBJECT cleanup only (workflow input clean_web_assets=true).
