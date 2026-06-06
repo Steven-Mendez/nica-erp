@@ -29,9 +29,7 @@ test.describe("invitation accept (veteran user) @critical", () => {
     // invitation lands. The sidebar TenantSwitcher renders the active
     // empresa as the text content of a dropdown trigger button
     // (accessible name is `<empresa> <role>`).
-    await expect(
-      veteranPage.getByRole("button", { name: new RegExp(empresaAName) }),
-    ).toBeVisible();
+    await expect(veteranPage.getByRole("button", { name: new RegExp(empresaAName) })).toBeVisible();
 
     // ── Owner B issues the invitation to the veteran's address. ─────
     const { token } = await inviteMember(ownerBPage, {
@@ -48,9 +46,7 @@ test.describe("invitation accept (veteran user) @critical", () => {
     await veteranPage.waitForURL(/\/dashboard/);
 
     // ── Active empresa is still A — no silent switch. ───────────────
-    await expect(
-      veteranPage.getByRole("button", { name: new RegExp(empresaAName) }),
-    ).toBeVisible();
+    await expect(veteranPage.getByRole("button", { name: new RegExp(empresaAName) })).toBeVisible();
 
     // Empresa B is available as a switch target — the membership was
     // created server-side, only the active_tenant claim was preserved.

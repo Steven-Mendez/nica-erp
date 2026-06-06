@@ -82,9 +82,7 @@ test.describe("invitation accept (stash flow) @critical", () => {
     //    empresa-picker detour at /tenants.
     await inviteePage.waitForURL(/\/dashboard/);
     expect(inviteePage.url()).not.toContain("/tenants");
-    await expect(
-      inviteePage.getByRole("button", { name: new RegExp(empresaName) }),
-    ).toBeVisible();
+    await expect(inviteePage.getByRole("button", { name: new RegExp(empresaName) })).toBeVisible();
 
     // ── Owner sees the invitee promoted from pending to member. ─────
     // Scope to the table since the email may also surface in other
