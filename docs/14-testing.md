@@ -256,10 +256,38 @@ aggregate coverage even when the floor is still satisfied.
 
 - **Typecheck is the first gate** — `pnpm typecheck` exit 0. Most
   regressions are catchable in CI.
-- **`make test-fe-all`** runs the three lanes plus the matrix and
-  coverage gates locally; CI runs them as four separate jobs (`unit`,
-  `integration`, `e2e-smoke`, `coverage-delta`) so failures point at
-  the layer that owns them.
+- **`make test SCOPE=fe COV=1`** runs the three lanes plus the matrix
+  and coverage gates locally; CI runs them as four separate jobs
+  (`unit`, `integration`, `e2e-smoke`, `coverage-delta`) so failures
+  point at the layer that owns them.
+
+---
+
+## Test invocation cheat sheet
+
+`make test` is the single entry point. Three variables select what
+runs:
+
+| Variable | Values | Effect |
+|---|---|---|
+| `SCOPE` | `be`, `fe` | restrict to one stack; omit for both |
+| `LANE` | `unit`, `integration`, `e2e` | backend lane (directory under `tests/`) or frontend vitest project; omit for all lanes. Frontend `e2e` is Playwright — use `make test-e2e-smoke` instead. |
+| `COV` | `1` | add coverage gates (89% on the three backend trees, 80% on FE `features/` + `components/`) and the FE inventory matrix check (when `LANE` is empty) |
+
+Common invocations:
+
+| Goal | Command |
+|---|---|
+| Run everything (no coverage, no Playwright) | `make test` |
+| Backend unit lane only (no testcontainer, < 10 s) | `make test SCOPE=be LANE=unit` |
+| Backend integration lane (one testcontainer per session) | `make test SCOPE=be LANE=integration` |
+| Backend e2e lane (full wired-app + testcontainer) | `make test SCOPE=be LANE=e2e` |
+| Backend coverage gate (CI parity) | `make test SCOPE=be COV=1` |
+| Frontend vitest unit lane | `make test SCOPE=fe LANE=unit` |
+| Frontend vitest integration lane | `make test SCOPE=fe LANE=integration` |
+| Frontend coverage + matrix (CI parity) | `make test SCOPE=fe COV=1` |
+| Full triad with both gates (full CI parity) | `make test COV=1` |
+| Playwright `@smoke` on Chromium | `make test-e2e-smoke` |
 
 ---
 

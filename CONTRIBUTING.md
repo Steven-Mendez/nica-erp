@@ -70,9 +70,8 @@ Why `make hooks` and not `uv run pre-commit install`? `pre-commit` is an `apps/a
 | Run web (`:5173`)          | `make web`                                             |
 | Apply migrations           | `make migrate`                                         |
 | Rollback last migration    | `make migrate-down`                                    |
-| Create empty migration     | `make makemigration M="<message>"`                     |
 | Create autogen migration   | `make makemigration-auto M="<message>"`                |
-| Run tests                  | `make test` (defaults to unit)                         |
+| Run tests                  | `make test` (BE + FE all lanes; see [docs/14-testing.md](docs/14-testing.md#test-invocation-cheat-sheet) for `SCOPE`/`LANE`/`COV`) |
 | Lint (API + web)           | `make lint`                                            |
 | Format (API + web)         | `make format`                                          |
 | Regenerate web API client  | `cd apps/web && pnpm gen:api` (API must be running)    |

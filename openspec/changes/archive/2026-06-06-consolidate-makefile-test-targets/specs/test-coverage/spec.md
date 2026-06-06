@@ -1,13 +1,10 @@
-# test-coverage Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change test-backfill-and-e2e-tooling. Update Purpose after archive.
-## Requirements
 ### Requirement: Backend coverage gate enforces ≥ 90% lines on production trees
 
 The backend test toolchain SHALL configure `pytest-cov` such that
-`make test SCOPE=be COV=1` executes the test suite with line-coverage
-measurement scoped to the union of:
+`make test SCOPE=be COV=1` executes the test suite with
+line-coverage measurement scoped to the union of:
 
 - `apps/api/src/contexts/tenants/`
 - `apps/api/src/contexts/identity/`
@@ -109,4 +106,3 @@ fail.
   `apps/api/src/bootstrap/settings.py`
 - **THEN** `make test SCOPE=be COV=1` SHALL still pass — the
   bootstrap tree is outside the measured scope
-
