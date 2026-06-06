@@ -180,7 +180,9 @@ export function AcceptInvitationRoute() {
         // stash it, then route to /signup. Audit F-026: the preview
         // intentionally does NOT include the invitee email, so the
         // user types their own email — the backend's identity binding
-        // catches typos before any membership row is created.
+        // catches typos before any membership row is created. Don't
+        // be tempted to seed `?email=` from the JWT `sub` either: the
+        // audit deliberately keeps the typing step.
         previewInvitation(token).then(
           () => {
             try {
@@ -193,7 +195,16 @@ export function AcceptInvitationRoute() {
             void navigate({ to: "/signup", search: {} });
           },
           (err: unknown) => {
-            const message = err instanceof Error ? err.message : "No se pudo cargar la invitación.";
+            // Map typed RFC-7807 codes (`invitation.not_found`,
+            // `invitation.expired`, ...) to user-facing Spanish copy
+            // via the shared registry. Anything unrecognised falls
+            // through to the generic copy.
+            const message =
+              err instanceof ApiError
+                ? messageForProblem(err)
+                : err instanceof Error
+                  ? err.message
+                  : "No se pudo cargar la invitación.";
             setMode({ kind: "preview-error", message });
           },
         );

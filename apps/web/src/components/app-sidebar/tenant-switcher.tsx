@@ -78,6 +78,9 @@ export function TenantSwitcher() {
             <div
               role="button"
               tabIndex={0}
+              aria-label={
+                active ? `Empresa activa: ${active.name}` : "Empresa activa"
+              }
               className="flex w-full cursor-pointer items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=collapsed]:justify-center data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               data-state={state}
             >

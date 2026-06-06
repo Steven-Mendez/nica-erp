@@ -149,6 +149,15 @@ const SPANISH_BY_CODE: Record<string, (p: ProblemDetail) => string> = {
   "tenants.invitation_duplicate_pending": () => "Esta persona ya tiene una invitación pendiente.",
   "invitation.identity_mismatch": () =>
     "Esta invitación es para otra persona. Cierra sesión y entra con el correo invitado.",
+  "invitation.expired": () =>
+    "Esta invitación expiró. Pide a quien te invitó que envíe una nueva.",
+  "invitation.already_accepted": () =>
+    "Esta invitación ya fue aceptada. Inicia sesión para continuar.",
+  "invitation.cancelled": () =>
+    "Esta invitación fue cancelada. Pide a quien te invitó que envíe una nueva.",
+  "invitation.invalid": () => "Este enlace de invitación no es válido.",
+  "invitation.not_found": () =>
+    "No encontramos esta invitación. Verifica el enlace con quien te invitó.",
 };
 
 /**

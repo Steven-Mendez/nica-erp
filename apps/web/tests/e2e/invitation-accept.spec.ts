@@ -40,13 +40,16 @@ test.describe("invitation accept (stash flow) @critical", () => {
 
     // Hit the accept route BEFORE signing up. The SPA previews the
     // invitation, stashes the token in sessionStorage, and redirects
-    // to /signup with the invitee email pre-filled.
+    // to /signup. Audit F-026: the preview deliberately does NOT
+    // surface the invitee email, so the user types it themselves; the
+    // backend's identity binding catches typos before any membership
+    // row is written.
     const before = new Date(Date.now() - 1_000);
     await inviteePage.goto(`/invitations/accept#t=${token}`);
     await inviteePage.waitForURL(/\/signup/);
-    await expect(inviteePage.getByLabel(/Correo/i)).toHaveValue(inviteeEmail);
 
     // ── Invitee: complete signup → confirm (auto-authenticates). ────
+    await inviteePage.getByLabel(/Correo/i).fill(inviteeEmail);
     await inviteePage.getByLabel("Contraseña", { exact: true }).fill(E2E_PASSWORD);
     await inviteePage.getByLabel("Confirmar contraseña").fill(E2E_PASSWORD);
     await inviteePage.getByRole("button", { name: /Crear cuenta/i }).click();
@@ -79,13 +82,15 @@ test.describe("invitation accept (stash flow) @critical", () => {
     //    empresa-picker detour at /tenants.
     await inviteePage.waitForURL(/\/dashboard/);
     expect(inviteePage.url()).not.toContain("/tenants");
-    await expect(inviteePage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
-      empresaName,
-    );
+    await expect(
+      inviteePage.getByRole("button", { name: new RegExp(empresaName) }),
+    ).toBeVisible();
 
     // ── Owner sees the invitee promoted from pending to member. ─────
+    // Scope to the table since the email may also surface in other
+    // sidebar/header chrome.
     await ownerPage.goto("/empresa/users");
-    await expect(ownerPage.getByText(inviteeEmail)).toBeVisible();
+    await expect(ownerPage.getByRole("table").getByText(inviteeEmail)).toBeVisible();
     await expect(ownerPage.getByRole("cell", { name: /Contador/i }).first()).toBeVisible();
 
     await ownerContext.close();

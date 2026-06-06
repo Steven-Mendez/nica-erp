@@ -26,11 +26,9 @@ test.describe("tenant onboarding @critical", () => {
     await signupConfirmLogin(page);
     const { name } = await createEmpresa(page);
     await expect(page).toHaveURL(/\/dashboard/);
-    // The active empresa is the selected <option> in the sidebar
-    // TenantSwitcher (a native combobox). Asserting the selected
-    // option's text contains the empresa name keeps the test agnostic
-    // to whether the sidebar renders the name in a separate visible
-    // chip.
-    await expect(page.getByRole("combobox", { name: /Empresa activa/i })).toContainText(name);
+    // The sidebar TenantSwitcher renders the active empresa's name as
+    // text inside its dropdown trigger button (accessible name is
+    // `<empresa> <role>`).
+    await expect(page.getByRole("button", { name: new RegExp(name) })).toBeVisible();
   });
 });

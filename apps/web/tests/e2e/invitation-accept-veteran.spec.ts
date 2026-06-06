@@ -26,10 +26,12 @@ test.describe("invitation accept (veteran user) @critical", () => {
     await signupConfirmLogin(veteranPage, { email: veteranEmail });
     const { name: empresaAName } = await createEmpresa(veteranPage);
     // Confirm A is the active empresa on the sidebar before the
-    // invitation lands.
-    await expect(veteranPage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
-      empresaAName,
-    );
+    // invitation lands. The sidebar TenantSwitcher renders the active
+    // empresa as the text content of a dropdown trigger button
+    // (accessible name is `<empresa> <role>`).
+    await expect(
+      veteranPage.getByRole("button", { name: new RegExp(empresaAName) }),
+    ).toBeVisible();
 
     // ── Owner B issues the invitation to the veteran's address. ─────
     const { token } = await inviteMember(ownerBPage, {
@@ -46,14 +48,14 @@ test.describe("invitation accept (veteran user) @critical", () => {
     await veteranPage.waitForURL(/\/dashboard/);
 
     // ── Active empresa is still A — no silent switch. ───────────────
-    await expect(veteranPage.getByRole("combobox", { name: /Empresa activa/i })).toContainText(
-      empresaAName,
-    );
+    await expect(
+      veteranPage.getByRole("button", { name: new RegExp(empresaAName) }),
+    ).toBeVisible();
 
     // Empresa B is available as a switch target — the membership was
     // created server-side, only the active_tenant claim was preserved.
-    await veteranPage.getByRole("combobox", { name: /Empresa activa/i }).click();
-    await expect(veteranPage.getByText(empresaBName)).toBeVisible();
+    await veteranPage.getByRole("button", { name: new RegExp(empresaAName) }).click();
+    await expect(veteranPage.getByRole("menuitem", { name: empresaBName })).toBeVisible();
 
     await ownerBContext.close();
     await veteranContext.close();

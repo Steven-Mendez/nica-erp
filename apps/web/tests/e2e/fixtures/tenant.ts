@@ -61,7 +61,14 @@ export async function inviteMember(
   await page.getByRole("button", { name: /Enviar invitación|Invitar/i }).click();
   // Dialog closes once the POST returns; the invitee email lives under
   // the Invitaciones tab, not the default Miembros one. The Mailpit
-  // round-trip below is the durable proof that the invite landed.
-  const message = await waitForEmail({ email: opts.email, since: before });
+  // round-trip below is the durable proof that the invite landed. We
+  // filter by subject ("invitación") so the veteran-user flow (where
+  // the invitee already received a signup confirmation email to the
+  // same address) does not match the older confirmation message.
+  const message = await waitForEmail({
+    email: opts.email,
+    since: before,
+    subjectIncludes: "invitación",
+  });
   return { token: extractInviteToken(message) };
 }

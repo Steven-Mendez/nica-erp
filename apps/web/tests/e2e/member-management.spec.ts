@@ -47,10 +47,15 @@ test.describe("member management @critical", () => {
     await inviteePage.goto(`/invitations/accept#t=${token}`);
     await inviteePage.waitForURL(/\/dashboard/);
 
-    // Owner reloads /empresa/users and observes the member on the
-    // default Miembros tab (no longer pending).
+    // Owner reloads /empresa/users — the selected tab survives the
+    // reload, so we click back to Miembros explicitly before asserting
+    // the invitee shows up (no longer pending). Scope to the table to
+    // avoid colliding with other places the email is rendered (e.g.
+    // the account-menu caption when the owner happens to share an
+    // email prefix, or future side-rail summaries).
     await ownerPage.reload();
-    await expect(ownerPage.getByText(inviteeEmail)).toBeVisible();
+    await ownerPage.getByRole("tab", { name: /Miembros/i }).click();
+    await expect(ownerPage.getByRole("table").getByText(inviteeEmail)).toBeVisible();
     await expect(ownerPage.getByRole("cell", { name: /Contador/i }).first()).toBeVisible();
 
     await ownerContext.close();

@@ -6,11 +6,14 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from bootstrap.db import get_uow as get_request_uow
 from bootstrap.dependencies import require
 from contexts.identity.adapters.inbound.http.dependencies import get_current_user
+from contexts.identity.adapters.inbound.http.errors import PROBLEM_CONTENT_TYPE
+from contexts.identity.adapters.inbound.http.schemas import ProblemDetail
 from contexts.tenants.adapters.inbound.http.dependencies import (
     get_accept_invitation,
     get_cancel_invitation,
@@ -628,11 +631,35 @@ async def accept_invitation_by_body(
     return AcceptInvitationResponse(tenant_id=result.tenant_id, role=result.role, tokens=tokens)
 
 
+def _invitation_preview_not_found() -> JSONResponse:
+    # 404 (not 410) preserves enumeration resistance: a uniform "not
+    # found" response for every invalid/expired/unknown token leaks no
+    # information about which tokens exist. The RFC-7807 body keeps the
+    # endpoint aligned with the rest of the API.
+    problem = ProblemDetail(
+        status=404,
+        code="invitation.not_found",
+        title="Invitation not found",
+    )
+    return JSONResponse(
+        content=problem.model_dump(mode="json", exclude_none=True),
+        status_code=404,
+        media_type=PROBLEM_CONTENT_TYPE,
+    )
+
+
 @public_router.get(
     "/v1/invitations/{token}/preview",
     response_model=InvitationPreviewResponse,
     tags=["tenants"],
     summary="Preview an invitation (organization + role)",
+    responses={
+        404: {
+            "model": ProblemDetail,
+            "content": {PROBLEM_CONTENT_TYPE: {}},
+            "description": "Token invalid, expired, or already used",
+        },
+    },
 )
 async def preview_invitation(
     token: str,
@@ -640,28 +667,29 @@ async def preview_invitation(
     invitation_repo: InvitationRepository = Depends(get_invitation_repository),
     tenant_repo: TenantRepository = Depends(get_tenant_repository),
     uow: SqlAlchemyUnitOfWork = Depends(get_request_uow),
-) -> InvitationPreviewResponse:
+) -> InvitationPreviewResponse | JSONResponse:
     """Return safe metadata for the pre-signup screen.
 
     The response exposes only fields the recipient already has from
     the invitation email — never tenant fiscal data or membership
     rosters. The token must validate; expired / unknown tokens
-    return 404 so we don't reveal which tokens exist.
+    return 404 (RFC-7807 problem+json) so we don't reveal which tokens
+    exist.
     """
 
     try:
         token_generator.verify(token=token)
-    except Exception as exc:  # pragma: no cover — defensive
-        raise HTTPException(status_code=404, detail="Invitation not found") from exc
+    except Exception:
+        return _invitation_preview_not_found()
 
     token_hash = token_generator.hash(token=token)
     async with uow.begin():
         invitation = await invitation_repo.get_by_token_hash(token_hash)
         if invitation is None or invitation.status != "pending":
-            raise HTTPException(status_code=404, detail="Invitation not found")
+            return _invitation_preview_not_found()
         tenant = await tenant_repo.get(invitation.tenant_id)
         if tenant is None:  # pragma: no cover — defensive
-            raise HTTPException(status_code=404, detail="Invitation not found")
+            return _invitation_preview_not_found()
         return InvitationPreviewResponse(
             organization_name=tenant.name,
             role=invitation.proposed_role.value,

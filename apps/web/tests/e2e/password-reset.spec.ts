@@ -66,8 +66,10 @@ test.describe("password reset @critical", () => {
     // The destructive alert appears (auto-retries up to the default
     // timeout) and the URL never leaves /login. Both assertions are
     // necessary: the alert alone could be a lingering banner, the URL
-    // alone could be a slow nav.
-    await expect(page.getByText(/No se pudo iniciar sesión/i)).toBeVisible();
+    // alone could be a slow nav. The Spanish copy is sourced from the
+    // error registry — `auth.invalid_credentials` renders as
+    // "Correo o contraseña incorrectos.".
+    await expect(page.getByText(/Correo o contraseña incorrectos/i)).toBeVisible();
     await expect(page).toHaveURL(/\/login(\?|$)/);
   });
 });
