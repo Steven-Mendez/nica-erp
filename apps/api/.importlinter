@@ -30,7 +30,7 @@ forbidden_modules =
     contexts
 
 [importlinter:contract:testing-helpers-not-in-prod]
-name = contexts.identity.testing must not be imported by productive code
+name = Testing helpers must not be imported by productive code
 type = forbidden
 source_modules =
     contexts.identity.adapters
@@ -40,3 +40,4 @@ source_modules =
     bootstrap
 forbidden_modules =
     contexts.identity.testing
+    shared_kernel.testing
