@@ -8,9 +8,20 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
+
+# Mirror `bootstrap.settings`: operators keep `.env.local` at the repo
+# root. Migrations branch on env vars (0002 creates `auth_local_users`
+# only when APP_ENV=local), so a bare `alembic upgrade head` must see
+# the same environment the API does. Real env vars win (override=False)
+# and both files are optional, so CI/AWS runs are unaffected.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(_REPO_ROOT / ".env.local", override=False)
+load_dotenv(_REPO_ROOT / ".env", override=False)
 
 config = context.config
 
