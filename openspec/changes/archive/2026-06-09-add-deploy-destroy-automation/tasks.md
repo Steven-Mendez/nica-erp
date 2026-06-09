@@ -150,7 +150,7 @@
 - [x] 9.8 Repeat `make deploy`; confirm idempotency and that the
       second run completes in well under 10 minutes (no infra
       churn).
-- [ ] 9.9 Inspect Cost Explorer 48 hours after a `make destroy` and
+- [x] 9.9 Inspect Cost Explorer 48 hours after a `make destroy` and
       confirm idle cost ≈ \$0/month for the `Project=nica-erp`
       filter.
 
