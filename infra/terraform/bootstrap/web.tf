@@ -65,6 +65,12 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
     cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+    # SPA assets get HSTS / nosniff / frame-options / referrer-policy at
+    # the edge. The /api/* behavior deliberately has no response-headers
+    # policy: the API origin owns its security headers and the managed
+    # policy's values (SAMEORIGIN, strict-origin-when-cross-origin)
+    # would override the stricter ones the origin sends.
+    response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security_headers.id
   }
 
   ordered_cache_behavior {
