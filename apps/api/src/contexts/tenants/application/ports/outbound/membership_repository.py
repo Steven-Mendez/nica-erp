@@ -8,6 +8,7 @@ from uuid import UUID
 from contexts.tenants.domain import Membership
 
 if TYPE_CHECKING:
+    from contexts.tenants.application.use_cases.get_my_tenants import MyTenantView
     from contexts.tenants.application.use_cases.list_members import (
         ListMembersQuery,
         MemberView,
@@ -26,6 +27,8 @@ class MembershipRepository(Protocol):
     async def list_by_tenant(self, tenant_id: UUID) -> list[Membership]: ...
 
     async def list_active_for_user(self, user_id: UUID) -> list[Membership]: ...
+
+    async def list_active_with_tenant_for_user(self, user_id: UUID) -> list[MyTenantView]: ...
 
     async def list_page(self, query: ListMembersQuery) -> tuple[list[MemberView], int]: ...
 

@@ -28,10 +28,15 @@ from contexts.tenants.domain import (
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
 
-async def _seed_tenant(uow: SqlAlchemyUnitOfWork) -> UUID:
+async def _seed_tenant(
+    uow: SqlAlchemyUnitOfWork,
+    *,
+    name: str = "Empresa Z",
+    ruc: str = "0010101800010X",
+) -> UUID:
     tenant = Tenant.register(
-        name="Empresa Z",
-        ruc=Ruc.parse("0010101800010X"),
+        name=name,
+        ruc=Ruc.parse(ruc),
         regime=Regime("general"),
         municipality=Municipality("Managua"),
         authorization_dgi=AuthorizationDgi(
@@ -323,3 +328,81 @@ async def test_list_page_sorts_display_name_desc(
 
     assert total == 3
     assert [it.display_name for it in items] == ["Carla", "Beto", "Ana"]
+
+
+@pytest.mark.integration
+async def test_list_active_with_tenant_joins_in_single_query(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """One JOIN resolves tenant name/status for every membership.
+
+    Reads run with the zero-uuid tenant GUC — the post-login picker
+    state — so this also exercises the ``user_id`` branch of the
+    ``tenant_members_self`` policy.
+    """
+
+    from shared_kernel.testing import assert_query_count
+
+    tenant_a = await _seed_tenant(isolated_uow, name="Empresa A", ruc="0010101800010X")
+    tenant_b = await _seed_tenant(isolated_uow, name="Empresa B", ruc="0010101800011X")
+    user_id = await _seed_user(session_factory)
+
+    first = datetime(2026, 6, 1, tzinfo=UTC)
+    later = datetime(2026, 6, 2, tzinfo=UTC)
+    async with isolated_uow.begin():
+        await _set_guc(isolated_uow, tenant_id=tenant_a, user_id=user_id)
+        await MembershipRepositorySqlAlchemy(isolated_uow).add(
+            Membership.create_owner(user_id=user_id, tenant_id=tenant_a, now=first)
+        )
+    async with isolated_uow.begin():
+        await _set_guc(isolated_uow, tenant_id=tenant_b, user_id=user_id)
+        await MembershipRepositorySqlAlchemy(isolated_uow).add(
+            Membership.join(user_id=user_id, tenant_id=tenant_b, role=Role.VIEWER, now=later)
+        )
+
+    async with isolated_uow.begin():
+        await _set_guc(
+            isolated_uow,
+            tenant_id=UUID("00000000-0000-0000-0000-000000000000"),
+            user_id=user_id,
+        )
+        repo = MembershipRepositorySqlAlchemy(isolated_uow)
+        async with assert_query_count(session_factory, max_queries=1):
+            views = await repo.list_active_with_tenant_for_user(user_id)
+
+    assert [(v.name, v.role, v.status) for v in views] == [
+        ("Empresa A", Role.OWNER, "active"),
+        ("Empresa B", Role.VIEWER, "active"),
+    ]
+    assert [v.tenant_id for v in views] == [tenant_a, tenant_b]
+
+
+@pytest.mark.integration
+async def test_list_active_with_tenant_excludes_removed_memberships(
+    isolated_uow: SqlAlchemyUnitOfWork,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    tenant_a = await _seed_tenant(isolated_uow, name="Empresa A", ruc="0010101800010X")
+    tenant_b = await _seed_tenant(isolated_uow, name="Empresa B", ruc="0010101800011X")
+    user_id = await _seed_user(session_factory)
+
+    now = datetime.now(UTC)
+    removed = Membership.join(user_id=user_id, tenant_id=tenant_b, role=Role.VIEWER, now=now)
+    removed.remove(now=now)
+    async with isolated_uow.begin():
+        await _set_guc(isolated_uow, tenant_id=tenant_a, user_id=user_id)
+        await MembershipRepositorySqlAlchemy(isolated_uow).add(
+            Membership.create_owner(user_id=user_id, tenant_id=tenant_a, now=now)
+        )
+    async with isolated_uow.begin():
+        await _set_guc(isolated_uow, tenant_id=tenant_b, user_id=user_id)
+        await MembershipRepositorySqlAlchemy(isolated_uow).add(removed)
+
+    async with isolated_uow.begin():
+        await _set_guc(isolated_uow, tenant_id=tenant_a, user_id=user_id)
+        views = await MembershipRepositorySqlAlchemy(isolated_uow).list_active_with_tenant_for_user(
+            user_id
+        )
+
+    assert [v.tenant_id for v in views] == [tenant_a]

@@ -80,6 +80,9 @@ class FakeTenantRepository:
 @dataclass
 class FakeMembershipRepository:
     rows: list[Membership] = field(default_factory=list)
+    # Shared with FakeTenantRepository.by_id (see the `membership_repo`
+    # fixture) so the with-tenant listing can mimic the SQL JOIN.
+    tenants: dict[UUID, Tenant] = field(default_factory=dict)
     add_count: int = 0
     update_count: int = 0
 
@@ -106,6 +109,27 @@ class FakeMembershipRepository:
 
     async def list_active_for_user(self, user_id: UUID) -> list[Membership]:
         return [m for m in self.rows if m.user_id == user_id and m.status == "active"]
+
+    async def list_active_with_tenant_for_user(self, user_id: UUID) -> list[Any]:
+        # INNER JOIN semantics: memberships without a tenant row are
+        # dropped, mirroring the SQL adapter.
+        from contexts.tenants.application.use_cases.get_my_tenants import MyTenantView
+
+        views = []
+        for m in await self.list_active_for_user(user_id):
+            tenant = self.tenants.get(m.tenant_id)
+            if tenant is None:
+                continue
+            views.append(
+                MyTenantView(
+                    tenant_id=tenant.id,
+                    name=tenant.name,
+                    role=m.role,
+                    status=tenant.status,
+                    joined_at=m.joined_at,
+                )
+            )
+        return views
 
     async def list_page(self, query: Any) -> tuple[list[Any], int]:
         # Filter by tenant and the optional role/status sets; ignore
@@ -325,8 +349,10 @@ def tenant_repo() -> Iterator[FakeTenantRepository]:
 
 
 @pytest.fixture
-def membership_repo() -> Iterator[FakeMembershipRepository]:
-    yield FakeMembershipRepository()
+def membership_repo(tenant_repo: FakeTenantRepository) -> Iterator[FakeMembershipRepository]:
+    # Share the tenant dict so memberships can "join" against the same
+    # tenants the test seeds through `tenant_repo`.
+    yield FakeMembershipRepository(tenants=tenant_repo.by_id)
 
 
 @pytest.fixture

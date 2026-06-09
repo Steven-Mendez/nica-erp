@@ -93,11 +93,8 @@ def get_create_tenant(
 def get_get_my_tenants(
     uow: SqlAlchemyUnitOfWork = Depends(get_request_uow),
     membership_repo: MembershipRepository = Depends(get_membership_repository),
-    tenant_repo: TenantRepository = Depends(get_tenant_repository),
 ) -> GetMyTenants:
-    return GetMyTenants(
-        uow=uow, membership_repository=membership_repo, tenant_repository=tenant_repo
-    )
+    return GetMyTenants(uow=uow, membership_repository=membership_repo)
 
 
 def get_get_tenant(

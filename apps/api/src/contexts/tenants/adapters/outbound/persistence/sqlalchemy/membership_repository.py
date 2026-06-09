@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import RowMapping, bindparam, text
 from sqlalchemy.sql.elements import BindParameter
 
+from contexts.tenants.application.use_cases.get_my_tenants import MyTenantView
 from contexts.tenants.application.use_cases.list_members import (
     ListMembersQuery,
     MemberView,
@@ -42,6 +43,15 @@ _SELECT_ACTIVE_FOR_USER_SQL = (
     "WHERE user_id = :user_id AND status = 'active' "
     "ORDER BY joined_at ASC"
 )
+# INNER JOIN drops memberships whose tenant row is missing — `tenants`
+# has no RLS, so an absent row means orphaned data, not a visibility
+# boundary; the picker should skip it rather than crash.
+_SELECT_ACTIVE_WITH_TENANT_SQL = (
+    "SELECT tm.tenant_id, t.name, tm.role, t.status, tm.joined_at "
+    "FROM tenant_members tm JOIN tenants t ON t.id = tm.tenant_id "
+    "WHERE tm.user_id = :user_id AND tm.status = 'active' "
+    "ORDER BY tm.joined_at ASC"
+)
 _SELECT_FIND = text(
     _SELECT_FIND_SQL
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
@@ -50,6 +60,9 @@ _SELECT_BY_TENANT = text(
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
 _SELECT_ACTIVE_FOR_USER = text(
     _SELECT_ACTIVE_FOR_USER_SQL
+)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+_SELECT_ACTIVE_WITH_TENANT = text(
+    _SELECT_ACTIVE_WITH_TENANT_SQL
 )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
 
 _INSERT = text(
@@ -103,6 +116,21 @@ class MembershipRepositorySqlAlchemy:
             _SELECT_ACTIVE_FOR_USER, {"user_id": user_id}
         )
         return [self._hydrate(row) for row in result.mappings().all()]
+
+    async def list_active_with_tenant_for_user(self, user_id: UUID) -> list[MyTenantView]:
+        result = await self._uow.current_session.execute(
+            _SELECT_ACTIVE_WITH_TENANT, {"user_id": user_id}
+        )
+        return [
+            MyTenantView(
+                tenant_id=row["tenant_id"],
+                name=row["name"],
+                role=Role(row["role"]),
+                status=row["status"],
+                joined_at=_as_dt(row["joined_at"]),
+            )
+            for row in result.mappings().all()
+        ]
 
     async def list_page(self, query: ListMembersQuery) -> tuple[list[MemberView], int]:
         # Only validated whitelist tokens (`where_sql`, `sort_col`,
