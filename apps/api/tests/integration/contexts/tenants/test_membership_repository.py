@@ -70,8 +70,9 @@ async def _seed_user_full(
     *,
     display_name: str,
     email: str,
+    user_id: UUID | None = None,
 ) -> UUID:
-    user_id = uuid4()
+    user_id = user_id if user_id is not None else uuid4()
     async with session_factory() as session:
         await session.execute(
             text(
@@ -240,10 +241,26 @@ async def test_list_page_q_matches_across_display_name_and_email(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     tenant_id = await _seed_tenant(isolated_uow)
-    ada = await _seed_user_full(session_factory, display_name="Ada Lovelace", email="ada@nica.test")
-    bob = await _seed_user_full(session_factory, display_name="Bob Builder", email="bob@nica.test")
+    # Fixed UUIDs: the q-filter also matches user_id::text, and a random
+    # uuid4 occasionally contains the needle "ada" (hex alphabet), which
+    # made this test flaky.
+    ada = await _seed_user_full(
+        session_factory,
+        display_name="Ada Lovelace",
+        email="ada@nica.test",
+        user_id=UUID("11111111-1111-4111-8111-111111111111"),
+    )
+    bob = await _seed_user_full(
+        session_factory,
+        display_name="Bob Builder",
+        email="bob@nica.test",
+        user_id=UUID("22222222-2222-4222-8222-222222222222"),
+    )
     carla = await _seed_user_full(
-        session_factory, display_name="Carla", email="carla-ada@nica.test"
+        session_factory,
+        display_name="Carla",
+        email="carla-ada@nica.test",
+        user_id=UUID("33333333-3333-4333-8333-333333333333"),
     )
     now = datetime.now(UTC)
     async with isolated_uow.begin():
