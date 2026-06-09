@@ -6,77 +6,85 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import RowMapping, bindparam, text
-from sqlalchemy.sql.elements import BindParameter
+from sqlalchemy import (
+    RowMapping,
+    Text,
+    asc,
+    bindparam,
+    cast,
+    desc,
+    func,
+    insert,
+    or_,
+    select,
+    update,
+)
+from sqlalchemy.sql.elements import ColumnElement, UnaryExpression
 
+from contexts.tenants.adapters.outbound.persistence.sqlalchemy.tables import tenant_members
 from contexts.tenants.application.use_cases.get_my_tenants import MyTenantView
 from contexts.tenants.application.use_cases.list_members import (
     ListMembersQuery,
     MemberView,
 )
 from contexts.tenants.domain import Membership, Role
+from shared_kernel.adapters.tables import tenants, users
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
-# Whitelist for `ORDER BY` — user input never reaches the SQL string;
-# only these mappings do.
-_SORT_COLUMNS: dict[str, str] = {
-    "joined_at": "tm.joined_at",
-    "display_name": "u.display_name",
-    "email": "u.email",
-    "role": "tm.role",
+_tm = tenant_members
+_u = users
+
+# Whitelist for `ORDER BY` — sort keys map to Column objects; user
+# input never selects anything outside these mappings.
+_SORT_COLUMNS: dict[str, ColumnElement[Any]] = {
+    "joined_at": _tm.c.joined_at,
+    "display_name": _u.c.display_name,
+    "email": _u.c.email,
+    "role": _tm.c.role,
 }
-_SORT_DIRECTIONS: dict[str, str] = {"asc": "ASC", "desc": "DESC"}
+_SORT_DIRECTIONS = {"asc": asc, "desc": desc}
 
-_COLUMNS = "id, user_id, tenant_id, role, status, joined_at, removed_at"
-
-# The SQL strings below interpolate only the trusted module-level
-# `_COLUMNS` constant — no user input reaches the SQL. Filter values are
-# bound via `:param` placeholders.
-_SELECT_FIND_SQL = (
-    f"SELECT {_COLUMNS} FROM tenant_members WHERE user_id = :user_id AND tenant_id = :tenant_id"
+_SELECT_FIND = select(_tm).where(
+    _tm.c.user_id == bindparam("user_id"), _tm.c.tenant_id == bindparam("tenant_id")
 )
-_SELECT_BY_TENANT_SQL = (
-    f"SELECT {_COLUMNS} FROM tenant_members WHERE tenant_id = :tenant_id ORDER BY joined_at ASC"
+_SELECT_BY_TENANT = (
+    select(_tm).where(_tm.c.tenant_id == bindparam("tenant_id")).order_by(_tm.c.joined_at.asc())
 )
-_SELECT_ACTIVE_FOR_USER_SQL = (
-    f"SELECT {_COLUMNS} FROM tenant_members "
-    "WHERE user_id = :user_id AND status = 'active' "
-    "ORDER BY joined_at ASC"
+_SELECT_ACTIVE_FOR_USER = (
+    select(_tm)
+    .where(_tm.c.user_id == bindparam("user_id"), _tm.c.status == "active")
+    .order_by(_tm.c.joined_at.asc())
 )
 # INNER JOIN drops memberships whose tenant row is missing — `tenants`
 # has no RLS, so an absent row means orphaned data, not a visibility
 # boundary; the picker should skip it rather than crash.
-_SELECT_ACTIVE_WITH_TENANT_SQL = (
-    "SELECT tm.tenant_id, t.name, tm.role, t.status, tm.joined_at "
-    "FROM tenant_members tm JOIN tenants t ON t.id = tm.tenant_id "
-    "WHERE tm.user_id = :user_id AND tm.status = 'active' "
-    "ORDER BY tm.joined_at ASC"
-)
-_SELECT_FIND = text(
-    _SELECT_FIND_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_BY_TENANT = text(
-    _SELECT_BY_TENANT_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_ACTIVE_FOR_USER = text(
-    _SELECT_ACTIVE_FOR_USER_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_ACTIVE_WITH_TENANT = text(
-    _SELECT_ACTIVE_WITH_TENANT_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-
-_INSERT = text(
-    "INSERT INTO tenant_members ("
-    "id, user_id, tenant_id, role, status, joined_at, removed_at"
-    ") VALUES ("
-    ":id, :user_id, :tenant_id, :role, :status, :joined_at, :removed_at"
-    ")"
+_SELECT_ACTIVE_WITH_TENANT = (
+    select(_tm.c.tenant_id, tenants.c.name, _tm.c.role, tenants.c.status, _tm.c.joined_at)
+    .select_from(_tm.join(tenants, tenants.c.id == _tm.c.tenant_id))
+    .where(_tm.c.user_id == bindparam("user_id"), _tm.c.status == "active")
+    .order_by(_tm.c.joined_at.asc())
 )
 
-_UPDATE = text(
-    "UPDATE tenant_members SET "
-    "role = :role, status = :status, removed_at = :removed_at "
-    "WHERE id = :id"
+_INSERT = insert(_tm).values(
+    id=bindparam("id"),
+    user_id=bindparam("user_id"),
+    tenant_id=bindparam("tenant_id"),
+    role=bindparam("role"),
+    status=bindparam("status"),
+    joined_at=bindparam("joined_at"),
+    removed_at=bindparam("removed_at"),
+)
+
+# ``bindparam("id")`` is reserved inside update() because it names a
+# column of the target table; the WHERE param needs the ``b_`` prefix.
+_UPDATE = (
+    update(_tm)
+    .where(_tm.c.id == bindparam("b_id"))
+    .values(
+        role=bindparam("role"),
+        status=bindparam("status"),
+        removed_at=bindparam("removed_at"),
+    )
 )
 
 
@@ -91,7 +99,7 @@ class MembershipRepositorySqlAlchemy:
         await self._uow.current_session.execute(
             _UPDATE,
             {
-                "id": membership.id,
+                "b_id": membership.id,
                 "role": membership.role.value,
                 "status": membership.status,
                 "removed_at": membership.removed_at,
@@ -133,42 +141,37 @@ class MembershipRepositorySqlAlchemy:
         ]
 
     async def list_page(self, query: ListMembersQuery) -> tuple[list[MemberView], int]:
-        # Only validated whitelist tokens (`where_sql`, `sort_col`,
-        # `sort_dir`) are interpolated into the SQL string. All
-        # user-typed values (`q`, roles/statuses, limit, offset, tenant
-        # id) reach the database exclusively via bound parameters built
-        # in `_build_filter` and `_expanding_binds`.
-        where_sql, params = _build_filter(query)
-        sort_col = _SORT_COLUMNS[query.sort]
-        sort_dir = _SORT_DIRECTIONS[query.dir]
+        filters = _build_filters(query)
         # `user_id` tiebreaker keeps pagination deterministic when the
         # primary sort column has ties (e.g. two members sharing a
         # `joined_at` from a bulk import).
-        page_sql_str = (
-            "SELECT tm.id, tm.user_id, tm.tenant_id, tm.role, tm.status, "
-            "tm.joined_at, tm.removed_at, u.display_name, u.email "
-            "FROM tenant_members tm LEFT JOIN users u ON u.id = tm.user_id "
-            f"{where_sql} "
-            f"ORDER BY {sort_col} {sort_dir}, tm.user_id ASC "
-            "LIMIT :limit OFFSET :offset"
-        )
-        count_sql_str = (
-            "SELECT COUNT(*) AS total "
-            "FROM tenant_members tm LEFT JOIN users u ON u.id = tm.user_id "
-            f"{where_sql}"
-        )
-        page_sql = text(page_sql_str).bindparams(
-            *_expanding_binds(query)
-        )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-        count_sql = text(count_sql_str).bindparams(
-            *_expanding_binds(query)
-        )  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+        order: UnaryExpression[Any] = _SORT_DIRECTIONS[query.dir](_SORT_COLUMNS[query.sort])
+        joined = _tm.outerjoin(_u, _u.c.id == _tm.c.user_id)
 
-        page_params = {**params, "limit": query.limit, "offset": query.offset}
-        page_result = await self._uow.current_session.execute(page_sql, page_params)
+        page_stmt = (
+            select(
+                _tm.c.id,
+                _tm.c.user_id,
+                _tm.c.tenant_id,
+                _tm.c.role,
+                _tm.c.status,
+                _tm.c.joined_at,
+                _tm.c.removed_at,
+                _u.c.display_name,
+                _u.c.email,
+            )
+            .select_from(joined)
+            .where(*filters)
+            .order_by(order, _tm.c.user_id.asc())
+            .limit(query.limit)
+            .offset(query.offset)
+        )
+        count_stmt = select(func.count().label("total")).select_from(joined).where(*filters)
+
+        page_result = await self._uow.current_session.execute(page_stmt)
         items = [_hydrate_view(row) for row in page_result.mappings().all()]
 
-        count_result = await self._uow.current_session.execute(count_sql, params)
+        count_result = await self._uow.current_session.execute(count_stmt)
         total_row = count_result.mappings().one()
         total = int(total_row["total"])
         return items, total
@@ -206,56 +209,36 @@ def _as_dt(value: Any) -> datetime:
     raise TypeError(f"Expected datetime, got {type(value).__name__}")
 
 
-def _build_filter(query: ListMembersQuery) -> tuple[str, dict[str, Any]]:
-    """Build the WHERE clause + bound parameters for ``list_page``.
+def _build_filters(query: ListMembersQuery) -> list[ColumnElement[bool]]:
+    """Build the WHERE clauses for ``list_page``.
 
-    Every dynamic value lands in ``params`` and is bound by name; the
-    returned string contains only the placeholder names and the
-    column references — no user input.
+    Every user-typed value reaches the database as a bound parameter;
+    the composed expressions reference columns only.
     """
 
-    clauses: list[str] = ["tm.tenant_id = :tenant_id"]
-    params: dict[str, Any] = {"tenant_id": query.tenant_id}
+    clauses: list[ColumnElement[bool]] = [_tm.c.tenant_id == query.tenant_id]
 
     if query.q is not None and len(query.q) > 0:
         # Escape LIKE metacharacters so a search for "100%" doesn't
         # collapse into a match-all. We pick `\` as the escape char
         # and tell Postgres about it via the `ESCAPE` clause.
         needle = query.q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        params["needle"] = f"%{needle}%"
+        pattern = f"%{needle}%"
         clauses.append(
-            "("
-            "LOWER(u.display_name) LIKE :needle ESCAPE '\\' "
-            "OR LOWER(u.email) LIKE :needle ESCAPE '\\' "
-            "OR LOWER(tm.user_id::text) LIKE :needle ESCAPE '\\'"
-            ")"
+            or_(
+                func.lower(_u.c.display_name).like(pattern, escape="\\"),
+                func.lower(_u.c.email).like(pattern, escape="\\"),
+                func.lower(cast(_tm.c.user_id, Text())).like(pattern, escape="\\"),
+            )
         )
 
     if len(query.roles) > 0:
-        clauses.append("tm.role IN :roles")
-        params["roles"] = [r.value for r in query.roles]
+        clauses.append(_tm.c.role.in_([r.value for r in query.roles]))
 
     if len(query.statuses) > 0:
-        clauses.append("tm.status IN :statuses")
-        params["statuses"] = list(query.statuses)
+        clauses.append(_tm.c.status.in_(list(query.statuses)))
 
-    return "WHERE " + " AND ".join(clauses), params
-
-
-def _expanding_binds(query: ListMembersQuery) -> tuple[BindParameter[Any], ...]:
-    """Declare the IN-list BindParameters that are present in this call.
-
-    SQLAlchemy needs ``expanding=True`` to turn a list into a tuple of
-    placeholders. We declare them conditionally so a query without
-    role / status filters doesn't ship empty arrays.
-    """
-
-    binds: list[BindParameter[Any]] = []
-    if len(query.roles) > 0:
-        binds.append(bindparam("roles", expanding=True))
-    if len(query.statuses) > 0:
-        binds.append(bindparam("statuses", expanding=True))
-    return tuple(binds)
+    return clauses
 
 
 def _hydrate_view(row: RowMapping) -> MemberView:

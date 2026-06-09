@@ -1,97 +1,110 @@
-"""Pre-compiled SQL statements for ``auth_local_users``.
+"""Pre-built Core statements for ``auth_local_users``.
 
-The local IdP adapter is large enough that inlining every ``text(...)``
-fragment hurts readability. Hoisting them here keeps the IdP class
-focused on policy and gives mypy a single place to type-check the column
-projection.
+The local IdP adapter is large enough that inlining every statement
+hurts readability. Hoisting them here keeps the IdP class focused on
+policy and gives mypy a single place to type-check the projection.
 
 Every statement is parameterised; the IdP supplies bound parameters via
-:meth:`SqlAlchemyUnitOfWork.current_session.execute`.
+:meth:`SqlAlchemyUnitOfWork.current_session.execute`. UPDATE statements
+take their WHERE id as ``b_id`` — ``bindparam("id")`` is reserved
+inside update() because it names a column of the target table.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import Text, bindparam, cast, func, insert, literal, select, true, update
+from sqlalchemy.dialects.postgresql import ARRAY
 
-# Full row projection used by the IdP for read-modify-write cycles.
-_COLUMNS = (
-    "id, email, password_hash, email_verified, verification_code_hash, "
-    "verification_code_expires_at, verification_attempts, "
-    "verification_attempts_reset_at, attributes, last_resend_at, "
-    "created_at, updated_at"
+from contexts.identity.adapters.outbound.persistence.sqlalchemy.tables import auth_local_users
+
+_t = auth_local_users
+
+SELECT_BY_EMAIL = select(_t).where(_t.c.email == bindparam("email"))
+SELECT_BY_ID = select(_t).where(_t.c.id == bindparam("id"))
+
+INSERT_USER = insert(_t).values(
+    id=bindparam("id"),
+    email=bindparam("email"),
+    password_hash=bindparam("password_hash"),
+    email_verified=False,
+    verification_code_hash=bindparam("verification_code_hash"),
+    verification_code_expires_at=bindparam("verification_code_expires_at"),
+    verification_attempts=0,
+    attributes=bindparam("attributes"),
+    last_resend_at=bindparam("last_resend_at"),
+    created_at=bindparam("created_at"),
+    updated_at=bindparam("updated_at"),
 )
 
-# The f-string interpolates only the trusted module-level `_COLUMNS`
-# constant — no user input reaches the SQL. The actual filters use bound
-# `:email` / `:id` parameters, which SQLAlchemy escapes via the driver.
-SELECT_BY_EMAIL = text(
-    f"SELECT {_COLUMNS} FROM auth_local_users WHERE email = :email"
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-SELECT_BY_ID = text(
-    f"SELECT {_COLUMNS} FROM auth_local_users WHERE id = :id"
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-
-INSERT_USER = text(
-    "INSERT INTO auth_local_users ("
-    "id, email, password_hash, email_verified, verification_code_hash, "
-    "verification_code_expires_at, verification_attempts, attributes, "
-    "last_resend_at, created_at, updated_at"
-    ") VALUES ("
-    ":id, :email, :password_hash, FALSE, :verification_code_hash, "
-    ":verification_code_expires_at, 0, CAST(:attributes AS jsonb), "
-    ":last_resend_at, :created_at, :updated_at"
-    ")"
+MARK_VERIFIED = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        email_verified=True,
+        verification_code_hash=None,
+        verification_code_expires_at=None,
+        updated_at=bindparam("updated_at"),
+    )
 )
 
-MARK_VERIFIED = text(
-    "UPDATE auth_local_users SET "
-    "email_verified = TRUE, "
-    "verification_code_hash = NULL, "
-    "verification_code_expires_at = NULL, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+UPDATE_VERIFICATION_CODE = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        verification_code_hash=bindparam("verification_code_hash"),
+        verification_code_expires_at=bindparam("verification_code_expires_at"),
+        last_resend_at=bindparam("last_resend_at"),
+        updated_at=bindparam("updated_at"),
+    )
 )
 
-UPDATE_VERIFICATION_CODE = text(
-    "UPDATE auth_local_users SET "
-    "verification_code_hash = :verification_code_hash, "
-    "verification_code_expires_at = :verification_code_expires_at, "
-    "last_resend_at = :last_resend_at, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+UPDATE_PASSWORD = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        password_hash=bindparam("password_hash"),
+        verification_code_hash=None,
+        verification_code_expires_at=None,
+        updated_at=bindparam("updated_at"),
+    )
 )
 
-UPDATE_PASSWORD = text(
-    "UPDATE auth_local_users SET "
-    "password_hash = :password_hash, "
-    "verification_code_hash = NULL, "
-    "verification_code_expires_at = NULL, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+INCREMENT_ATTEMPTS = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        verification_attempts=_t.c.verification_attempts + 1,
+        verification_attempts_reset_at=bindparam("verification_attempts_reset_at"),
+        updated_at=bindparam("updated_at"),
+    )
 )
 
-INCREMENT_ATTEMPTS = text(
-    "UPDATE auth_local_users SET "
-    "verification_attempts = verification_attempts + 1, "
-    "verification_attempts_reset_at = :verification_attempts_reset_at, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+RESET_ATTEMPTS = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        verification_attempts=0,
+        verification_attempts_reset_at=None,
+        updated_at=bindparam("updated_at"),
+    )
 )
 
-RESET_ATTEMPTS = text(
-    "UPDATE auth_local_users SET "
-    "verification_attempts = 0, "
-    "verification_attempts_reset_at = NULL, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
-)
+# jsonb_set's path argument is text[]; the typed literal makes the
+# driver send a real array instead of an untyped string.
+_ACTIVE_TENANT_PATH = literal(["custom:active_tenant"], type_=ARRAY(Text()))
 
-UPDATE_ACTIVE_TENANT = text(
-    "UPDATE auth_local_users SET "
-    "attributes = jsonb_set(attributes, '{custom:active_tenant}', "
-    "to_jsonb(CAST(:tenant_id AS text)), true), "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+UPDATE_ACTIVE_TENANT = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(
+        attributes=func.jsonb_set(
+            _t.c.attributes,
+            _ACTIVE_TENANT_PATH,
+            func.to_jsonb(cast(bindparam("tenant_id", type_=Text()), Text())),
+            true(),
+        ),
+        updated_at=bindparam("updated_at"),
+    )
 )
 
 

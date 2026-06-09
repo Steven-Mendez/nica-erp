@@ -6,50 +6,47 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import RowMapping, text
+from sqlalchemy import RowMapping, Text, bindparam, func, insert, select, update
 
+from contexts.tenants.adapters.outbound.persistence.sqlalchemy.tables import invitations
 from contexts.tenants.domain import Invitation, Role
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
-_COLUMNS = (
-    "id, tenant_id, email, proposed_role, token_hash, expires_at, status, cancelled_at, created_at"
+_t = invitations
+
+_SELECT_BY_ID = select(_t).where(_t.c.id == bindparam("id"))
+_SELECT_BY_HASH = select(_t).where(_t.c.token_hash == bindparam("token_hash"))
+_SELECT_BY_TENANT = (
+    select(_t).where(_t.c.tenant_id == bindparam("tenant_id")).order_by(_t.c.created_at.desc())
+)
+# ``lower(email) = lower(:email)`` must stay verbatim — the pending
+# lookup's partial expression index matches exactly that predicate.
+# The bindparam is typed explicitly so lower() does not leave the
+# driver guessing the parameter type.
+_SELECT_PENDING_BY_EMAIL = select(_t).where(
+    _t.c.tenant_id == bindparam("tenant_id"),
+    func.lower(_t.c.email) == func.lower(bindparam("email", type_=Text())),
+    _t.c.status == "pending",
 )
 
-# Interpolated columns are trusted; filter values bound as parameters.
-_SELECT_BY_ID_SQL = f"SELECT {_COLUMNS} FROM invitations WHERE id = :id"
-_SELECT_BY_HASH_SQL = f"SELECT {_COLUMNS} FROM invitations WHERE token_hash = :token_hash"
-_SELECT_BY_TENANT_SQL = (
-    f"SELECT {_COLUMNS} FROM invitations WHERE tenant_id = :tenant_id ORDER BY created_at DESC"
-)
-_SELECT_PENDING_BY_EMAIL_SQL = (
-    f"SELECT {_COLUMNS} FROM invitations "
-    "WHERE tenant_id = :tenant_id AND lower(email) = lower(:email) AND status = 'pending'"
-)
-_SELECT_BY_ID = text(
-    _SELECT_BY_ID_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_BY_HASH = text(
-    _SELECT_BY_HASH_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_BY_TENANT = text(
-    _SELECT_BY_TENANT_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_PENDING_BY_EMAIL = text(
-    _SELECT_PENDING_BY_EMAIL_SQL
-)  # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-
-_INSERT = text(
-    "INSERT INTO invitations ("
-    "id, tenant_id, email, proposed_role, token_hash, expires_at, "
-    "status, cancelled_at, created_at"
-    ") VALUES ("
-    ":id, :tenant_id, :email, :proposed_role, :token_hash, :expires_at, "
-    ":status, :cancelled_at, :created_at"
-    ")"
+_INSERT = insert(_t).values(
+    id=bindparam("id"),
+    tenant_id=bindparam("tenant_id"),
+    email=bindparam("email"),
+    proposed_role=bindparam("proposed_role"),
+    token_hash=bindparam("token_hash"),
+    expires_at=bindparam("expires_at"),
+    status=bindparam("status"),
+    cancelled_at=bindparam("cancelled_at"),
+    created_at=bindparam("created_at"),
 )
 
-_UPDATE = text(
-    "UPDATE invitations SET status = :status, cancelled_at = :cancelled_at WHERE id = :id"
+# ``bindparam("id")`` is reserved inside update() because it names a
+# column of the target table; the WHERE param needs the ``b_`` prefix.
+_UPDATE = (
+    update(_t)
+    .where(_t.c.id == bindparam("b_id"))
+    .values(status=bindparam("status"), cancelled_at=bindparam("cancelled_at"))
 )
 
 
@@ -64,7 +61,7 @@ class InvitationRepositorySqlAlchemy:
         await self._uow.current_session.execute(
             _UPDATE,
             {
-                "id": invitation.id,
+                "b_id": invitation.id,
                 "status": invitation.status,
                 "cancelled_at": invitation.cancelled_at,
             },

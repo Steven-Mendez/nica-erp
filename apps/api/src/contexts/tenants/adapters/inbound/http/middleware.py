@@ -26,7 +26,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, literal, select
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -37,8 +37,20 @@ from contexts.identity.adapters.inbound.http.allowlist import (
 )
 from contexts.identity.adapters.inbound.http.errors import PROBLEM_CONTENT_TYPE
 from contexts.identity.adapters.inbound.http.schemas import ProblemDetail
+from contexts.tenants.adapters.outbound.persistence.sqlalchemy.tables import tenant_members
 from shared_kernel.adapters.context import CurrentUserContext, TenantContext
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
+
+_MEMBERSHIP_CHECK = (
+    select(literal(1))
+    .select_from(tenant_members)
+    .where(
+        tenant_members.c.user_id == bindparam("user_id"),
+        tenant_members.c.tenant_id == bindparam("tenant_id"),
+        tenant_members.c.status == "active",
+    )
+    .limit(1)
+)
 
 
 def _problem_response(status: int, code: str, title: str, **extra: Any) -> JSONResponse:
@@ -113,13 +125,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         uow = self._uow_factory()
         async with uow.begin() as session:
             result = await session.execute(
-                text(
-                    "SELECT 1 FROM tenant_members "
-                    "WHERE user_id = :user_id "
-                    "  AND tenant_id = :tenant_id "
-                    "  AND status = 'active' "
-                    "LIMIT 1"
-                ),
+                _MEMBERSHIP_CHECK,
                 {"user_id": current_user.user_id, "tenant_id": tenant_uuid},
             )
             hit = result.scalar_one_or_none()

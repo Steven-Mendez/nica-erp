@@ -62,10 +62,6 @@ ignore = []
 "**/contexts/tenants/adapters/inbound/http/dependencies.py" = ["B008"]
 "**/contexts/tenants/adapters/inbound/http/router.py" = ["B008"]
 "**/tests/integration/contexts/identity/http/test_login_throttle.py" = ["B008"]
-# Persistence adapters keep each ``text(...)`` call on a single line so
-# the per-call ``# nosemgrep`` suppressor is unambiguous; the trailing
-# comment naturally exceeds the 100-char line budget.
-"**/contexts/tenants/adapters/outbound/persistence/sqlalchemy/*.py" = ["E501"]
 "**/tests/unit/contexts/tenants/domain/test_value_objects.py" = ["E501"]
 
 [tool.ruff.format]

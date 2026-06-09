@@ -9,21 +9,10 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import insert
 
+from shared_kernel.adapters.tables import outbox
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
-
-_INSERT_SQL = text(
-    """
-    INSERT INTO outbox (
-        event_id, tenant_id, event_type, event_version,
-        aggregate_type, aggregate_id, payload, correlation_id
-    ) VALUES (
-        :event_id, :tenant_id, :event_type, :event_version,
-        :aggregate_type, :aggregate_id, CAST(:payload AS jsonb), :correlation_id
-    )
-    """
-)
 
 
 class OutboxWriterSqlAlchemy:
@@ -42,18 +31,15 @@ class OutboxWriterSqlAlchemy:
         payload: dict[str, Any],
         correlation_id: UUID | None = None,
     ) -> None:
-        import json
-
         await self._uow.current_session.execute(
-            _INSERT_SQL,
-            {
-                "event_id": event_id,
-                "tenant_id": tenant_id,
-                "event_type": event_type,
-                "event_version": event_version,
-                "aggregate_type": aggregate_type,
-                "aggregate_id": aggregate_id,
-                "payload": json.dumps(payload),
-                "correlation_id": correlation_id,
-            },
+            insert(outbox).values(
+                event_id=event_id,
+                tenant_id=tenant_id,
+                event_type=event_type,
+                event_version=event_version,
+                aggregate_type=aggregate_type,
+                aggregate_id=aggregate_id,
+                payload=payload,
+                correlation_id=correlation_id,
+            )
         )

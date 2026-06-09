@@ -1,7 +1,7 @@
 """SQLAlchemy adapter for :class:`TenantRepository`.
 
-Raw SQL via :func:`sqlalchemy.text` against the active UoW session;
-the ``Tenant`` aggregate stays free of SQLAlchemy.
+Core statements over the shared table metadata against the active UoW
+session; the ``Tenant`` aggregate stays free of SQLAlchemy.
 """
 
 from __future__ import annotations
@@ -10,9 +10,10 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import RowMapping, text
+from sqlalchemy import RowMapping, bindparam, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
+from contexts.tenants.adapters.outbound.persistence.sqlalchemy.tables import tenant_members
 from contexts.tenants.domain import (
     AuthorizationDgi,
     FiscalEmail,
@@ -23,67 +24,60 @@ from contexts.tenants.domain import (
     RucCollisionError,
     Tenant,
 )
+from shared_kernel.adapters.tables import tenants
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
-_COLUMNS = (
-    "id, name, ruc, regime, departamento, municipality, "
-    "authorization_dgi_number, authorization_dgi_valid_from, "
-    "authorization_dgi_valid_to, fiscal_address, fiscal_email, "
-    "fiscal_phone, is_withholder, status, created_at, updated_at"
+_SELECT_BY_ID = select(tenants).where(tenants.c.id == bindparam("id"))
+_SELECT_BY_RUC = select(tenants).where(tenants.c.ruc == bindparam("ruc"))
+_SELECT_FOR_USER = select(tenants).where(
+    tenants.c.id.in_(
+        select(tenant_members.c.tenant_id).where(
+            tenant_members.c.user_id == bindparam("user_id"),
+            tenant_members.c.status == "active",
+        )
+    )
 )
 
-# The SQL strings below interpolate only the trusted module-level
-# `_COLUMNS` constant — no user input reaches the SQL. Filter values are
-# bound via `:param` placeholders, which SQLAlchemy escapes through the
-# driver. Building each SQL string before passing it to ``text()`` keeps
-# every ``text(...)`` call on a single line so the per-call
-# ``# nosemgrep`` suppressor is unambiguous.
-_SELECT_BY_ID_SQL = f"SELECT {_COLUMNS} FROM tenants WHERE id = :id"
-_SELECT_BY_RUC_SQL = f"SELECT {_COLUMNS} FROM tenants WHERE ruc = :ruc"
-_SELECT_FOR_USER_SQL = (
-    f"SELECT {_COLUMNS} FROM tenants WHERE id IN ("
-    " SELECT tenant_id FROM tenant_members"
-    " WHERE user_id = :user_id AND status = 'active'"
-    ")"
-)
-# nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_BY_ID = text(_SELECT_BY_ID_SQL)
-# nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_BY_RUC = text(_SELECT_BY_RUC_SQL)
-# nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-_SELECT_FOR_USER = text(_SELECT_FOR_USER_SQL)
-
-_INSERT = text(
-    "INSERT INTO tenants ("
-    "id, name, ruc, regime, departamento, municipality, "
-    "authorization_dgi_number, authorization_dgi_valid_from, "
-    "authorization_dgi_valid_to, fiscal_address, fiscal_email, "
-    "fiscal_phone, is_withholder, status, created_at, updated_at"
-    ") VALUES ("
-    ":id, :name, :ruc, :regime, :departamento, :municipality, "
-    ":authorization_dgi_number, :authorization_dgi_valid_from, "
-    ":authorization_dgi_valid_to, :fiscal_address, :fiscal_email, "
-    ":fiscal_phone, :is_withholder, :status, :created_at, :updated_at"
-    ")"
+_INSERT = insert(tenants).values(
+    id=bindparam("id"),
+    name=bindparam("name"),
+    ruc=bindparam("ruc"),
+    regime=bindparam("regime"),
+    departamento=bindparam("departamento"),
+    municipality=bindparam("municipality"),
+    authorization_dgi_number=bindparam("authorization_dgi_number"),
+    authorization_dgi_valid_from=bindparam("authorization_dgi_valid_from"),
+    authorization_dgi_valid_to=bindparam("authorization_dgi_valid_to"),
+    fiscal_address=bindparam("fiscal_address"),
+    fiscal_email=bindparam("fiscal_email"),
+    fiscal_phone=bindparam("fiscal_phone"),
+    is_withholder=bindparam("is_withholder"),
+    status=bindparam("status"),
+    created_at=bindparam("created_at"),
+    updated_at=bindparam("updated_at"),
 )
 
-_UPDATE = text(
-    "UPDATE tenants SET "
-    "name = :name, "
-    "ruc = :ruc, "
-    "regime = :regime, "
-    "departamento = :departamento, "
-    "municipality = :municipality, "
-    "authorization_dgi_number = :authorization_dgi_number, "
-    "authorization_dgi_valid_from = :authorization_dgi_valid_from, "
-    "authorization_dgi_valid_to = :authorization_dgi_valid_to, "
-    "fiscal_address = :fiscal_address, "
-    "fiscal_email = :fiscal_email, "
-    "fiscal_phone = :fiscal_phone, "
-    "is_withholder = :is_withholder, "
-    "status = :status, "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+# ``bindparam("id")`` is reserved inside update() because it names a
+# column of the target table; the WHERE param needs the ``b_`` prefix.
+_UPDATE = (
+    update(tenants)
+    .where(tenants.c.id == bindparam("b_id"))
+    .values(
+        name=bindparam("name"),
+        ruc=bindparam("ruc"),
+        regime=bindparam("regime"),
+        departamento=bindparam("departamento"),
+        municipality=bindparam("municipality"),
+        authorization_dgi_number=bindparam("authorization_dgi_number"),
+        authorization_dgi_valid_from=bindparam("authorization_dgi_valid_from"),
+        authorization_dgi_valid_to=bindparam("authorization_dgi_valid_to"),
+        fiscal_address=bindparam("fiscal_address"),
+        fiscal_email=bindparam("fiscal_email"),
+        fiscal_phone=bindparam("fiscal_phone"),
+        is_withholder=bindparam("is_withholder"),
+        status=bindparam("status"),
+        updated_at=bindparam("updated_at"),
+    )
 )
 
 
@@ -111,7 +105,9 @@ class TenantRepositorySqlAlchemy:
 
     async def update(self, tenant: Tenant) -> None:
         try:
-            await self._uow.current_session.execute(_UPDATE, self._params(tenant))
+            await self._uow.current_session.execute(
+                _UPDATE, {**self._params(tenant), "b_id": tenant.id}
+            )
         except IntegrityError as exc:
             if "uq_tenants_ruc" in str(exc):
                 raise RucCollisionError() from exc
@@ -124,9 +120,9 @@ class TenantRepositorySqlAlchemy:
     # ---------------------------------------------------------------- helpers
     @staticmethod
     def _hydrate(row: RowMapping) -> Tenant:
-        # Per ADR-0034, every fiscal column is nullable. Construct each VO
-        # only when the underlying column has a value; otherwise keep None
-        # so the aggregate reflects "operator hasn't provided this yet".
+        # Every fiscal column is nullable. Construct each VO only when
+        # the underlying column has a value; otherwise keep None so the
+        # aggregate reflects "operator hasn't provided this yet".
         dgi_number = row["authorization_dgi_number"]
         dgi_from = row["authorization_dgi_valid_from"]
         dgi_to = row["authorization_dgi_valid_to"]

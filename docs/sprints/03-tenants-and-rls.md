@@ -1635,3 +1635,37 @@ with a misleading comment claiming the HTTP adapter mapped it to 400
 - No interceptor refactor. The `__bearerAttached` flag stays as the
   safer default in case a future endpoint adds a 401 surface where
   no bearer is attached.
+
+## Sprint follow-up — SQLAlchemy Core statement builder (sprint 3.9, 2026-06-09)
+
+A **backend-only** refactor follow-up: persistence adapters stop
+assembling SQL strings for `text()` and build statements from
+SQLAlchemy Core `Table` metadata instead ([ADR-0036](../adr/0036-sqlalchemy-core-statement-builder.md)).
+No ORM adoption — domain hydration stays manual, ports and HTTP
+contracts are untouched, and Alembic keeps hand-written revisions
+with `--autogenerate` off.
+
+Scope:
+
+- New `Table` metadata modules on a single shared `MetaData`:
+  `shared_kernel/adapters/tables.py` (`users`, `tenants`, `outbox`,
+  `role_permissions`) plus one `tables.py` per context persistence
+  package (`auth_local_users`, `auth_local_refresh_tokens`;
+  `tenant_members`, `invitations`).
+- The seven `text()`-based adapters (outbox writer, user repository,
+  local IdP user/refresh-token stores, tenant / membership /
+  invitation repositories) rewritten to `select()` / `insert()` /
+  `update()` builder statements. `list_page` drops its string-built
+  WHERE, `ORDER BY` whitelist interpolation, and conditional
+  expanding bindparams in favour of composed column expressions.
+- The two remaining business-table lookups outside repositories
+  (tenant middleware membership check, `role_permissions` lookup in
+  bootstrap dependencies) migrate the same way.
+- A schema-consistency integration test pins the metadata to the
+  Alembic-migrated schema (zero column drift on modeled tables).
+- Cleanup: all `nosemgrep: avoid-sqlalchemy-text` suppressions and
+  the tenants-persistence E501 carve-out disappear; `text()` remains
+  only for RLS `set_config` GUCs, `/healthz` probes, and test seeds.
+
+No migrations, no behavior changes; the integration suite (including
+`assert_query_count` gates) must pass unchanged.

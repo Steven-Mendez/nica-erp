@@ -1,53 +1,49 @@
 """SQLAlchemy adapter for the :class:`UserRepository` port.
 
-Uses raw SQL via :func:`sqlalchemy.text` against the active
-:class:`SqlAlchemyUnitOfWork`'s session — no ORM mapping. The ``User``
-aggregate stays free of SQLAlchemy, mirroring the
+Builds Core statements over the shared ``users`` table metadata against
+the active :class:`SqlAlchemyUnitOfWork`'s session — no ORM mapping.
+The ``User`` aggregate stays free of SQLAlchemy, mirroring the
 ``OutboxWriterSqlAlchemy`` pattern in :mod:`shared_kernel.adapters`.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import RowMapping, bindparam, text
+from sqlalchemy import RowMapping, bindparam, insert, select, update
 
 from contexts.identity.domain import Email, User
+from shared_kernel.adapters.tables import users
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 
-_SELECT_BY_ID = text(
-    "SELECT id, external_sub, email, display_name, locale, timezone, "
-    "preferences, created_at, updated_at FROM users WHERE id = :id"
+_SELECT_BY_ID = select(users).where(users.c.id == bindparam("id"))
+_SELECT_BY_EXTERNAL_SUB = select(users).where(users.c.external_sub == bindparam("external_sub"))
+_INSERT = insert(users).values(
+    id=bindparam("id"),
+    external_sub=bindparam("external_sub"),
+    email=bindparam("email"),
+    display_name=bindparam("display_name"),
+    locale=bindparam("locale"),
+    timezone=bindparam("timezone"),
+    preferences=bindparam("preferences"),
+    created_at=bindparam("created_at"),
+    updated_at=bindparam("updated_at"),
 )
-_SELECT_BY_IDS = text(
-    "SELECT id, external_sub, email, display_name, locale, timezone, "
-    "preferences, created_at, updated_at FROM users WHERE id IN :ids"
-).bindparams(bindparam("ids", expanding=True))
-_SELECT_BY_EXTERNAL_SUB = text(
-    "SELECT id, external_sub, email, display_name, locale, timezone, "
-    "preferences, created_at, updated_at FROM users WHERE external_sub = :external_sub"
-)
-_INSERT = text(
-    "INSERT INTO users ("
-    "id, external_sub, email, display_name, locale, timezone, preferences, "
-    "created_at, updated_at"
-    ") VALUES ("
-    ":id, :external_sub, :email, :display_name, :locale, :timezone, "
-    "CAST(:preferences AS jsonb), :created_at, :updated_at"
-    ")"
-)
-_UPDATE = text(
-    "UPDATE users SET "
-    "display_name = :display_name, "
-    "locale = :locale, "
-    "timezone = :timezone, "
-    "preferences = CAST(:preferences AS jsonb), "
-    "updated_at = :updated_at "
-    "WHERE id = :id"
+# ``bindparam("id")`` is reserved inside update() because it names a
+# column of the target table; the WHERE param needs the ``b_`` prefix.
+_UPDATE = (
+    update(users)
+    .where(users.c.id == bindparam("b_id"))
+    .values(
+        display_name=bindparam("display_name"),
+        locale=bindparam("locale"),
+        timezone=bindparam("timezone"),
+        preferences=bindparam("preferences"),
+        updated_at=bindparam("updated_at"),
+    )
 )
 
 
@@ -66,7 +62,7 @@ class UserRepositorySqlAlchemy:
         ids = list({uid for uid in user_ids})
         if not ids:
             return []
-        result = await self._uow.current_session.execute(_SELECT_BY_IDS, {"ids": ids})
+        result = await self._uow.current_session.execute(select(users).where(users.c.id.in_(ids)))
         return [self._hydrate(row) for row in result.mappings().all()]
 
     async def get_by_external_sub(self, external_sub: str) -> User | None:
@@ -83,11 +79,11 @@ class UserRepositorySqlAlchemy:
         await self._uow.current_session.execute(
             _UPDATE,
             {
-                "id": user.id,
+                "b_id": user.id,
                 "display_name": user.display_name,
                 "locale": user.locale,
                 "timezone": user.timezone,
-                "preferences": json.dumps(user.preferences),
+                "preferences": user.preferences,
                 "updated_at": user.updated_at,
             },
         )
@@ -117,7 +113,7 @@ class UserRepositorySqlAlchemy:
             "display_name": user.display_name,
             "locale": user.locale,
             "timezone": user.timezone,
-            "preferences": json.dumps(user.preferences),
+            "preferences": user.preferences,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
         }

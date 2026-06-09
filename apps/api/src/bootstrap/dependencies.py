@@ -20,14 +20,29 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import Depends
-from sqlalchemy import text
+from sqlalchemy import bindparam, select
 
 from bootstrap.container import build_request_uow
 from bootstrap.settings import get_settings
 from contexts.identity.application.errors import InvalidCredentialsError
+from contexts.tenants.adapters.outbound.persistence.sqlalchemy.tables import tenant_members
 from shared_kernel.adapters.context import CurrentUserContext, TenantContext
+from shared_kernel.adapters.tables import role_permissions
 from shared_kernel.adapters.unit_of_work import SqlAlchemyUnitOfWork
 from shared_kernel.permissions import Actor, ForbiddenError, PermissionCache
+
+_SELECT_ROLE_PERMISSIONS = select(role_permissions.c.permission).where(
+    role_permissions.c.role == bindparam("role")
+)
+_SELECT_ACTIVE_MEMBER_ROLE = (
+    select(tenant_members.c.role)
+    .where(
+        tenant_members.c.user_id == bindparam("user_id"),
+        tenant_members.c.tenant_id == bindparam("tenant_id"),
+        tenant_members.c.status == "active",
+    )
+    .limit(1)
+)
 
 _settings = get_settings()
 _permission_cache = PermissionCache(ttl_seconds=_settings.permission_cache_ttl_seconds)
@@ -56,7 +71,7 @@ async def _load_permissions(role: str, session: object) -> frozenset[str]:
     # cache stays free of SQLAlchemy imports). The loader runs only on
     # cache miss; concurrent misses serialise on the cache's ``asyncio.Lock``.
     result = await session.execute(  # type: ignore[attr-defined]
-        text("SELECT permission FROM role_permissions WHERE role = :role"),
+        _SELECT_ROLE_PERMISSIONS,
         {"role": role},
     )
     return frozenset(row[0] for row in result.all())
@@ -82,11 +97,7 @@ async def current_actor(
 
     async with uow.begin() as session:
         membership = await session.execute(
-            text(
-                "SELECT role FROM tenant_members "
-                "WHERE user_id = :user_id AND tenant_id = :tenant_id "
-                "  AND status = 'active' LIMIT 1"
-            ),
+            _SELECT_ACTIVE_MEMBER_ROLE,
             {"user_id": current_user.user_id, "tenant_id": tenant_id},
         )
         role_row = membership.scalar_one_or_none()

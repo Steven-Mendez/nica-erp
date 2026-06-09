@@ -116,7 +116,7 @@ class IdentityProviderLocal:
             "password_hash": password_hash,
             "verification_code_hash": _sha256(code),
             "verification_code_expires_at": now + timedelta(seconds=self.signup_code_ttl_seconds),
-            "attributes": '{"custom:active_tenant": ""}',
+            "attributes": {"custom:active_tenant": ""},
             "last_resend_at": now,
             "created_at": now,
             "updated_at": now,
@@ -161,7 +161,7 @@ class IdentityProviderLocal:
         # Success: reset the failure counter.
         await self.uow.current_session.execute(
             sql.RESET_ATTEMPTS,
-            {"id": row["id"], "updated_at": now},
+            {"b_id": row["id"], "updated_at": now},
         )
 
         active_tenant = _read_active_tenant(row["attributes"])
@@ -253,7 +253,7 @@ class IdentityProviderLocal:
         # fresh one. This means a stolen refresh JWT cannot be re-used
         # after a legitimate session has rotated past it.
         await self.uow.current_session.execute(
-            refresh_sql.REVOKE_BY_JTI, {"jti": jti, "revoked_at": self.now()}
+            refresh_sql.REVOKE_BY_JTI, {"b_jti": jti, "revoked_at": self.now()}
         )
         new_refresh = await self._make_refresh_token(sub=sub)
         return Identity(
@@ -293,7 +293,7 @@ class IdentityProviderLocal:
         except ValueError:
             return
         await self.uow.current_session.execute(
-            refresh_sql.REVOKE_BY_JTI, {"jti": jti, "revoked_at": self.now()}
+            refresh_sql.REVOKE_BY_JTI, {"b_jti": jti, "revoked_at": self.now()}
         )
 
     async def confirm_signup(self, *, email: str, code: str) -> str:
@@ -320,7 +320,7 @@ class IdentityProviderLocal:
             raise InvalidConfirmationCodeError("invalid code")
         await self.uow.current_session.execute(
             sql.MARK_VERIFIED,
-            {"id": row["id"], "updated_at": self.now()},
+            {"b_id": row["id"], "updated_at": self.now()},
         )
         return str(row["id"])
 
@@ -344,7 +344,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.UPDATE_VERIFICATION_CODE,
             {
-                "id": row["id"],
+                "b_id": row["id"],
                 "verification_code_hash": _sha256(code),
                 "verification_code_expires_at": now
                 + timedelta(seconds=self.signup_code_ttl_seconds),
@@ -364,7 +364,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.UPDATE_VERIFICATION_CODE,
             {
-                "id": row["id"],
+                "b_id": row["id"],
                 "verification_code_hash": _sha256(code),
                 "verification_code_expires_at": now
                 + timedelta(seconds=self.password_reset_code_ttl_seconds),
@@ -389,7 +389,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.UPDATE_PASSWORD,
             {
-                "id": row["id"],
+                "b_id": row["id"],
                 "password_hash": new_hash,
                 "updated_at": self.now(),
             },
@@ -409,7 +409,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.UPDATE_PASSWORD,
             {
-                "id": row["id"],
+                "b_id": row["id"],
                 "password_hash": new_hash,
                 "updated_at": self.now(),
             },
@@ -423,7 +423,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.UPDATE_ACTIVE_TENANT,
             {
-                "id": UUID(external_sub),
+                "b_id": UUID(external_sub),
                 "tenant_id": tenant_id,
                 "updated_at": self.now(),
             },
@@ -452,7 +452,7 @@ class IdentityProviderLocal:
         await self.uow.current_session.execute(
             sql.INCREMENT_ATTEMPTS,
             {
-                "id": row_id,
+                "b_id": row_id,
                 "verification_attempts_reset_at": reset_at,
                 "updated_at": now,
             },

@@ -12,6 +12,7 @@ Template: [`template.md`](template.md).
 | [ADR-0001](0001-hexagonal-architecture.md) | Hexagonal + DDD | Modular monolith, ports & adapters, bounded contexts |
 | [ADR-0002](0002-postgres-rls.md) | Multi-tenancy: pool + RLS | One DB, `tenant_id`, RLS as defense-in-depth |
 | [ADR-0010](0010-python-fastapi.md) | Backend stack | Python 3.12 + FastAPI + SQLAlchemy 2.0 async + Alembic |
+| [ADR-0036](0036-sqlalchemy-core-statement-builder.md) | Core statement builder | Builder over `Table` metadata instead of `text()` raw SQL; no ORM |
 | [ADR-0011](0011-uuidv7-identifiers.md) | UUIDv7 primary keys | Temporally ordered identifiers, B-tree friendly |
 
 ### Auth & security
