@@ -11,11 +11,14 @@ under `/api` when `app_env == "aws"`. Locally the routes mount at root.
 
 Middleware order: ``AuthMiddleware`` is registered **before**
 ``CORSMiddleware``. Starlette runs middleware in reverse order of
-addition (last-added is outermost), so the resulting stack has CORS as
-the OUTER layer. That ordering ensures the 401 emitted by the auth layer
+addition (last-added is outermost), so the resulting stack has CORS
+outside auth. That ordering ensures the 401 emitted by the auth layer
 on a missing/invalid token still carries the
 ``access-control-allow-origin`` header the SPA needs to read the
 problem body — see ``openspec/changes/add-identity-context/specs/api-bootstrap``.
+``SecurityHeadersMiddleware`` is added last (outermost) so every
+response — including those short-circuited by auth/tenant/CORS —
+carries the baseline security headers.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from bootstrap.container import (
     build_request_uow,
 )
 from bootstrap.db import get_uow
+from bootstrap.security_headers import SecurityHeadersMiddleware
 from bootstrap.settings import get_settings
 from contexts.identity.adapters.inbound.http.allowlist import is_unauthenticated
 from contexts.identity.adapters.inbound.http.errors import register_exception_handlers
@@ -144,6 +148,14 @@ def create_app() -> FastAPI:
             # responses when credentials are enabled.
             expose_headers=["set-cookie", "retry-after"],
         )
+
+    # Added last = outermost: the security headers also decorate the
+    # 401/403 responses short-circuited by the auth/tenant middleware
+    # and the CORS preflight responses.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        auth_path_prefix=("/api" if settings.app_env == "aws" else "") + "/v1/auth",
+    )
 
     register_exception_handlers(app)
     register_tenants_exception_handlers(app)
